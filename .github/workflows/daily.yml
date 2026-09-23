@@ -3,15 +3,20 @@ on:
   schedule:
     - cron: '0 1 * * *' # 9am HKT
   workflow_dispatch:
+
 jobs:
   run:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install fonts
+        run: sudo apt-get update && sudo apt-get install -y fonts-dejavu-core
       - uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
+        with:
+          python-version: '3.11'
       - run: pip install requests beautifulsoup4 pillow
-      - run: python scraper.py
+      - name: Run scraper
+        run: python scraper.py
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
