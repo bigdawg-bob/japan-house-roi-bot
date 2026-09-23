@@ -1,376 +1,376 @@
 """
-Daily akiya bot:
-scrape -> closest to ski resorts -> AirROI revenue -> ROI -> Grok copy
--> render slides -> send to Telegram
-
-Local run:  python main.py
-Test mode:  TEST_RUN=true python main.py  (sends, but doesn't mark the house as posted)
+Daily "cheap Japanese house near a ski resort" bot.
+Flow: scraper.scrape() -> keep houses within MAX_KM of a ski resort -> pick one
+      not posted before -> exchange rate + optional AirROI estimate
+      -> 1080x1350 slides -> Telegram (album + copyable caption).
+Local test without sending anything:  DRY_RUN=1 python main.py
 """
-import json, math, os, re, sys, time
-from datetime import date
+import io, json, math, os, textwrap
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import requests
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 import scraper
-from render import render
 
-# ─── Settings you can change ─────────────────────────────────────────
-MAX_PRICE_YEN       = 15_000_000   # ignore houses above this
-MIN_YIELD           = 0.08         # post nothing if the best deal is under 8% net
-NIGHTS_CAP          = 180          # minpaku law: max 180 nights/year
-EXPENSE_RATIO       = 0.40         # cleaning, platform fees, utilities, mgmt, tax
-RENO_YEN_PER_M2     = 50_000       # renovation guess, built 1981 or later
-RENO_YEN_PER_M2_OLD = 80_000       # built before 1981 (old earthquake code)
-DEFAULT_AREA_M2     = 90
-TOP_N_FOR_AIRROI    = 10           # only the 10 closest houses use AirROI credits
-CACHE_DAYS          = 30
-GROK_MODEL          = os.getenv("GROK_MODEL", "grok-3-mini")
-HANDLE              = os.getenv("IG_HANDLE", "@yourhandle")
-TEST_RUN            = os.getenv("TEST_RUN", "false").lower() == "true"
+# ─── settings ────────────────────────────────────────────────────────
+MAX_KM         = float(os.getenv("MAX_KM", "30"))          # max distance to a resort
+MAX_PRICE_YEN  = float(os.getenv("MAX_PRICE_YEN", "5000000"))
+MAX_PHOTOS     = 5                                          # photo slides after cover
+W, H           = 1080, 1350                                 # Instagram portrait
+FX_FALLBACK    = 0.0067                                     # USD per JPY if API fails
+DRY_RUN        = os.getenv("DRY_RUN") == "1"
 
-# (name, lat, lng) - approximate resort base locations. Add your own.
-HOOKS = [
-    ("Happo-One",     36.698, 137.832),
-    ("Hakuba Goryu",  36.667, 137.829),
-    ("Niseko Hirafu", 42.859, 140.704),
-    ("Rusutsu",       42.748, 140.898),
-    ("Nozawa Onsen",  36.923, 138.447),
-    ("Myoko Akakura", 36.883, 138.180),
-    ("Shiga Kogen",   36.720, 138.500),
-    ("Furano",        43.335, 142.354),
-    ("Zao Onsen",     38.166, 140.400),
+ROOT        = Path(__file__).parent
+STATE       = ROOT / "state"
+POSTED_FILE = STATE / "posted.json"
+OUT         = ROOT / "out"
+JST         = timezone(timedelta(hours=9))
+
+BOT_TOKEN   = os.getenv("BOT_TOKEN")
+CHAT_ID     = os.getenv("CHAT_ID")
+AIRROI_KEY  = os.getenv("AIRROI_API_KEY") or os.getenv("AIRROI_KEY")
+AIRROI_URL  = os.getenv("AIRROI_URL", "https://api.airroi.com/calculator/estimate")
+
+# (name, lat, lng) – approximate base-area coordinates, check on Google Maps
+SKI_RESORTS = [
+    ("Niseko Grand Hirafu", 42.862, 140.698),
+    ("Rusutsu",             42.748, 140.555),
+    ("Kiroro",              43.075, 140.985),
+    ("Furano",              43.332, 142.358),
+    ("Hakkoda",             40.656, 140.858),
+    ("APPI Kogen",          40.003, 140.966),
+    ("Kazuno Hanawa",       40.190, 140.750),
+    ("Tazawako",            39.752, 140.726),
+    ("Zao Onsen",           38.166, 140.415),
+    ("Gassan",              38.528, 140.020),
+    ("Aizu Takatsue",       37.117, 139.563),
+    ("Oze Iwakura",         36.820, 139.200),
+    ("Minakami",            36.830, 138.930),
+    ("GALA Yuzawa",         36.947, 138.804),
+    ("Naeba",               36.790, 138.760),
+    ("Myoko Akakura",       36.887, 138.172),
+    ("Madarao Kogen",       36.863, 138.297),
+    ("Nozawa Onsen",        36.922, 138.444),
+    ("Shiga Kogen",         36.707, 138.508),
+    ("Hakuba Happo-one",    36.700, 137.832),
+    ("Hakuba Goryu",        36.670, 137.830),
+    ("Hakuba Cortina",      36.797, 137.853),
+    ("Hida Nagareha",       36.325, 137.330),
 ]
 
-ROOT      = Path(__file__).parent
-STATE     = ROOT / "state"
-TEMPLATES = ROOT / "templates"
-OUT       = ROOT / "out" / date.today().isoformat()
-AIRROI_URL = "https://api.airroi.com/calculator/estimate"
+PREF_EN = {
+    "北海道": "Hokkaido", "青森県": "Aomori", "岩手県": "Iwate", "宮城県": "Miyagi",
+    "秋田県": "Akita", "山形県": "Yamagata", "福島県": "Fukushima", "茨城県": "Ibaraki",
+    "栃木県": "Tochigi", "群馬県": "Gunma", "埼玉県": "Saitama", "千葉県": "Chiba",
+    "東京都": "Tokyo", "神奈川県": "Kanagawa", "新潟県": "Niigata", "富山県": "Toyama",
+    "石川県": "Ishikawa", "福井県": "Fukui", "山梨県": "Yamanashi", "長野県": "Nagano",
+    "岐阜県": "Gifu", "静岡県": "Shizuoka", "愛知県": "Aichi", "三重県": "Mie",
+    "滋賀県": "Shiga", "京都府": "Kyoto", "大阪府": "Osaka", "兵庫県": "Hyogo",
+    "奈良県": "Nara", "和歌山県": "Wakayama", "鳥取県": "Tottori", "島根県": "Shimane",
+    "岡山県": "Okayama", "広島県": "Hiroshima", "山口県": "Yamaguchi", "徳島県": "Tokushima",
+    "香川県": "Kagawa", "愛媛県": "Ehime", "高知県": "Kochi", "福岡県": "Fukuoka",
+    "佐賀県": "Saga", "長崎県": "Nagasaki", "熊本県": "Kumamoto", "大分県": "Oita",
+    "宮崎県": "Miyazaki", "鹿児島県": "Kagoshima", "沖縄県": "Okinawa",
+}
 
 
-# ─── Small helpers ───────────────────────────────────────────────────
-def load(name, default):
-    p = STATE / name
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else default
-
-def save(name, data):
-    STATE.mkdir(exist_ok=True)
-    (STATE / name).write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
-
-def to_num(v):
-    """'1,000万円' -> 10000000, '3LDK' -> 3, 98.5 -> 98.5"""
-    if v is None or isinstance(v, bool):
-        return None
-    if isinstance(v, (int, float)):
-        return float(v)
-    s = str(v).replace(",", "")
-    m = re.search(r"\d+(\.\d+)?", s)
-    if not m:
-        return None
-    n = float(m.group(0))
-    if "万" in s:
-        n *= 10_000
-    return n
-
-def pick(d, *keys):
-    for k in keys:
-        if d.get(k) not in (None, "", []):
-            return d[k]
-    return None
-
-def km_between(lat1, lng1, lat2, lng2):
-    r = math.radians
-    a = (math.sin(r(lat2 - lat1) / 2) ** 2
-         + math.cos(r(lat1)) * math.cos(r(lat2)) * math.sin(r(lng2 - lng1) / 2) ** 2)
+# ─── helpers ─────────────────────────────────────────────────────────
+def haversine(lat1, lng1, lat2, lng2):
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
     return 6371 * 2 * math.asin(math.sqrt(a))
 
 def nearest_hook(lat, lng):
-    return min(((name, km_between(lat, lng, hl, hg)) for name, hl, hg in HOOKS),
-               key=lambda x: x[1])
+    return min(((n, haversine(lat, lng, a, b)) for n, a, b in SKI_RESORTS), key=lambda x: x[1])
 
-def fmt_usd(v):  return f"${v/1000:.0f}K" if v >= 1000 else f"${v:.0f}"
-def fmt_yen(v):  return f"¥{v/1e6:.1f}M" if v >= 1e6 else f"¥{v/1e3:.0f}K"
-def fmt_dist(km): return f"{km*1000:.0f} m" if km < 1 else f"{km:.0f} km"
+def fmt_dist(km): return "<1 km" if km < 1 else f"~{km:.0f} km"
+def fmt_usd(v):   return "FREE" if v == 0 else (f"${v/1000:.0f}K" if v >= 1000 else f"${v:.0f}")
+def fmt_yen(v):   return "FREE" if v == 0 else (f"¥{v/1e6:.1f}M" if v >= 1e6 else f"¥{v/1e3:.0f}K")
 
-def usd_per_yen():
+def load_json(p):
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+
+def save_json(p, data):
+    p.parent.mkdir(exist_ok=True)
+    p.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+# ─── exchange rate ───────────────────────────────────────────────────
+def get_fx():
     try:
         r = requests.get("https://open.er-api.com/v6/latest/JPY", timeout=15)
-        return float(r.json()["rates"]["USD"])
-    except Exception:
-        print("FX lookup failed, using 1 USD = 150 JPY")
-        return 1 / 150
+        rate = float(r.json()["rates"]["USD"])
+        if 0.003 < rate < 0.02:
+            print(f"FX: 1 JPY = {rate:.5f} USD")
+            return rate
+    except Exception as e:
+        print(f"FX error: {e}")
+    print(f"FX: using fallback {FX_FALLBACK}")
+    return FX_FALLBACK
 
 
-# ─── Scraper adapter ─────────────────────────────────────────────────
-def normalize(d):
-    if not isinstance(d, dict):
-        d = vars(d)
-    photos = pick(d, "photos", "images", "image_urls", "photo_urls", "photo", "image", "thumbnail", "img")
-    if isinstance(photos, str):
-        photos = [photos]
-    year = to_num(pick(d, "year_built", "built", "year", "built_year"))
-    beds = to_num(pick(d, "bedrooms", "rooms", "layout", "madori"))
-    return {
-        "id":        str(pick(d, "id", "listing_id", "url", "link")),
-        "url":       pick(d, "url", "link", "detail_url") or "",
-        "price_yen": to_num(pick(d, "price_yen", "price", "price_jpy")),
-        "lat":       to_num(pick(d, "lat", "latitude")),
-        "lng":       to_num(pick(d, "lng", "lon", "longitude")),
-        "bedrooms":  int(min(max(beds or 2, 1), 8)),
-        "area_m2":   to_num(pick(d, "area_m2", "floor_area", "building_area", "area", "size")),
-        "year":      int(year) if year and 1900 < year < 2100 else None,
-        "town":      str(pick(d, "location", "town", "address", "city", "prefecture") or "Japan"),
-        "photos":    [p for p in (photos or []) if isinstance(p, str) and p.startswith("http")],
-    }
-
-def get_listings():
-    for fn in ("scrape", "get_listings", "run", "main"):
-        if hasattr(scraper, fn):
-            try:
-                data = getattr(scraper, fn)()
-            except TypeError as e:
-                sys.exit(f"scraper.{fn}() needs arguments ({e}). Send me scraper.py and I'll wire it up.")
-            return [normalize(x) for x in (data or [])]
-    sys.exit("scraper.py has no scrape() / get_listings() function. Send it to me and I'll wire it up.")
-
-
-# ─── AirROI ──────────────────────────────────────────────────────────
-_printed_raw = False
-
+# ─── AirROI (optional) ───────────────────────────────────────────────
 def find_num(obj, names):
-    """Find the first number under any of `names`, searching nested JSON."""
     if isinstance(obj, dict):
         for k, v in obj.items():
-            if k.lower() in names:
-                if isinstance(v, (int, float)):
-                    return float(v)
-                if isinstance(v, dict):
-                    for sub in ("p50", "median", "avg", "mean", "value"):
-                        if isinstance(v.get(sub), (int, float)):
-                            return float(v[sub])
+            if k.lower() in names and isinstance(v, (int, float)):
+                return float(v)
         for v in obj.values():
-            f = find_num(v, names)
-            if f is not None:
-                return f
+            n = find_num(v, names)
+            if n is not None:
+                return n
     elif isinstance(obj, list):
         for v in obj:
-            f = find_num(v, names)
-            if f is not None:
-                return f
+            n = find_num(v, names)
+            if n is not None:
+                return n
     return None
 
-def airroi(l, cache, fx):
-    global _printed_raw
-    key = f'{l["lat"]:.3f},{l["lng"]:.3f},{l["bedrooms"]}'
-    hit = cache.get(key)
-    if hit and time.time() - hit["t"] < CACHE_DAYS * 86400:
-        return hit["adr"], hit["occ"]
-
-    r = requests.get(
-        AIRROI_URL,
-        headers={"x-api-key": os.environ["AIRROI_API_KEY"]},
-        params={"lat": l["lat"], "lng": l["lng"], "bedrooms": l["bedrooms"],
-                "baths": 1, "guests": max(2, l["bedrooms"] * 2), "currency": "usd"},
-        timeout=30,
-    )
-    if r.status_code != 200:
-        print(f"AirROI error {r.status_code}: {r.text[:400]}")
+def airroi_estimate(lat, lng, rooms):
+    if not AIRROI_KEY:
+        print("AirROI: no key, skipping")
         return None
-    data = r.json()
-    if not _printed_raw:
-        print("AirROI raw response (first call):", json.dumps(data)[:1200])
-        _printed_raw = True
-
-    adr = find_num(data, {"average_daily_rate", "adr", "avg_daily_rate", "daily_rate"})
-    occ = find_num(data, {"occupancy", "occupancy_rate", "avg_occupancy"})
-    if adr is None or occ is None:
-        print("AirROI: couldn't find ADR/occupancy in the response above")
-        return None
-    if occ > 1:
-        occ /= 100                 # 55 -> 0.55
-    if adr > 3000:
-        adr *= fx                  # looks like yen, not USD -> convert
-    cache[key] = {"t": time.time(), "adr": adr, "occ": occ}
-    return adr, occ
-
-
-# ─── ROI ─────────────────────────────────────────────────────────────
-def roi(l, adr, occ, fx):
-    nights = min(occ * 365, NIGHTS_CAP)
-    gross = adr * nights
-    net = gross * (1 - EXPENSE_RATIO)
-    per_m2 = RENO_YEN_PER_M2_OLD if (l["year"] or 1970) < 1981 else RENO_YEN_PER_M2
-    reno_yen = (l["area_m2"] or DEFAULT_AREA_M2) * per_m2
-    total = (l["price_yen"] + reno_yen) * fx
-    return {"adr": adr, "occ": occ, "nights": round(nights), "gross": gross, "net": net,
-            "price_usd": l["price_yen"] * fx, "reno_usd": reno_yen * fx,
-            "total_usd": total, "yield": net / total if total else 0}
-
-
-# ─── Grok ────────────────────────────────────────────────────────────
-def grok_copy(facts, fallback_hook):
-    key = os.getenv("GROK_API_KEY")
-    if not key:
-        return fallback_hook, "", ""
-    prompt = f"""You write Instagram copy for a page about cheap Japanese akiya
-(vacant houses) that could become Airbnbs. Use ONLY these facts, invent nothing:
-{facts}
-
-Reply with JSON only:
-{{"hook": "max 28 characters, punchy, no numbers or prices",
-  "caption": "3-5 short lines, casual, 1-2 emojis",
-  "hashtags": "8 hashtags on one line"}}"""
+    beds = max(1, min((rooms or 4) - 1, 5))
+    params = {"lat": lat, "lng": lng, "bedrooms": beds, "baths": 1,
+              "guests": beds * 2, "currency": "usd"}
     try:
-        r = requests.post(
-            "https://api.x.ai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {key}"},
-            json={"model": GROK_MODEL, "temperature": 0.8,
-                  "messages": [{"role": "user", "content": prompt}]},
-            timeout=90,
-        )
-        if r.status_code != 200:
-            print(f"Grok error {r.status_code}: {r.text[:300]}")
-            return fallback_hook, "", ""
-        text = r.json()["choices"][0]["message"]["content"]
-        data = json.loads(re.search(r"\{.*\}", text, re.S).group(0))
-        hook = (data.get("hook") or "").strip()
-        if not hook or len(hook) > 40:
-            hook = fallback_hook
-        return hook, (data.get("caption") or "").strip(), (data.get("hashtags") or "").strip()
+        r = requests.get(AIRROI_URL, params=params,
+                         headers={"X-API-KEY": AIRROI_KEY}, timeout=30)
+        print(f"AirROI raw {r.status_code}: {r.text[:600]}")
+        if not r.ok:
+            return None
+        data = r.json()
     except Exception as e:
-        print(f"Grok failed ({e}), using fallback text")
-        return fallback_hook, "", ""
+        print(f"AirROI error: {e}")
+        return None
+    rev = find_num(data, {"revenue", "annual_revenue", "ltm_revenue", "revenue_ltm", "yearly_revenue"})
+    occ = find_num(data, {"occupancy", "occupancy_rate", "ltm_occupancy"})
+    adr = find_num(data, {"adr", "average_daily_rate", "ltm_adr", "daily_rate"})
+    if occ is not None and occ <= 1:
+        occ *= 100
+    if rev is None and adr is None:
+        return None
+    return {"revenue": rev, "occupancy": occ, "adr": adr}
 
 
-# ─── Photo + Telegram ────────────────────────────────────────────────
-def download_photo(urls):
-    for u in urls[:5]:
+# ─── slides ──────────────────────────────────────────────────────────
+FONT_PATHS = ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+              "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+              "DejaVuSans-Bold.ttf", "arialbd.ttf", "Arial Bold.ttf"]
+
+def font(size):
+    for p in FONT_PATHS:
         try:
-            r = requests.get(u, timeout=30, headers={"User-Agent": "Mozilla/5.0"})
-            if r.ok and r.headers.get("content-type", "").startswith("image"):
-                p = TEMPLATES / "_photo.jpg"
-                p.write_bytes(r.content)
-                return p
-        except Exception:
+            return ImageFont.truetype(p, size)
+        except OSError:
             pass
-    return None
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
 
-def tg(method, **kw):
-    r = requests.post(f"https://api.telegram.org/bot{os.environ['BOT_TOKEN']}/{method}",
-                      timeout=120, **kw)
-    if not r.ok:
-        print(f"Telegram {method} error: {r.text[:300]}")
-    r.raise_for_status()
+def draw_text(d, xy, s, size, fill=(255, 255, 255)):
+    x, y = xy
+    f = font(size)
+    d.text((x + 3, y + 3), s, font=f, fill=(0, 0, 0))
+    d.text((x, y), s, font=f, fill=fill)
+    return y + int(size * 1.25)
 
-def send_to_telegram(paths, caption):
-    chat = os.environ["CHAT_ID"]
-    if len(paths) == 1:
-        with open(paths[0], "rb") as f:
-            tg("sendPhoto", data={"chat_id": chat}, files={"photo": f})
-    else:
-        files = {f"p{i}": open(p, "rb") for i, p in enumerate(paths[:10])}
-        media = [{"type": "photo", "media": f"attach://p{i}"} for i in range(len(files))]
-        try:
-            tg("sendMediaGroup", data={"chat_id": chat, "media": json.dumps(media)}, files=files)
-        finally:
-            for f in files.values():
-                f.close()
-    tg("sendMessage", data={"chat_id": chat, "text": caption[:4000]})
+def darken_bottom(img, start=0.40):
+    mask = Image.new("L", (1, H))
+    for y in range(H):
+        t = max(0.0, (y / H - start) / (1 - start))
+        mask.putpixel((0, y), int(235 * t))
+    return Image.composite(Image.new("RGB", (W, H)), img, mask.resize((W, H)))
+
+def download(url):
+    try:
+        r = requests.get(url, headers=scraper.UA, timeout=30)
+        if not r.ok:
+            return None
+        img = Image.open(io.BytesIO(r.content)).convert("RGB")
+        return img if img.width >= 300 and img.height >= 200 else None
+    except Exception as e:
+        print(f"  photo error {url}: {e}")
+        return None
+
+def cover_slide(photo, l, resort, km, usd):
+    img = ImageOps.fit(photo, (W, H), Image.LANCZOS) if photo else Image.new("RGB", (W, H), (24, 44, 70))
+    img = darken_bottom(img)
+    d = ImageDraw.Draw(img)
+    draw_text(d, (60, 60), "JAPAN SKI AKIYA", 44, (180, 220, 255))
+    y = H - 480
+    y = draw_text(d, (60, y), fmt_usd(usd), 150)
+    y = draw_text(d, (60, y + 10), fmt_yen(l["price_yen"]), 56, (230, 230, 230))
+    y = draw_text(d, (60, y + 20), f"{fmt_dist(km)} to {resort}", 54)
+    draw_text(d, (60, y + 5), f"{PREF_EN.get(l['pref'], l['pref'])}, Japan", 48, (200, 200, 200))
+    return img
+
+def photo_slide(photo):
+    img = ImageOps.fit(photo, (W, H), Image.LANCZOS)
+    d = ImageDraw.Draw(img)
+    draw_text(d, (W - 470, H - 70), "Photo: akiya.sumai.biz", 32, (235, 235, 235))
+    return img
+
+def stats_slide(l, resort, km, usd, est):
+    img = Image.new("RGB", (W, H), (18, 28, 45))
+    d = ImageDraw.Draw(img)
+    y = draw_text(d, (60, 70), "THE NUMBERS", 64, (180, 220, 255)) + 30
+    rows = [("Price", f"{fmt_usd(usd)}  ({fmt_yen(l['price_yen'])})"),
+            ("Location", f"{PREF_EN.get(l['pref'], l['pref'])}, Japan"),
+            ("Nearest ski resort", f"{resort}, {fmt_dist(km)}")]
+    if l.get("bedrooms"):
+        rows.append(("Rooms", str(l["bedrooms"])))
+    if l.get("year_built"):
+        rows.append(("Built", str(l["year_built"])))
+    if l.get("area_m2"):
+        rows.append(("Floor area", f"{l['area_m2']:.0f} m²"))
+    if est:
+        if est.get("revenue"):
+            rows.append(("Airbnb est. revenue", f"${est['revenue']:,.0f} / year"))
+        if est.get("adr"):
+            occ = f", {est['occupancy']:.0f}% occupied" if est.get("occupancy") else ""
+            rows.append(("Nightly rate est.", f"${est['adr']:,.0f}{occ}"))
+    for label, value in rows:
+        y = draw_text(d, (60, y), label.upper(), 34, (140, 160, 190))
+        for line in textwrap.wrap(value, 30):
+            y = draw_text(d, (60, y), line, 52)
+        y += 22
+    note = "Distance measured from the district centre, not the exact house."
+    if l.get("geo_level") == "town":
+        note = "Distance measured from the town centre, not the exact house."
+    for line in textwrap.wrap(note, 48):
+        y = draw_text(d, (60, H - 170 + (y - y)), line, 30, (150, 150, 150)) if False else y
+    yy = H - 160
+    for line in textwrap.wrap(note, 48) + ["Link to the listing in the caption."]:
+        yy = draw_text(d, (60, yy), line, 30, (150, 150, 150))
+    return img
+
+def build_slides(l, resort, km, usd, est):
+    OUT.mkdir(exist_ok=True)
+    for old in OUT.glob("slide_*.jpg"):
+        old.unlink()
+    photos = []
+    for url in l.get("photos", []):
+        if len(photos) >= MAX_PHOTOS + 1:
+            break
+        img = download(url)
+        if img:
+            photos.append(img)
+    print(f"Photos downloaded: {len(photos)}")
+    slides = [cover_slide(photos[0] if photos else None, l, resort, km, usd)]
+    slides += [photo_slide(p) for p in photos[1:MAX_PHOTOS + 1]]
+    slides.append(stats_slide(l, resort, km, usd, est))
+    paths = []
+    for i, s in enumerate(slides, 1):
+        p = OUT / f"slide_{i}.jpg"
+        s.save(p, "JPEG", quality=90)
+        paths.append(p)
+    return paths
 
 
-# ─── Main ────────────────────────────────────────────────────────────
+# ─── caption ─────────────────────────────────────────────────────────
+def build_caption(l, resort, km, usd, est):
+    pref = PREF_EN.get(l["pref"], l["pref"])
+    lines = [f"🏔 {fmt_usd(usd)} house {fmt_dist(km)} from {resort}",
+             "",
+             f"💴 Price: {fmt_yen(l['price_yen'])} (≈ {fmt_usd(usd)})",
+             f"📍 {l['location']} ({pref})"]
+    if l.get("bedrooms"):
+        lines.append(f"🛏 Rooms: {l['bedrooms']}")
+    if l.get("year_built"):
+        lines.append(f"🏗 Built: {l['year_built']}")
+    if l.get("area_m2"):
+        lines.append(f"📐 Floor area: {l['area_m2']:.0f} m²")
+    if est and est.get("revenue"):
+        lines.append(f"📈 Airbnb estimate: ${est['revenue']:,.0f}/year (AirROI, rough)")
+    lines += ["",
+              "Distance is approximate (district centre).",
+              f"Source & photos: Sumai空き家 / local akiya bank",
+              f"🔗 {l['url']}",
+              "",
+              "#akiya #japanhouse #cheaphouse #skijapan #japow #moveto" + pref.lower()
+              + " #japanrealestate #空き家 #古民家"]
+    return "\n".join(lines)
+
+
+# ─── Telegram ────────────────────────────────────────────────────────
+def tg_text(text):
+    if DRY_RUN or not (BOT_TOKEN and CHAT_ID):
+        print(f"[telegram skipped]\n{text}")
+        return True
+    r = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+                      json={"chat_id": CHAT_ID, "text": text[:4096],
+                            "disable_web_page_preview": True}, timeout=30)
+    print(f"Telegram text: {r.status_code} {r.text[:200] if not r.ok else ''}")
+    return r.ok
+
+def tg_album(paths, caption):
+    if DRY_RUN or not (BOT_TOKEN and CHAT_ID):
+        print(f"[telegram skipped] {len(paths)} slides in {OUT}")
+        return True
+    files, media = {}, []
+    try:
+        for i, p in enumerate(paths[:10]):
+            key = f"photo{i}"
+            files[key] = open(p, "rb")
+            item = {"type": "photo", "media": f"attach://{key}"}
+            if i == 0:
+                item["caption"] = caption[:1024]
+            media.append(item)
+        r = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMediaGroup",
+                          data={"chat_id": CHAT_ID, "media": json.dumps(media)},
+                          files=files, timeout=120)
+    finally:
+        for f in files.values():
+            f.close()
+    print(f"Telegram album: {r.status_code} {r.text[:200] if not r.ok else ''}")
+    return r.ok
+
+
+# ─── main ────────────────────────────────────────────────────────────
 def main():
-    for var in ("AIRROI_API_KEY", "BOT_TOKEN", "CHAT_ID"):
-        if not os.getenv(var):
-            sys.exit(f"Missing secret: {var}")
-
-    posted = load("posted.json", [])
-    cache = load("airroi_cache.json", {})
-    fx = usd_per_yen()
-
-    listings = get_listings()
-    print(f"Scraped {len(listings)} listings{' (TEST RUN)' if TEST_RUN else ''}")
+    today = datetime.now(JST).strftime("%Y-%m-%d")
+    listings = scraper.scrape()
+    posted = load_json(POSTED_FILE)
 
     cands = []
     for l in listings:
-        if l["id"] in posted or not l["price_yen"] or l["price_yen"] > MAX_PRICE_YEN:
+        if l["url"] in posted:
             continue
-        if l["lat"] is None or l["lng"] is None:
+        if l.get("price_yen") is None or l["price_yen"] > MAX_PRICE_YEN:
             continue
         name, km = nearest_hook(l["lat"], l["lng"])
-        cands.append((km, name, l))
-    cands.sort(key=lambda c: c[0])
-    print(f"{len(cands)} candidates with price + coordinates")
-
-    scored = []
-    try:
-        for km, name, l in cands[:TOP_N_FOR_AIRROI]:
-            est = airroi(l, cache, fx)
-            if not est:
-                continue
-            r = roi(l, *est, fx)
-            print(f"  {l['town'][:24]:24} {fmt_yen(l['price_yen']):>7}  "
-                  f"{fmt_dist(km):>6} to {name:14} ADR ${r['adr']:.0f}  "
-                  f"occ {r['occ']:.0%}  yield {r['yield']:.1%}")
-            scored.append((r["yield"], km, name, l, r))
-    finally:
-        save("airroi_cache.json", cache)
-
-    scored.sort(key=lambda s: s[0], reverse=True)
-    for y, km, name, l, r in scored:
-        if y < MIN_YIELD:
-            break
-        photo = download_photo(l["photos"])
-        if not photo:
-            print(f"No usable photo for {l['id']}, trying next")
+        if km > MAX_KM:
             continue
+        cands.append((l, name, km))
+    print(f"Candidates within {MAX_KM:.0f} km of a ski resort: {len(cands)}")
 
-        specs = " · ".join(x for x in [
-            f"{l['bedrooms']}BR",
-            f"Built {l['year']}" if l["year"] else "",
-            f"{l['area_m2']:.0f} m²" if l["area_m2"] else "",
-        ] if x)
-        facts = (f"- Location: {l['town']}\n- Price: {fmt_usd(r['price_usd'])} ({fmt_yen(l['price_yen'])})\n"
-                 f"- {fmt_dist(km)} to {name} ski resort\n- {specs}\n"
-                 f"- Estimated net yield {y:.1%} (180-night cap)")
-        hook, cap, tags = grok_copy(facts, f"Ski house near {name}")
-
-        data = {
-            "photo": photo.name, "hook": hook,
-            "sub_hook": f"{fmt_dist(km)} to {name} · {y:.0%} yield est.",
-            "price_usd": fmt_usd(r["price_usd"]), "price_yen": fmt_yen(l["price_yen"]),
-            "specs": specs, "location": l["town"], "handle": HANDLE,
-            "roi": r, "km": km, "hook_name": name, "listing": l,
-        }
-        slides = [(t, data) for t in ("cover.html", "location.html", "roi.html", "cta.html")
-                  if (TEMPLATES / t).exists()]
-        try:
-            paths = render(slides, OUT)
-        finally:
-            photo.unlink(missing_ok=True)
-
-        caption = "\n\n".join(x for x in [
-            cap,
-            f"📍 {l['town']}\n💴 {fmt_yen(l['price_yen'])} (~{fmt_usd(r['price_usd'])})\n"
-            f"🛠 Reno est. {fmt_usd(r['reno_usd'])}\n"
-            f"📈 Est. net {fmt_usd(r['net'])}/yr · {y:.1%} yield "
-            f"({r['nights']} nights, {EXPENSE_RATIO:.0%} costs)\n🔗 {l['url']}",
-            "Estimates only, not financial advice.",
-            tags,
-        ] if x)
-        (OUT / "caption.txt").write_text(caption, encoding="utf-8")
-
-        send_to_telegram(paths, ("🧪 TEST\n\n" if TEST_RUN else "") + caption)
-        if not TEST_RUN:
-            posted.append(l["id"])
-            save("posted.json", posted)
-        print(f"Sent {len(paths)} slides for {l['id']}")
+    if not cands:
+        tg_text(f"No deal today ({today}) – no new houses within {MAX_KM:.0f} km of a ski resort.")
         return
 
-    msg = f"No deal ≥ {MIN_YIELD:.0%} yield today ({len(scored)} checked)."
-    print(msg)
-    tg("sendMessage", data={"chat_id": os.environ["CHAT_ID"], "text": msg})
+    cands.sort(key=lambda c: (c[0]["price_yen"], c[2]))       # cheapest, then closest
+    l, resort, km = cands[0]
+    fx = get_fx()
+    usd = l["price_yen"] * fx
+    print(f"PICK: {l['location']} {fmt_yen(l['price_yen'])} {fmt_dist(km)} to {resort}\n  {l['url']}")
+
+    est = airroi_estimate(l["lat"], l["lng"], l.get("bedrooms"))
+    paths = build_slides(l, resort, km, usd, est)
+    caption = build_caption(l, resort, km, usd, est)
+    (OUT / "caption.txt").write_text(caption, encoding="utf-8")
+
+    ok = tg_album(paths, caption) and tg_text(caption)
+    if ok and not DRY_RUN:
+        posted[l["url"]] = today
+        save_json(POSTED_FILE, posted)
+        print("Saved to state/posted.json")
+    elif not ok:
+        print("Telegram failed – not marking as posted, will retry next run")
 
 
 if __name__ == "__main__":
