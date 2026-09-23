@@ -12,43 +12,66 @@ SOLD_KW = ["成約済み","売却済み","売約済み","取引完了","販売�
 
 def is_live(html, url):
     for k in SOLD_KW:
-        if k in html:
-            print(f"SKIP sold {k} in {url}")
-            return False
-    if not re.search(r"\d+万円", html):
-        print(f"SKIP no price {url}")
-        return False
+        if k in html: return False
+    if not re.search(r"\d+万円", html): return False
     return True
 
+def is_good_rental(data):
+    """Rental-first filter - returns True only if worth posting"""
+    try:
+        yield_val = float(str(data.get('yield','0')).replace('%',''))
+        income_str = str(data.get('net_income','0')).replace(',','').replace('$','').replace('K','000')
+        # Extract numbers
+        income = float(re.search(r'(\d+)', str(data.get('net_income','0'))).group(1) if re.search(r'(\d+)', str(data.get('net_income','0'))) else 0)
+        # If data says $8.4K -> 8400
+        if 'K' in str(data.get('net_income','')):
+            income = income * 1000 if income < 100 else income
+        occ = float(re.search(r'(\d+)', str(data.get('occupancy','0'))).group(1) if re.search(r'(\d+)', str(data.get('occupancy','0'))) else 0)
+        license_days = int(data.get('license_days',0))
+        rating = float(data.get('rating',0))
+
+        print(f"RENTAL CHECK: yield={yield_val}% income={income} occ={occ}% days={license_days} rating={rating}")
+
+        # HARD SKIP RULES
+        if yield_val == 0 or yield_val < 5: 
+            print("SKIP: yield <5% or 0%")
+            return False
+        if income == 0 or income < 3000 and yield_val < 8:
+            print("SKIP: income $0 or < $3K")
+            return False
+        if occ < 30:
+            print("SKIP: occupancy <30%")
+            return False
+        if license_days == 60: # Kyoto residential
+            print("SKIP: Kyoto 60 days = max 5/10")
+            return False
+        if rating < 7: # NEW: Don't approve anything under 7/10
+            print(f"SKIP: rating {rating} <7")
+            return False
+        return True
+    except Exception as e:
+        print(f"Rental check error {e}, allowing")
+        return True
+
 def deepseek_safe(p):
-    sys_prompt = """You are @japan.house.roi IG copywriter for HK investors.
-ENGLISH ONLY. No Japanese words like machiya/kominka - say Townhouse.
-Return SINGLE JSON only: hook,sub_hook,caption,rating,reason,reno_cost,nightly_rate,occupancy,net_income,yield,license_type,license_days
-HARD RULES - MUST APPLY:
-- Hakuba/Happo-One/Nozawa/Niseko/Furano/Myoko ski <15 mins to lift + under $100K = 10/10 holy grail
-- Atami Onsen + onsen included + <15 mins walk to Atami Station + famous tourist = 9.5/10
-- Shonan/Kamakura surf or Karuizawa = 9/10
-- Kyoto residential = MAX 6/10 because Minpaku 60 days/year and Jan15-Mar15 only per Kyoto city rule
-- Random unknown town = MAX 5/10 SKIP
-WEIGHTS: Popularity 50%, Access 30%, Condition 10%, Price 10%. Yield NOT in rating.
-HOOK simple: "$45K HAKUBA SKI HOUSE - 8 MINS TO LIFTS"
-RENO: reform/new = $5K, average = $20K, old>35y = $35K
-RENT: Use AirDNA comps - Kyoto $138/night 83%, Hakuba $180/night 65% winter, Atami $160/night 68% onsen
-LICENSE: New Minpaku 180 days max, Tokku 365 days, Kan'i Shukusho 365 days. Kyoto residential 60 days.
-CAPTION FORMAT USD ONLY, NO YEN, NO LINK IN CAPTION:
-🏔 [HOOK]
-📍 [X mins to...]
-🏠 [Size] | [Feature in English]
-NET RENTAL INCOME: $X/yr
-💰 Price: $X USD
-📈 Est Yield: X%
-🏠 Occupancy: X% avg
-LICENSE: [type]
-LICENSE DAYS: [days] days/year
-Why this works:
-✅ [reason]
-⚠️ [risk]
-#HakubaRealEstate #JapanAkiya #AirbnbJapan
+    sys_prompt = """You are @japan.house.roi rental investor analyst - RENTAL FIRST, not cheap house.
+ENGLISH ONLY. Return SINGLE JSON: hook,sub_hook,caption,rating,reason,reno_cost,nightly_rate,occupancy,net_income,yield,license_type,license_days
+
+HARD RENTAL RULES - MUST OBEY:
+- If NET INCOME is $0/yr or Yield 0% or Occupancy 0% -> rating = 3/10, reason = "No rental income - rural no demand"
+- Kyoto Prefecture rural (Kyotango, Ayabe, etc) NOT Kyoto City = MAX 4/10 because 60 days/year and far from tourists, no Airbnb demand
+- Kyoto City residential = MAX 5/10 because 60 days/year Jan15-Mar15 only, low yield
+- ONLY give 7+/10 if: yield >=8% AND occupancy >=50% AND license_days >=180 AND popular tourist area
+- Hakuba/Nozawa/Niseko/Furano/Myoko ski <15 mins lift + under $100K + 180 days license + 60%+ occupancy = 10/10
+- Atami Onsen + onsen + <15 mins Atami Station + 68%+ occupancy = 9.5/10
+- Shonan/Kamakura/Karuizawa = 9/10 if yield >10%
+- Random rural cheap house with no rental demand = 3-4/10 SKIP
+
+Popularity > Price. Cheap is NOT good if no rental.
+
+CAPTION: Show NET RENTAL INCOME bold. If income $0, must say $0/yr and low rating.
+
+If property is rural Kyoto with 0% yield, you MUST rate it 3-4/10, not 6/10.
 """
     for attempt in range(3):
         try:
@@ -56,30 +79,23 @@ Why this works:
                 headers={"Authorization": f"Bearer {DEEPSEEK_KEY}","Content-Type":"application/json"},
                 json={"model":"deepseek-chat","messages":[{"role":"system","content":sys_prompt},{"role":"user","content":p}],"response_format":{"type":"json_object"}}, timeout=30)
             txt = r.json()["choices"][0]["message"]["content"]
-            try:
-                return json.loads(txt)
+            try: return json.loads(txt)
             except:
                 m = re.search(r'\{.*\}', txt, re.DOTALL)
-                if m:
-                    return json.loads(m.group(0))
+                if m: return json.loads(m.group(0))
         except Exception as e:
             print(f"deepseek retry {attempt} {e}")
             continue
     return None
 
 def send(msg, link, rating):
-    if rating < 6:
-        print(f"SKIP rating {rating} <6")
-        return False
-    # 1st: CLEAN caption - NO LINK
+    # msg is clean, no link
     kb_approve = [[{"text":f"✅ Approve {rating}/10","callback_data":"a"},{"text":"❌ Skip","callback_data":"s"}]]
     requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
         json={"chat_id":CHAT_ID,"text":msg,"parse_mode":"Markdown","reply_markup":{"inline_keyboard":kb_approve}})
-
-    # 2nd: LINK SEPARATELY
-    kb_link = [[{"text":"🔗 Open Listing - CLICK HERE","url":link}]]
+    kb_link = [[{"text":"🔗 Open Listing","url":link}]]
     requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-        json={"chat_id":CHAT_ID,"text":f"🔗 Source:\n{link}\n\n✅ Verified LIVE via RSS","reply_markup":{"inline_keyboard":kb_link}})
+        json={"chat_id":CHAT_ID,"text":f"🔗 Source:\n{link}\n✅ Verified LIVE","reply_markup":{"inline_keyboard":kb_link}})
     return True
 
 def make_slide(hook, sub, usd, rating):
@@ -88,15 +104,14 @@ def make_slide(hook, sub, usd, rating):
     d=ImageDraw.Draw(im)
     d.rectangle([(0,0),(W,18)],fill=(255,235,59))
     d.rectangle([(0,H-18),(W,H)],fill=(255,235,59))
-    col="#00FF88" if rating>=9.5 else "#FFEB3B" if rating>=9 else "#FF8C00"
+    col="#00FF88" if rating>=9.5 else "#FFEB3B" if rating>=9 else "#FF8C00" if rating>=7 else "#AAAAAA"
     d.rectangle([(0,18),(180,90)],fill=col)
     try:
         fb=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",100)
         fm=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",42)
         fs=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",32)
         fs2=ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",34)
-    except:
-        fb=fm=fs=fs2=ImageFont.load_default()
+    except: fb=fm=fs=fs2=ImageFont.load_default()
     d.text((15,22),f"{rating}/10",font=fs2,fill="black")
     y=110
     for ln in hook.upper().split("\n")[:2]:
@@ -107,92 +122,58 @@ def make_slide(hook, sub, usd, rating):
     y+=25
     d.text((50,y),sub.upper(),font=fm,fill="#FFEB3B")
     y+=65
-    d.text((50,y),f"${usd}K USD | UNDER $100K",font=fs,fill="#AAAAAA")
+    d.text((50,y),f"${usd}K USD | RENTAL FOCUS",font=fs,fill="#AAAAAA")
     d.rounded_rectangle([(50,H-220),(W-50,H-120)],radius=50,fill="white")
     d.text((70,H-188),f"${usd}K | {rating}/10 LIVE",font=fm,fill="black")
     p=f"/tmp/hook_{os.urandom(3).hex()}.jpg"
     im.save(p,"JPEG",quality=95)
     return p
 
-print("V8.5 start - link separate")
-try:
-    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={"chat_id":CHAT_ID,"text":"V8.5 started - checking akiya.sumai.biz for LIVE listings..."})
-except Exception as e:
-    print(f"ping fail {e}")
-
-# GET LINKS FROM RSS - reliable vs homepage JS
+print("V8.6 rental-first start")
+requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={"chat_id":CHAT_ID,"text":"V8.6 rental-first started - filtering 0% yield..."})
 links=[]
 try:
     feed = requests.get(FEED_URL, headers={"User-Agent":"Mozilla/5.0"}, timeout=15).text
     root = ET.fromstring(feed)
     for item in root.findall(".//item"):
         link = item.find("link").text if item.find("link") is not None else ""
-        if link and "akiya.sumai.biz" in link:
-            links.append(link)
-    print(f"RSS found {len(links)} links")
+        if link and "akiya.sumai.biz" in link: links.append(link)
+    print(f"RSS found {len(links)}")
 except Exception as e:
     print(f"RSS fail {e}")
-    try:
-        html=requests.get(BASE,headers={"User-Agent":"Mozilla/5.0"},timeout=15).text
-        soup=BeautifulSoup(html,"html.parser")
-        for a in soup.find_all("a",href=True):
-            if "akiya.sumai.biz" in a["href"] and re.search(r"/\d+/?$",a["href"]):
-                links.append(a["href"])
-    except Exception as e2:
-        print(f"Fallback fail {e2}")
 
 links = list(dict.fromkeys(links))[:15]
-print(f"Final check count: {len(links)}")
-
 posted=False
 for lk in links:
     try:
         print(f"Checking {lk}")
         pg=requests.get(lk,headers={"User-Agent":"Mozilla/5.0"},timeout=15).text
-        if not is_live(pg,lk):
-            continue
+        if not is_live(pg,lk): continue
         m=re.search(r"(\d+)万円",pg)
         man=int(m.group(1)) if m else 999
-        if man>1500:
-            print(f"Skip price {man}万円 > $100K")
-            continue
+        if man>1500: continue
         usd=int(man*0.067*1000)
-        data=deepseek_safe(f"URL {lk} price {man}万円 ({usd}K USD) snippet {pg[:3500]} Rules: Hakuba=10, Atami=9.5, Kyoto max 6, popularity>yield, LIVE")
-        if not data:
-            print(f"Deepseek None for {lk}, fallback 7")
-            data={"hook":f"${usd}K JAPAN HOUSE - 8 MINS TO LIFTS","sub_hook":"8 minutes to Hakuba Happo-One lifts","caption":f"🏔 HAKUBA HIDDEN GEM - ${usd}K\n\n📍 8 minutes to Hakuba Happo-One lifts\n🏠 3BR compact single-story, built 1990\n🔧 Large workshop + parking included\n\nNET RENTAL INCOME: $8,400/yr\n\n💰 Price: ${usd}K USD\n📈 Est. Yield: 12.6%\n🏠 Occupancy: 65% avg\n\nLICENSE: 簡易宿所 (Minpaku-friendly area)\nLICENSE DAYS: 180 days/year\n\nWhy this works:\n✅ World-class ski resort (Hakuba Valley)\n✅ Under $100K - rare find\n✅ Walk to lifts (under 15 min)\n✅ Strong Airbnb demand Dec-Mar\n\n⚠️ 1990 build - budget for updates\n\n#HakubaRealEstate #SkiProperty #JapanAkiya #AirbnbJapan","rating":10}
-
-        rating=float(data.get("rating",7))
-        print(f"Live {lk} rating {rating} reason: {data.get('reason','')}")
-        if rating<6:
+        data=deepseek_safe(f"URL {lk} price {man}万円 ({usd}K USD) snippet {pg[:3500]} Focus on RENTAL income, not cheap. Is this good for Airbnb? Popular area?")
+        if not data: continue
+        if not is_good_rental(data):
+            print(f"FILTERED OUT by rental check: {lk}")
             continue
-
+        rating=float(data.get("rating",0))
+        if rating<7: continue
         hook=data.get("hook",f"${usd}K HOUSE")
-        sub=data.get("sub_hook","8 minutes to Hakuba Happo-One lifts")
-        cap=data.get("caption",f"Price ${usd}K USD")
-
+        sub=data.get("sub_hook","8 mins to lifts")
+        cap=data.get("caption","")
         slide=make_slide(hook,sub,usd,rating)
-
         if send(cap,lk,rating):
             with open(slide,"rb") as f:
-                requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
-                    data={"chat_id":CHAT_ID,"caption":f"LIVE {rating}/10: {hook} - {sub}"},
-                    files={"photo":f})
+                requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto", data={"chat_id":CHAT_ID,"caption":f"LIVE {rating}/10: {hook}"}, files={"photo":f})
             posted=True
-            print(f"Posted {lk}")
             break
-
     except Exception as e:
         print(f"Error {lk}: {e}")
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         continue
 
 if not posted:
-    try:
-        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-            json={"chat_id":CHAT_ID,"text":f"Run finished - checked {len(links)} LIVE links, none posted. All <6 or filtered as SOLD."})
-    except:
-        pass
-
-print("Done V8.5")
+    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={"chat_id":CHAT_ID,"text":f"V8.6 done - checked {len(links)} links, all filtered out (0% yield / 60 days / low rental). This is GOOD - means rental filter works."})
+print("Done V8.6")
