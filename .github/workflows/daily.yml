@@ -1,28 +1,58 @@
-name: akiya-scraper-v89-grok
+name: Run scraper
 
 on:
   schedule:
-    - cron: '0 2 * * *'  # daily 11am JST
+    # 10:17 JST daily = 01:17 UTC, random minute so Cloudflare can't fingerprint
+    - cron: '17 1 * * *'
   workflow_dispatch:
 
 jobs:
-  scrape:
+  run-scraper:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install deps
         run: |
+          pip install --upgrade pip
           pip install requests beautifulsoup4 pillow lxml
+          pip install cloudscraper --upgrade
 
-      - name: Run scraper
+      - name: Random delay anti-block 0-5min
+        run: sleep $((RANDOM % 300))
+
+      - name: Run python scraper.py
         env:
-          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
-        run: python scraper.py
+          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
+          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+        run: |
+          python scraper.py
+
+      - name: Upload seen cache
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: seen-cache
+          path: seen_ids.txt
+          retention-days: 30
+
+      - name: Notify on failure
+        if: failure()
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+          -d "chat_id=${CHAT_ID}" \
+          -d "text=❌ Scraper failed – check Actions log"
