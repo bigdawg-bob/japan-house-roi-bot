@@ -1,36 +1,111 @@
-name: Akiya Daily
+name: Daily akiya post
+
 on:
   schedule:
-    - cron: '0 17 * * *'
-  workflow_dispatch:
+    # GitHub uses UTC time. 13:00 UTC = 22:00 Japan / 9:00 US Eastern (summer).
+    # Scheduled runs can start 5–30 min late when GitHub is busy.
+    - cron: "0 13 * * *"
+  workflow_dispatch:            # adds a "Run workflow" button in the Actions tab
+    inputs:
+      dry_run:
+        description: "Build slides only (don't post to Instagram)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write               # lets the bot commit images + saved data
+
+concurrency:
+  group: daily-post             # never run two posts at the same time
+  cancel-in-progress: false
 
 jobs:
-  scrape:
+  post:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      TZ: Asia/Tokyo
+      IG_HANDLE: "@yourhandle"                      # ← change this
+      # Scheduled runs always post. Manual runs follow the checkbox.
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      IMAGE_BASE_URL: https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}
+
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v4
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          name: seen-cache
-          path:.
-        continue-on-error: true
-      - name: Ensure files exist
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Python packages
+        run: pip install -r requirements.txt
+
+      - name: Cache Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Install Chromium + Japanese fonts
         run: |
-          touch seen.txt
-          echo '{}' > posted.json || true
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install deps
-        run: pip install requests
-      - name: Run scraper
+          python -m playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+
+      # 1) Scrape → score → AirROI → Grok hooks → render slides
+      - name: Find today's deal and render slides
+        id: build
         env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          CHAT_ID: ${{ secrets.CHAT_ID }}
-        run: python scraper.py
-      - uses: actions/upload-artifact@v4
+          AIRROI_API_KEY: ${{ secrets.AIRROI_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          MINPAKU_API_KEY: ${{ secrets.MINPAKU_API_KEY }}   # optional; empty = 180-night cap
+        run: python main.py build
+
+      - name: Upload slides for review
+        if: steps.build.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
         with:
-          name: seen-cache
-          path: |
-            seen.txt
-            posted.json
+          name: slides-${{ github.run_number }}
+          path: ${{ steps.build.outputs.post_dir }}
+          retention-days: 14
+
+      # 2) Instagram needs public image URLs, so push the images first
+      - name: Commit slide images
+        if: steps.build.outputs.found == 'true' && env.DRY_RUN != 'true'
+        env:
+          POST_DIR: ${{ steps.build.outputs.post_dir }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$POST_DIR"
+          git commit -m "Slides: $(basename "$POST_DIR")"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push
+          sleep 30   # give raw.githubusercontent.com time to serve the new files
+
+      # 3) Post the carousel
+      - name: Publish to Instagram
+        if: steps.build.outputs.found == 'true' && env.DRY_RUN != 'true'
+        env:
+          POST_DIR: ${{ steps.build.outputs.post_dir }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+        run: python main.py publish "$POST_DIR"
+
+      # 4) Save the AirROI cache + posted-listings list, even if a step failed
+      - name: Save state
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/
+          if git diff --staged --quiet; then
+            echo "No state changes"; exit 0
+          fi
+          git commit -m "State update $(date +%F)"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push
