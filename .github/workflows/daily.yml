@@ -2,21 +2,26 @@ name: Akiya Daily
 
 on:
   schedule:
-    - cron: '0 17 * * *'  # 02:00 JST daily
+    - cron: '0 17 * * *'
   workflow_dispatch:
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5  # fix Node.js 20 deprecated warning
 
-      - name: Download previous seen.txt
+      - name: Try to download previous cache
         uses: actions/download-artifact@v4
         with:
           name: seen-cache
           path: .
         continue-on-error: true
+
+      - name: Create empty files if first run
+        run: |
+          touch seen.txt posted.json
+          echo "Files ready: $(ls -lh seen.txt posted.json)"
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -34,7 +39,7 @@ jobs:
           SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
         run: python scraper.py
 
-      - name: Upload seen for tomorrow
+      - name: Upload cache for tomorrow
         uses: actions/upload-artifact@v4
         with:
           name: seen-cache
