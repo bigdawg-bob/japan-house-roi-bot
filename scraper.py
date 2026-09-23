@@ -89,43 +89,61 @@ def estimate_reno(html, area, age):
 
 def get_all_links():
     links = []
-    try:
-        feed = requests.get("https://akiya.sumai.biz/feed/", headers={"User-Agent":"Mozilla/5.0"}, timeout=10).text
-        root = ET.fromstring(feed)
-        for it in root.findall(".//item"):
-            l = it.find("link")
-            if l is not None and l.text:
-                links.append(l.text)
-    except:
-        pass
+    # Source 1: akiya.sumai.biz – 30 pages
     for i in range(1, 31):
         try:
             url = f"https://akiya.sumai.biz/page/{i}/" if i>1 else "https://akiya.sumai.biz/"
             html = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}, timeout=10).text
-            for m in re.findall(r'href="([^"]*akiya\.sumai\.biz/\d+/)"', html):
-                links.append(urljoin("https://akiya.sumai.biz/", m))
+            found = re.findall(r'href="(https://akiya\.sumai\.biz/\d+/)"', html)
+            links.extend(found)
+            if len(links) > 200:
+                break
         except:
             pass
-    return list(dict.fromkeys(links))[:650]
+    # Source 2: akiya-athome sitemap pages
+    for i in range(1, 11):
+        try:
+            url = f"https://www.akiya-athome.jp/buy/?page={i}"
+            html = requests.get(url, headers={"User-Agent":"Mozilla/5.0"}, timeout=10).text
+            found = re.findall(r'href="(/buy/[^"]+)"', html)
+            for f in found:
+                links.append(urljoin("https://www.akiya-athome.jp", f))
+        except:
+            pass
+    # Source 3: inaka – fallback
+    try:
+        html = requests.get("https://www.inaka-teiju.com/", headers={"User-Agent":"Mozilla/5.0"}, timeout=10).text
+        found = re.findall(r'href="(https://www\.inaka-teiju\.com/[^"]+)"', html)[:50]
+        links.extend(found)
+    except:
+        pass
+    uniq = list(dict.fromkeys(links))
+    print(f"DEBUG POOL after dedup {len(uniq)}")
+    return uniq[:650]
 
 def grok_write_caption(payload):
-    sys = f"""You are @japan.house.roi copywriter. You get LIVE verified numbers from Python - DO NOT recalculate.
-
-PAYLOAD: {json.dumps(payload, ensure_ascii=False)[:2000]}
-
-Write JSON: hook (2 lines uppercase, first with price), sub_hook (1 line), caption (must include: LIVE comps source "{payload['comps_raw'][:150]}", reno breakdown ${payload['reno']}, license {payload['license_days']}d {payload['license_text']}, NET ${payload['net']} bold, YIELD {payload['yield']}% formula GROSS=nightly*occ*days, ski {payload['ski_name']}), rating (10 if ski<10min+yield>=12, 9.5 Atami onsen, 9 Shonan/Karuizawa, 7-8 if yield>=8 occ>=50 180d, 5 MAX Kyoto 60d), reason
-English only.
+    sys = f"""You are @japan.house.roi copywriter. LIVE numbers from Python - DO NOT recalculate.
+PAYLOAD: {json.dumps(payload, ensure_ascii=False)[:1800]}
+Write JSON: hook (2 lines uppercase first with price), sub_hook, caption (must include LIVE comps "{payload['comps_raw'][:120]}", reno ${payload['reno']}, license {payload['license_days']}d {payload['license_text']}, NET ${payload['net']} YIELD {payload['yield']}% formula GROSS=nightly*occ*days, ski {payload['ski_name']}), rating (10 ski<10min+yield>=12, 9.5 Atami, 9 Shonan, 7-8 yield>=8, 5 MAX Kyoto 60d), reason
 """
-    r = requests.post("https://api.x.ai/v1/chat/completions",
-        headers={"Authorization": f"Bearer {GROK_KEY}","Content-Type":"application/json"},
-        json={
-            "model":"grok-3-mini",
-            "search_parameters":{"mode":"off"},
-            "response_format":{"type":"json_object"},
-            "messages":[{"role":"system","content":sys},{"role":"user","content":payload['url']}],
-            "temperature":0.3
-        }, timeout=30)
-    return json.loads(r.json()["choices"][0]["message"]["content"])
+    try:
+        r = requests.post("https://api.x.ai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {GROK_KEY}","Content-Type":"application/json"},
+            json={
+                "model":"grok-3-mini",
+                "search_parameters":{"mode":"off"},
+                "response_format":{"type":"json_object"},
+                "messages":[{"role":"system","content":sys},{"role":"user","content":payload['url']}],
+                "temperature":0.3
+            }, timeout=30)
+        j = r.json()
+        if "choices" not in j:
+            print(f"GROK ERR API {j}")
+            return None
+        return json.loads(j["choices"][0]["message"]["content"])
+    except Exception as e:
+        print(f"GROK ERR {e}")
+        return None
 
 def send(msg, link, rating):
     kb = [[{"text":f"Approve {rating}/10","callback_data":"a"},{"text":"Skip","callback_data":"s"}]]
@@ -133,7 +151,7 @@ def send(msg, link, rating):
         json={"chat_id":CHAT_ID,"text":msg,"parse_mode":"Markdown","reply_markup":{"inline_keyboard":kb}})
     kb2 = [[{"text":"Open Listing","url":link}]]
     requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-        json={"chat_id":CHAT_ID,"text":f"Source (Python LIVE search):\n{link}","reply_markup":{"inline_keyboard":kb2}})
+        json={"chat_id":CHAT_ID,"text":f"Source:\n{link}","reply_markup":{"inline_keyboard":kb2}})
 
 def make_slide(hook, sub, usd, rating):
     W, H = 1080, 1350
@@ -141,14 +159,7 @@ def make_slide(hook, sub, usd, rating):
     d = ImageDraw.Draw(im)
     d.rectangle([0, 0, W, 18], fill=(255,235,59))
     d.rectangle([0, H-18, W, H], fill=(255,235,59))
-    if rating >= 9.5:
-        col = "#00FF88"
-    elif rating >= 9:
-        col = "#FFEB3B"
-    elif rating >= 7:
-        col = "#FF8C00"
-    else:
-        col = "#AAAAAA"
+    col = "#00FF88" if rating>=9.5 else "#FFEB3B" if rating>=9 else "#FF8C00" if rating>=7 else "#AAAAAA"
     d.rectangle([0, 18, 180, 90], fill=col)
     try:
         fb = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 100)
@@ -159,28 +170,31 @@ def make_slide(hook, sub, usd, rating):
         fb = fm = fs = fs2 = ImageFont.load_default()
     d.text((15, 22), f"{rating}/10", font=fs2, fill="black")
     y = 110
-    parts = hook.upper().split("\n")[:2]
-    for ln in parts:
+    for ln in hook.upper().split("\n")[:2]:
         if ln.strip():
             d.text((50, y), ln.strip(), font=fb, fill="white", stroke_width=6, stroke_fill="black")
             y += 115
     d.line([(50, y+5), (W-50, y+5)], fill="#FFEB3B", width=5)
     y += 25
-    d.text((50, y), sub.upper(), font=fm, fill="#FFEB3B")
+    d.text((50, y), sub.upper()[:40], font=fm, fill="#FFEB3B")
     y += 65
-    d.text((50, y), f"${usd}K USD | PYTHON MATH + LIVE SEARCH", font=fs, fill="#AAAAAA")
+    d.text((50, y), f"${usd}K USD | PYTHON MATH", font=fs, fill="#AAAAAA")
     d.rounded_rectangle([(50, H-220), (W-50, H-120)], radius=50, fill="white")
     d.text((70, H-188), f"${usd}K | {rating}/10", font=fm, fill="black")
     p = f"/tmp/{os.urandom(3).hex()}.jpg"
     im.save(p, "JPEG", quality=95)
     return p
 
-print("V8.9 PYTHON MATH + GROK CAPTION - 650 pool")
-requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={"chat_id":CHAT_ID,"text":"V8.9 start - 650 pool, Python LIVE license/comps + 500 ski + Python MATH (GROSS/NET/YIELD) + Grok-3-mini caption only - $10=30k listings"})
+# MAIN – GUARANTEED 1 LISTING
+print("V8.9.1 FIX POOL 500 + ALWAYS 1 LISTING")
+requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={"chat_id":CHAT_ID,"text":"V8.9.1 start - 500 pool fix + guaranteed 1 listing per run"})
 
 links = get_all_links()
 print(f"POOL {len(links)}")
+
+candidates = [] # store all with yield to guarantee 1
 checked = 0
+
 for lk in links:
     try:
         checked += 1
@@ -191,7 +205,7 @@ for lk in links:
         if not m:
             continue
         man = int(m.group(1))
-        if man > 1500:
+        if man > 1500 or man < 10:
             continue
         usd = int(man*0.067*1000)
         area, age = parse_area_age(pg)
@@ -205,28 +219,51 @@ for lk in links:
         net = gross * 0.70
         total_cost = usd + reno
         yld = round(net / total_cost * 100, 1) if total_cost else 0
-        if yld < 5 or occ < 30:
-            print(f"SKIP Python {lk} y{yld}% occ{occ}%")
-            continue
-        payload = {
-            "url": lk, "price_man": man, "price_usd": usd, "area": area, "age": age,
-            "reno": reno, "city": city, "is_ski": is_ski, "ski_name": ski_name or "none",
-            "license_days": lic_days, "license_text": lic_text,
-            "nightly": nightly, "occ": occ, "gross": int(gross), "net": int(net), "yield": yld,
-            "comps_raw": comps_raw, "total_cost": total_cost
-        }
-        data = grok_write_caption(payload)
-        rating = float(data.get('rating',0))
-        if rating < 7:
-            continue
-        slide = make_slide(data.get('hook',f"${usd}K"), data.get('sub_hook',''), usd, rating)
-        full_caption = f"{data.get('caption','')}\n\nPYTHON MATH: GROSS=${int(gross)} ({nightly}*{occ}%*{lic_days}d) NET=${int(net)} YIELD={yld}% = {int(net)}/{total_cost}\nChecked {checked}/{len(links)}"
-        send(full_caption, lk, rating)
-        with open(slide,"rb") as f:
-            requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
-                data={"chat_id":CHAT_ID,"caption":f"LIVE {rating}/10 {city} {ski_name} {area} {age}y NET ${int(net)} YIELD {yld}%"},
-                files={"photo":f})
-        break
+
+        candidates.append((yld, lk, man, usd, area, age, reno, city, ski_name, lic_days, lic_text, nightly, occ, comps_raw, gross, net, total_cost))
+
+        if len(candidates) >= 100: # enough to pick best
+            break
     except Exception as e:
         print(f"Err {lk}: {e}")
         continue
+
+if not candidates:
+    requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={"chat_id":CHAT_ID,"text":f"❌ 0 candidates after {checked} checks – site blocked. POOL {len(links)}"})
+    exit()
+
+# Sort by yield DESC – guaranteed best even if low
+candidates.sort(key=lambda x: x[0], reverse=True)
+print(f"CANDIDATES {len(candidates)} best yield {candidates[0][0]}%")
+
+# Try top 20 with Grok, if Grok fails use Python caption
+for cand in candidates[:20]:
+    yld, lk, man, usd, area, age, reno, city, ski_name, lic_days, lic_text, nightly, occ, comps_raw, gross, net, total_cost = cand
+    payload = {
+        "url": lk, "price_man": man, "price_usd": usd, "area": area, "age": age,
+        "reno": reno, "city": city, "ski_name": ski_name or "none",
+        "license_days": lic_days, "license_text": lic_text,
+        "nightly": nightly, "occ": occ, "gross": int(gross), "net": int(net), "yield": yld,
+        "comps_raw": comps_raw, "total_cost": total_cost
+    }
+    data = grok_write_caption(payload)
+    if data is None:
+        # Grok failed – use Python fallback caption so you ALWAYS get listing
+        data = {
+            "hook": f"${usd}K AKIYA\n{city}",
+            "sub_hook": f"{yld}% YIELD | {area}SQM | {lic_days}D LICENSE",
+            "caption": f"PYTHON FALLBACK (Grok err): LIVE comps {comps_raw[:100]} Reno ${reno} License {lic_days}d {lic_text} NET ${int(net)} YIELD {yld}% GROSS {nightly}*{occ}%*{lic_days}d",
+            "rating": 7.5 if yld>=4 else 6.5,
+            "reason": "fallback"
+        }
+    rating = float(data.get('rating',6.5))
+    slide = make_slide(data.get('hook',f"${usd}K"), data.get('sub_hook',''), usd, rating)
+    full_caption = f"{data.get('caption','')}\n\nPYTHON MATH: GROSS=${int(gross)} ({nightly}*{occ}%*{lic_days}d) NET=${int(net)} YIELD={yld}% = {int(net)}/{total_cost}\nBest of {checked} checked, pool {len(links)}"
+    send(full_caption, lk, rating)
+    with open(slide,"rb") as f:
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
+            data={"chat_id":CHAT_ID,"caption":f"LIVE {rating}/10 {city} {ski_name} {area}㎡ {age}y NET ${int(net)} YIELD {yld}%"},
+            files={"photo":f})
+    break
+
+requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={"chat_id":CHAT_ID,"text":f"✅ DONE: Checked {checked} | Pool {len(links)} | Candidates {len(candidates)} | Top yield {candidates[0][0]}% | Posted {candidates[0][1][:40]}"})
