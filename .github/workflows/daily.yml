@@ -1,5 +1,4 @@
 name: Akiya Daily
-
 on:
   schedule:
     - cron: '0 17 * * *'
@@ -9,41 +8,24 @@ jobs:
   scrape:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5  # fix Node.js 20 deprecated warning
-
-      - name: Try to download previous cache
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
         with:
           name: seen-cache
-          path: .
+          path:.
         continue-on-error: true
-
-      - name: Create empty files if first run
-        run: |
-          touch seen.txt posted.json
-          echo "Files ready: $(ls -lh seen.txt posted.json)"
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - run: touch seen.txt posted.json
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Install deps
-        run: pip install requests beautifulsoup4 lxml feedparser
-
-      - name: Run scraper
+      - run: pip install requests lxml
+      - run: python scraper.py
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           CHAT_ID: ${{ secrets.CHAT_ID }}
-          GROK_API_KEY: ${{ secrets.GROK_API_KEY }}
-          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
-        run: python scraper.py
-
-      - name: Upload cache for tomorrow
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: seen-cache
           path: |
             seen.txt
             posted.json
-          if-no-files-found: warn
