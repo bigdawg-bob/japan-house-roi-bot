@@ -6,9 +6,11 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
          GOOGLE_MAPS_KEY is set, otherwise free OSRM / OpenStreetMap), cached
       -> keep houses within MAX_DRIVE_MIN by road, rank by LOCATION first
       -> for the best-located houses: read yearly fees (skip if > 15% of price)
-         and get an AirROI estimate (cached)
-      -> final score = attraction points + yield points + build-year points
-         (yield capped at +15, age -10..+5, so location always matters most)
+         and get an AirROI estimate (cached). No AirROI data -> skip.
+      -> yield (yield_calc.py): AirROI rate x occupancy x 180 nights, minus 30%
+         management and yearly fees, divided by house + reno + buying fees
+      -> final score = attraction points + yield points (-10..+15) + build-year points
+         (so location always matters most)
       -> 1080x1350 slides -> Telegram (album + copyable caption).
 """
 import io, json, math, os, re, textwrap, time
@@ -21,6 +23,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 import scraper
 import scraper_athome
 import scraper_homes
+from yield_calc import (estimate, yield_points, caption_text, is_renovated,
+                        show_yield, fmt_k)
 
 # ─── settings ────────────────────────────────────────────────────────
 def _env(name, default):
@@ -43,8 +47,7 @@ SITES_ON         = [s for s in _env("SOURCES", "sumai,athome,homes")
 ROTATE           = _env("ROTATE_SOURCES", "1") == "1"
 
 # ranking: location first, yield and build year as adjustments
-YIELD_CAP        = float(_env("YIELD_CAP_PCT", "15"))  # max points from yield (free house = cap)
-MIN_YIELD        = float(_env("MIN_YIELD_PCT", "0"))   # skip houses with an estimate below this
+MIN_YIELD        = float(_env("MIN_YIELD_PCT", "0"))   # skip houses with net yield below this
 MAX_CHECK        = int(_env("MAX_CHECK", "40"))        # top-located houses to fully check
 RECENT_HOOKS     = int(_env("RECENT_HOOKS", "5"))      # avoid repeating these attractions
 REPEAT_PENALTY   = 25                                  # points off for a recently used attraction
@@ -663,21 +666,6 @@ def fetch_estimate(l, cache):
     return est
 
 
-# ─── yield (secondary score) ─────────────────────────────────────────
-def net_revenue(est, fees_usd):
-    return est["revenue"] - fees_usd if est and est.get("revenue") else None
-
-def yield_pct(est, fees_usd, usd):
-    """Yearly yield in %, or None without AirROI data. A free house counts as
-    YIELD_CAP (not infinity), so it can't jump ahead of a better location."""
-    net = net_revenue(est, fees_usd)
-    if net is None:
-        return None
-    if usd <= 0:
-        return YIELD_CAP if net > 0 else -YIELD_CAP
-    return net / usd * 100
-
-
 # ─── slides ──────────────────────────────────────────────────────────
 FONT_PATHS = ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
               "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -723,21 +711,20 @@ def download(url):
         print(f"  photo error {url}: {e}")
         return None
 
-def yield_text(usd, est, fees_usd):
-    net = net_revenue(est, fees_usd)
-    if net is None:
+def cover_yield_text(e):
+    if not e or e["net"] <= 0:
         return None
-    if usd == 0:
-        return "Free house + Airbnb income"
-    return f"{net / usd * 100:.0f}% est. yield after fees"
+    if show_yield(e):
+        return f"{e['roi'] * 100:.0f}% net yield · ~${e['monthly']:,}/mo"
+    return f"Avg. monthly income ~${e['monthly']:,}"
 
-def cover_slide(photo, l, hooks, usd, est, fees_usd):
+def cover_slide(photo, l, hooks, usd, e):
     h0 = hooks[0]
     img = ImageOps.fit(photo, (W, H), Image.LANCZOS) if photo else Image.new("RGB", (W, H), (24, 44, 70))
     img = darken_bottom(img)
     d = ImageDraw.Draw(img)
     draw_text(d, (60, 60), KINDS[h0["kind"]]["banner"], 44, (180, 220, 255))
-    yt = yield_text(usd, est, fees_usd)
+    yt = cover_yield_text(e)
     if yt:
         draw_text(d, (60, 125), yt, 48, (140, 255, 170))
     y = H - 480 - (55 if len(hooks) > 1 else 0)
@@ -758,18 +745,24 @@ def photo_slide(photo, l):
     draw_text(d, (x, H - 70), credit, 32, (235, 235, 235))
     return img
 
-def stats_slide(l, hooks, usd, est, fees_yen, fees_usd):
+def stats_slide(l, hooks, usd, e, fees_yen, fees_usd):
     h0 = hooks[0]
     img = Image.new("RGB", (W, H), (18, 28, 45))
     d = ImageDraw.Draw(img)
     y = draw_text(d, (60, 70), "THE NUMBERS", 64, (180, 220, 255)) + 30
     price_txt = "FREE" if l["price_yen"] == 0 else f"{fmt_usd(usd)}  ({fmt_yen(l['price_yen'])})"
     rows = [("Price", price_txt),
-            ("Location", f"{PREF_EN.get(l['pref'], l['pref'])}, Japan"),
             (KINDS[h0["kind"]]["label"].capitalize(), f"{h0['name']}, {fmt_trip(h0, l)}")]
-    if len(hooks) > 1:
-        h1 = hooks[1]
-        rows.append(("Also nearby", f"{h1['name']}, {fmt_trip(h1, l)}"))
+    if e:
+        rows += [
+            ("All-in cost (est.)", f"{fmt_k(e['all_in'])} = house {fmt_k(e['house'])} + "
+                                   f"reno {fmt_k(e['reno'])} + fees {fmt_k(e['fees'])}"),
+            ("Airbnb (AirROI)", f"${e['adr']}/night x {e['occ'] * 100:.0f}% x {e['nights']} days"),
+            (f"Net after {e['mgmt_pct'] * 100:.0f}% management",
+             f"{fmt_k(e['net'])}/yr · ~${e['monthly']:,}/mo"),
+        ]
+        if e["breakeven_yrs"]:
+            rows.append(("Break even", f"{e['breakeven_yrs']:.1f} years"))
     house = []
     if l.get("bedrooms"):
         house.append(f"{l['bedrooms']} rooms")
@@ -781,29 +774,27 @@ def stats_slide(l, hooks, usd, est, fees_yen, fees_usd):
         rows.append(("House", " · ".join(house)))
     if fees_yen:
         rows.append(("Yearly fees", f"{fmt_yen(fees_yen)} (≈ {fmt_usd(fees_usd)})"))
-    if est:
-        if est.get("revenue"):
-            rows.append(("Airbnb est. revenue", f"${est['revenue']:,.0f} / year"))
-            if usd > 0:
-                net = net_revenue(est, fees_usd)
-                rows.append(("Yield after fees", f"{net / usd * 100:.0f}% (before tax & renovation)"))
-        if est.get("adr"):
-            occ = f", {est['occupancy']:.0f}% booked" if est.get("occupancy") else ""
-            rows.append(("Nightly rate est.", f"${est['adr']:,.0f}{occ}"))
+    rows.append(("Location", f"{PREF_EN.get(l['pref'], l['pref'])}, Japan"))
+    if len(hooks) > 1:
+        h1 = hooks[1]
+        rows.append(("Also nearby", f"{h1['name']}, {fmt_trip(h1, l)}"))
     for label, value in rows:
+        lines = textwrap.wrap(value, 30)
+        if y + 45 + 65 * len(lines) > H - 190:        # no room left above the note
+            break
         y = draw_text(d, (60, y), label.upper(), 34, (140, 160, 190))
-        for line in textwrap.wrap(value, 30):
+        for line in lines:
             y = draw_text(d, (60, y), line, 52)
         y += 16
     place = "town" if l.get("geo_level") == "town" else "district"
-    note = (f"Drive times: {time_source(hooks)}, from the {place} centre, "
-            f"not the exact house.")
-    yy = H - 160
+    note = (f"Drive times: {time_source(hooks)}, from the {place} centre. "
+            f"Estimates, before tax & running costs.")
+    yy = H - 170
     for line in textwrap.wrap(note, 48) + ["Link to the listing in the caption."]:
         yy = draw_text(d, (60, yy), line, 30, (150, 150, 150))
     return img
 
-def build_slides(l, hooks, usd, est, fees_yen, fees_usd):
+def build_slides(l, hooks, usd, e, fees_yen, fees_usd):
     OUT.mkdir(exist_ok=True)
     for old in OUT.glob("slide_*.jpg"):
         old.unlink()
@@ -815,9 +806,9 @@ def build_slides(l, hooks, usd, est, fees_yen, fees_usd):
         if img:
             photos.append(img)
     print(f"Photos downloaded: {len(photos)}")
-    slides = [cover_slide(photos[0] if photos else None, l, hooks, usd, est, fees_usd)]
+    slides = [cover_slide(photos[0] if photos else None, l, hooks, usd, e)]
     slides += [photo_slide(p, l) for p in photos[1:MAX_PHOTOS + 1]]
-    slides.append(stats_slide(l, hooks, usd, est, fees_yen, fees_usd))
+    slides.append(stats_slide(l, hooks, usd, e, fees_yen, fees_usd))
     paths = []
     for i, s in enumerate(slides, 1):
         p = OUT / f"slide_{i}.jpg"
@@ -827,13 +818,15 @@ def build_slides(l, hooks, usd, est, fees_yen, fees_usd):
 
 
 # ─── caption ─────────────────────────────────────────────────────────
-def build_caption(l, hooks, usd, est, fees_yen, fees_usd):
+def build_caption(l, hooks, usd, e, fees_yen, fees_usd):
     h0 = hooks[0]
     pref = PREF_EN.get(l["pref"], l["pref"])
     price_line = ("💴 Price: FREE 🎉" if l["price_yen"] == 0
                   else f"💴 Price: {fmt_yen(l['price_yen'])} (≈ {fmt_usd(usd)})")
-    lines = [f"{KINDS[h0['kind']]['emoji']} {fmt_usd(usd)} house, "
-             f"{fmt_trip(h0, l)} to {h0['name']}",
+    headline = (f"{KINDS[h0['kind']]['emoji']} {fmt_usd(usd)} house, "
+                f"{fmt_trip(h0, l)} to {h0['name']}.")
+    roi_block = caption_text(e, headline)
+    lines = [roi_block or headline,
              "",
              price_line,
              f"📍 {l['location']} ({pref})"]
@@ -849,16 +842,13 @@ def build_caption(l, hooks, usd, est, fees_yen, fees_usd):
         lines.append(f"📐 Floor area: {l['area_m2']:.0f} m²")
     if fees_yen:
         lines.append(f"🧾 Yearly fees: {fmt_yen(fees_yen)} (≈ {fmt_usd(fees_usd)})")
-    if est and est.get("revenue"):
-        lines.append(f"📈 Airbnb estimate: ${est['revenue']:,.0f}/year (AirROI, rough)")
-        if usd > 0:
-            net = net_revenue(est, fees_usd)
-            lines.append(f"💰 Yield after fees: ~{net / usd * 100:.0f}% before tax & renovation")
     place = "town" if l.get("geo_level") == "town" else "district"
     src = time_source(hooks)
     credit = " (© OpenStreetMap contributors)" if src == "OpenStreetMap routing" else ""
     kind_tags = " ".join(dict.fromkeys(KINDS[h["kind"]]["tags"] for h in hooks))
     lines += ["",
+              "⚠️ Rough estimates: rental data from AirROI (180 nights max), reno & "
+              "buying fees estimated. Before tax & running costs.",
               f"Drive times: {src}{credit}, from the {place} centre.",
               f"Source & photos: {site_info(l)[0]}",
               f"🔗 {l['url']}",
@@ -907,52 +897,62 @@ def pick(ranked, fx, last_source=None):
     """ranked = [(location_points, listing, hooks)], best location first.
     Checks the top MAX_CHECK houses (fees + AirROI, spending paid calls on the
     best locations first), then picks the highest
-    location points + yield points + build-year points.
-    Yield adds at most YIELD_CAP, age -10..+5, so location always matters most."""
+    location points + yield points (-10..+15) + build-year points (-10..+5).
+    Houses without AirROI data or with negative income are skipped."""
     ac, fc = load_json(AIRROI_CACHE), load_json(FEE_CACHE)
-    budget = MAX_AIRROI_CALLS
+    if not AIRROI_KEY:
+        print("!! AIRROI_API_KEY missing – only houses already in the AirROI cache can be used")
+    budget = MAX_AIRROI_CALLS if AIRROI_KEY else 0
     rotate = ROTATE and last_source is not None
-    scored, skip_fee, skip_yield, no_year = [], 0, 0, 0
+    scored, skip_fee, skip_yield, skip_data, no_year = [], 0, 0, 0, 0
     try:
         for hp, l, hooks in ranked:
             if len(scored) >= MAX_CHECK:
                 break
+            found, est = cached_estimate(l, ac)
+            if not found and budget <= 0:
+                skip_data += 1                            # no AirROI data, no calls left
+                continue
             fees = yearly_fees(l, fc)
             if fees is not None and fees > FEE_LIMIT * l["price_yen"]:
                 skip_fee += 1
                 print(f"  skip, fees {fmt_yen(fees)}/yr > {FEE_LIMIT:.0%} of "
                       f"{fmt_yen(l['price_yen'])}: {l['url']}")
                 continue
-            est = None
-            if AIRROI_KEY:
-                found, est = cached_estimate(l, ac)
-                if not found and budget > 0:
-                    budget -= 1
-                    est = fetch_estimate(l, ac)
-            usd = l["price_yen"] * fx
-            y = yield_pct(est, (fees or 0) * fx, usd)
-            if y is not None and y < MIN_YIELD:
-                skip_yield += 1
-                print(f"  skip, yield {y:.0f}% < {MIN_YIELD:.0f}%: {l['url']}")
+            if not found:
+                budget -= 1
+                est = fetch_estimate(l, ac)
+            e = estimate(l["price_yen"], l.get("year_built"), est, fx,
+                         floor_m2=l.get("area_m2"), renovated=is_renovated(l),
+                         yearly_fees_jpy=fees or 0)
+            if e is None:
+                skip_data += 1
+                print(f"  skip, no AirROI rate/occupancy: {l['url']}")
                 continue
-            yp = 0.0 if y is None else max(-YIELD_CAP, min(y, YIELD_CAP))
+            roi_pct = e["roi"] * 100
+            if e["net"] <= 0 or roi_pct < MIN_YIELD:
+                skip_yield += 1
+                print(f"  skip, net {fmt_k(e['net'])}/yr, yield {roi_pct:.0f}%: {l['url']}")
+                continue
+            yp = yield_points(e)
             ap, age_label = age_points(l.get("year_built"))
             if age_label == "built ?":
                 no_year += 1
             total = hp + yp + ap
             h0 = hooks[0]
             how = "road" if h0.get("routed") else "est."
-            ytxt = "no Airbnb data" if y is None else f"yield {y:.0f}%"
             print(f"  [{l.get('source')}] {l['location']} {fmt_yen(l['price_yen'])} | "
-                  f"{h0['name']} {fmt_trip(h0, l)} ({how}) | location {hp:.0f} + {ytxt} "
-                  f"({yp:+.0f}) + {age_label} ({ap:+.0f}) = {total:.0f}")
-            scored.append((total, hp, l, hooks, est, fees))
+                  f"{h0['name']} {fmt_trip(h0, l)} ({how}) | location {hp:.0f} + "
+                  f"yield {roi_pct:.0f}% on {fmt_k(e['all_in'])} all-in ({yp:+.0f}) + "
+                  f"{age_label} ({ap:+.0f}) = {total:.0f}")
+            scored.append((total, hp, l, hooks, e, fees))
     finally:
         save_json(AIRROI_CACHE, ac)                       # never pay twice
         save_json(FEE_CACHE, fc)
-    print(f"Checked: {len(scored)}  |  fee rule skipped: {skip_fee}  |  yield rule skipped: "
-          f"{skip_yield}  |  build year unknown: {no_year}  |  AirROI calls used: "
-          f"{MAX_AIRROI_CALLS - budget}  |  last source: {last_source}")
+    print(f"Checked: {len(scored)}  |  fee rule skipped: {skip_fee}  |  no AirROI data: "
+          f"{skip_data}  |  yield rule skipped: {skip_yield}  |  build year unknown: "
+          f"{no_year}  |  AirROI calls used: {(MAX_AIRROI_CALLS if AIRROI_KEY else 0) - budget}"
+          f"  |  last source: {last_source}")
 
     if not scored:
         return None, None, None, None
@@ -960,8 +960,8 @@ def pick(ranked, fx, last_source=None):
     best = scored[0]
     if rotate:
         best = next((s for s in scored if s[2].get("source") != last_source), best)
-    _, _, l, hooks, est, fees = best
-    return l, hooks, est, fees
+    _, _, l, hooks, e, fees = best
+    return l, hooks, e, fees
 
 
 # ─── main ────────────────────────────────────────────────────────────
@@ -1009,10 +1009,10 @@ def main():
         tg_text(f"No deal today ({today}) – no new houses near any attraction.")
         return
 
-    l, hooks, est, fees = pick(cands, fx, last_source)
+    l, hooks, e, fees = pick(cands, fx, last_source)
     if l is None:
         tg_text(f"No deal today ({today}) – every candidate failed the fee "
-                f"({FEE_LIMIT:.0%}) or yield ({MIN_YIELD:.0f}%) rule.")
+                f"({FEE_LIMIT:.0%}) rule, had no AirROI data, or wouldn't make money.")
         return
 
     usd = l["price_yen"] * fx
@@ -1021,10 +1021,11 @@ def main():
     h0 = hooks[0]
     print(f"PICK [{l.get('source')}]: {l['location']} {fmt_yen(l['price_yen'])} "
           f"{fmt_trip(h0, l)} to {h0['name']} ({h0['kind']}, {time_source(hooks)}), "
-          f"{age_points(l.get('year_built'))[1]}\n  {l['url']}")
+          f"{age_points(l.get('year_built'))[1]}, {e['roi'] * 100:.0f}% net yield, "
+          f"~${e['monthly']:,}/mo\n  {l['url']}")
 
-    paths = build_slides(l, hooks, usd, est, fees_yen, fees_usd)
-    caption = build_caption(l, hooks, usd, est, fees_yen, fees_usd)
+    paths = build_slides(l, hooks, usd, e, fees_yen, fees_usd)
+    caption = build_caption(l, hooks, usd, e, fees_yen, fees_usd)
     (OUT / "caption.txt").write_text(caption, encoding="utf-8")
 
     ok = tg_album(paths, caption) and tg_text(caption)
