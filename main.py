@@ -20,6 +20,7 @@ from pathlib import Path
 
 import requests
 from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import features as pil_features
 
 import scraper
 import scraper_athome
@@ -669,31 +670,46 @@ def fetch_estimate(l, cache):
 
 
 # ─── slides ──────────────────────────────────────────────────────────
-FONT_FILES = {
-    "bold":    [str(ROOT / "fonts" / "Inter-Bold.ttf"),
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                "DejaVuSans-Bold.ttf", "arialbd.ttf", "Arial Bold.ttf"],
-    "regular": [str(ROOT / "fonts" / "Inter-Regular.ttf"),
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                "DejaVuSans.ttf", "arial.ttf", "Arial.ttf"],
-}
+FONT_DIR = ROOT / "fonts"
+FALLBACK_FONTS = ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                  "DejaVuSans.ttf", "arial.ttf", "Arial.ttf"]
+RAQM = pil_features.check("raqm")          # needed for straight (lining) numbers in the serif
+_missing = set()
+
+def font_file(style, weight):
+    if style == "serif":
+        return FONT_DIR / "Serif-Light.ttf"
+    if weight >= 500:
+        return FONT_DIR / "Sans-Medium.ttf"
+    if weight >= 400:
+        return FONT_DIR / "Sans-Regular.ttf"
+    return FONT_DIR / "Sans-Light.ttf"
 
 @lru_cache(maxsize=256)
-def cfont(style, size, weight=700):
-    """Cover font. weight >= 500 -> bold file, below -> regular file."""
-    key = "bold" if weight >= 500 else "regular"
-    for p in FONT_FILES[key] + FONT_FILES["bold"]:
+def cfont(style, size, weight=500):
+    """'serif' = Cormorant Light. 'sans' = Inter: 300 Light, 400 Regular, 500+ Medium."""
+    p = font_file(style, weight)
+    try:
+        return ImageFont.truetype(str(p), size)
+    except OSError:
+        if p not in _missing:
+            _missing.add(p)
+            print(f"!! FONT MISSING: {p} – using a fallback font")
+    for fb in FALLBACK_FONTS:
         try:
-            return ImageFont.truetype(p, size)
+            return ImageFont.truetype(fb, size)
         except OSError:
             pass
-    try:
-        return ImageFont.load_default(size=size)
-    except TypeError:
-        return ImageFont.load_default()
+    return ImageFont.load_default()
 
 def font(size):
-    return cfont("sans", size, 700)
+    return cfont("sans", size, 500)
+
+def feat(f):
+    """Lining numbers (no dropping 3/5/7/9) for the serif, if Pillow supports it."""
+    if RAQM and "Serif" in str(getattr(f, "path", "")):
+        return {"features": ["lnum"]}
+    return {}
 
 def draw_text(d, xy, s, size, fill=(255, 255, 255), maxw=W - 120):
     """Draws text with a shadow; shrinks the font if the line is too wide."""
@@ -707,7 +723,7 @@ def draw_text(d, xy, s, size, fill=(255, 255, 255), maxw=W - 120):
     return y + int(size * 1.25)
 
 def text_width(d, s, f, track=0):
-    return d.textlength(s, font=f) + track * max(0, len(s) - 1)
+    return d.textlength(s, font=f, **feat(f)) + track * max(0, len(s) - 1)
 
 def fit_font(d, s, size, weight, track=0, maxw=W - 120, style="sans"):
     """Largest font (starting at size) that makes the line fit maxw."""
@@ -718,25 +734,29 @@ def fit_font(d, s, size, weight, track=0, maxw=W - 120, style="sans"):
         size -= 2
 
 def put(d, xy, s, f, fill, anchor="la", track=0, shadow=3):
-    """Text with a soft shadow; track = extra letter spacing in px."""
+    """Text with a shadow. track = extra letter spacing in px (can be negative).
+    All letters sit on ONE shared baseline and keep the font's kerning."""
     x, y = xy
+    kw = feat(f)
     if not track:
         if shadow:
-            d.text((x + shadow, y + shadow), s, font=f, fill=(0, 0, 0), anchor=anchor)
-        d.text((x, y), s, font=f, fill=fill, anchor=anchor)
+            d.text((x + shadow, y + shadow), s, font=f, fill=(0, 0, 0), anchor=anchor, **kw)
+        d.text((x, y), s, font=f, fill=fill, anchor=anchor, **kw)
         return
-    widths = [d.textlength(c, font=f) for c in s]
-    total = sum(widths) + track * (len(s) - 1)
+    # work out where the baseline is for the requested anchor (top, middle, ...)
+    a_top = d.textbbox((0, 0), s, font=f, anchor="l" + anchor[1], **kw)[1]
+    b_top = d.textbbox((0, 0), s, font=f, anchor="ls", **kw)[1]
+    base = y + a_top - b_top
+    total = text_width(d, s, f, track)
     if anchor[0] == "m":
         x -= total / 2
     elif anchor[0] == "r":
         x -= total
-    char_anchor = "l" + anchor[1]
-    for c, w in zip(s, widths):
+    for i, c in enumerate(s):
+        px = x + d.textlength(s[:i], font=f, **kw) + track * i
         if shadow:
-            d.text((x + shadow, y + shadow), c, font=f, fill=(0, 0, 0), anchor=char_anchor)
-        d.text((x, y), c, font=f, fill=fill, anchor=char_anchor)
-        x += w + track
+            d.text((px + shadow, base + shadow), c, font=f, fill=(0, 0, 0), anchor="ls", **kw)
+        d.text((px, base), c, font=f, fill=fill, anchor="ls", **kw)
 
 def shade(img, base=60, top=0.16, bottom=0.55):
     """Darkens the photo: light overall, stronger at the top (handle) and bottom (facts)."""
@@ -806,24 +826,24 @@ def cover_slide(photo, l, hooks, usd, e):
         label = "house price" if l["price_yen"] == 0 else fmt_yen(l["price_yen"])
         sub, bottom_price = None, None
 
-    # (x, y, text, size, weight, colour, anchor, letter spacing)
+    # (x, y, text, style, size, weight, colour, anchor, letter spacing)
     items = [
-        (60, 60, HANDLE, 24, 500, white, "la", 2),
-        (cx, 640, big, 260, 700, white, "ms", 0),
-        (cx, 690, label, 48, 400, soft, "mt", 1),
+        (60, 60, HANDLE, "sans", 26, 500, white, "la", 1),
+        (cx, 640, big, "serif", 300, 300, white, "ms", -4),
+        (cx, 690, label, "sans", 40, 300, soft, "mt", 2),
     ]
     if sub:
-        items.append((cx, 770, sub, 36, 400, soft, "mt", 0))
+        items.append((cx, 760, sub, "sans", 34, 400, soft, "mt", 0))
     if bottom_price:
-        items.append((cx, H - 330, bottom_price, 72, 700, white, "mt", 0))
-    items.append((cx, H - 235, cover_trip(h0, l), 44, 500, white, "mt", 0))
+        items.append((cx, H - 330, bottom_price, "serif", 88, 300, white, "mt", 0))
+    items.append((cx, H - 225, cover_trip(h0, l), "sans", 42, 500, white, "mt", 0))
     facts = cover_facts(l)
     if facts:
-        items.append((cx, H - 165, facts, 34, 400, grey, "mt", 1))
+        items.append((cx, H - 160, facts, "sans", 30, 400, grey, "mt", 3))
 
-    for x, y, s, size, weight, fill, anchor, track in items:
-        f = fit_font(d, s, size, weight, track)
-        put(d, (x, y), s, f, fill, anchor, track, shadow=4 if size >= 100 else 2)
+    for x, y, s, style, size, weight, fill, anchor, track in items:
+        f = fit_font(d, s, size, weight, track, style=style)
+        put(d, (x, y), s, f, fill, anchor, track, shadow=3 if size >= 100 else 2)
     return img
 
 def photo_slide(photo, l):
@@ -1056,6 +1076,9 @@ def pick(ranked, fx, last_source=None):
 # ─── main ────────────────────────────────────────────────────────────
 def main():
     today = datetime.now(JST).strftime("%Y-%m-%d")
+    print(f"Fonts folder: {FONT_DIR} | files: "
+          f"{sorted(p.name for p in FONT_DIR.glob('*.ttf')) if FONT_DIR.exists() else 'FOLDER NOT FOUND'}"
+          f" | raqm (lining numbers): {RAQM}")
     fx = get_fx()
     max_yen = MAX_PRICE_USD / fx
     listings = gather()
