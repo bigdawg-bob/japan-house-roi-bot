@@ -1,0 +1,104 @@
+{
+ "checks": {
+  "pexels:31354630|day|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 4,
+   "why": "person and busy trees distract"
+  },
+  "pexels:31046945|day|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 4,
+   "why": "Busy snowy street with many people"
+  },
+  "pexels:8890413|day|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "bright snow hurts white text contrast"
+  },
+  "pexels:30759486|day|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 6,
+   "why": "Empty snowy street but sunny harsh shadows"
+  },
+  "pexels:36053216|day|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Scenic snowy town, busy for text overlay"
+  },
+  "pexels:31046945|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 4,
+   "why": "Busy people-filled daytime snow scene"
+  },
+  "pexels:31354630|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 5,
+   "why": "Person visible, busy trees, daytime snow"
+  },
+  "pexels:29531012|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Night street person Japan dark contrast"
+  },
+  "pexels:17856682|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Night shopfront dark sides person visible"
+  },
+  "pexels:6279604|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Snowy night street glowing trees empty"
+  }
+ }
+}

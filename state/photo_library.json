@@ -1,0 +1,35 @@
+{
+ "717810d88cc9bafd": {
+  "id": "house:https://akiya.sumai.biz/wp-content/uploads/2026/09/115kt-1.png",
+  "credit": "Photo: akiya.sumai.biz",
+  "role": "house",
+  "mood": null,
+  "kind": "ski",
+  "generic": false,
+  "added": "2026-09-24T20:41:03+09:00",
+  "uses": 1,
+  "last": "2026-09-24T20:41:03+09:00"
+ },
+ "e1c6572076efeb19": {
+  "id": "pexels:36053216",
+  "credit": "Photo: Maxine Xin / Pexels",
+  "role": "area",
+  "mood": "day",
+  "kind": "ski",
+  "generic": false,
+  "added": "2026-09-24T20:41:03+09:00",
+  "uses": 1,
+  "last": "2026-09-24T20:41:03+09:00"
+ },
+ "be9cafde84811b6c": {
+  "id": "pexels:6279604",
+  "credit": "Photo: 2ykang / Pexels",
+  "role": "area",
+  "mood": "dusk",
+  "kind": "ski",
+  "generic": false,
+  "added": "2026-09-24T20:41:03+09:00",
+  "uses": 1,
+  "last": "2026-09-24T20:41:03+09:00"
+ }
+}
