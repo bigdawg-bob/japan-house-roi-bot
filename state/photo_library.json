@@ -31,5 +31,38 @@
   "added": "2026-09-24T20:41:03+09:00",
   "uses": 4,
   "last": "2026-09-24T22:15:57+09:00"
+ },
+ "3d9af773508aa589": {
+  "id": "house:https://akiya.sumai.biz/wp-content/uploads/2025/08/902kt-1.jpg",
+  "credit": "Photo: akiya.sumai.biz",
+  "role": "house",
+  "mood": null,
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-24T22:32:10+09:00",
+  "uses": 1,
+  "last": "2026-09-24T22:32:10+09:00"
+ },
+ "4c47de8fa5f5eaf7": {
+  "id": "pexels:30933038",
+  "credit": "Photo: Julias  Torten und Törtchen / Pexels",
+  "role": "area",
+  "mood": "day",
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-24T22:32:10+09:00",
+  "uses": 1,
+  "last": "2026-09-24T22:32:10+09:00"
+ },
+ "b359c5e760605040": {
+  "id": "pexels:28969414",
+  "credit": "Photo: Edward Sy / Pexels",
+  "role": "area",
+  "mood": "dusk",
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-24T22:32:10+09:00",
+  "uses": 1,
+  "last": "2026-09-24T22:32:10+09:00"
  }
 }

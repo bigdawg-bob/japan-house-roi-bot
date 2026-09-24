@@ -99,6 +99,36 @@
    "light_ok": true,
    "score": 7,
    "why": "Snowy night street glowing trees empty"
+  },
+  "pexels:30933038|day|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Misty onsen canal, even overcast light"
+  },
+  "pexels:30933028|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 7,
+   "why": "Empty moody onsen street, good overlay"
+  },
+  "pexels:28969414|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": true,
+   "score": 7,
+   "why": "Night Kyoto street dark sky for overlay"
   }
  }
 }
