@@ -1,21 +1,34 @@
+"""
+Yield math for the akiya bot.
+Rental data comes ONLY from AirROI (nightly rate + occupancy).
+Reno cost and buying fees are rule-of-thumb estimates, not data.
+"""
 import os
 
-NIGHTS         = 180                                          # 民泊 legal cap — fixed
-MGMT_PCT       = float(os.getenv("MGMT_PCT", "0.30"))         # management fee shown in caption
-SETUP_JPY      = int(os.getenv("SETUP_JPY", "500000"))        # furniture, fire safety, registration
-MAX_SHOWN_ROI  = float(os.getenv("MAX_SHOWN_ROI", "0.60"))    # hide yield % above this
+def _env(name, default):
+    return os.getenv(name) or default                  # empty string -> default
+
+NIGHTS        = 180                                     # 民泊 legal cap - fixed
+MGMT_PCT      = float(_env("MGMT_PCT", "0.30"))         # management company cut
+SETUP_JPY     = int(_env("SETUP_JPY", "500000"))        # furniture, fire safety, registration
+MAX_SHOWN_ROI = float(_env("MAX_SHOWN_ROI", "0.60"))    # hide yield % above this (looks fake)
+RENO_WORDS    = ("リフォーム済", "リノベ済", "リノベーション済", "改装済")
 
 
-# ---------- costs ----------
+# ---------- costs (yen) ----------
 def reno_jpy(year_built, floor_m2=None, renovated=False):
-    if year_built is None:
-        per_m2, flat = None, 3_000_000
+    try:
+        year_built = int(year_built)
+    except (TypeError, ValueError):
+        year_built = None
+    if not year_built:
+        per_m2, flat = None, 3_000_000                  # unknown -> assume the worst
     elif year_built < 1981:
-        per_m2, flat = 50_000, 3_500_000
+        per_m2, flat = 50_000, 3_500_000                # old earthquake code, pipes, wiring
     elif year_built < 2000:
-        per_m2, flat = 30_000, 2_200_000
+        per_m2, flat = 30_000, 2_200_000                # kitchen, bath, interior
     else:
-        per_m2, flat = 15_000, 1_200_000
+        per_m2, flat = 15_000, 1_200_000                # mostly cosmetic
     cost = per_m2 * floor_m2 if (per_m2 and floor_m2) else flat
     if renovated:
         cost *= 0.5
@@ -23,66 +36,74 @@ def reno_jpy(year_built, floor_m2=None, renovated=False):
 
 
 def fees_jpy(price_jpy):
+    """One-time buying costs: agent + scrivener + registration/acquisition tax."""
     if price_jpy <= 8_000_000:
-        agent = 330_000                                   # 2024 low-cost akiya cap (tax incl.)
+        agent = 330_000                                 # 2024 low-cost akiya cap (tax incl.)
     else:
         agent = (price_jpy * 0.03 + 60_000) * 1.10
     scrivener = 100_000
-    taxes = price_jpy * 0.04                              # registration + acquisition tax (proxy)
+    taxes = price_jpy * 0.04                            # proxy: real tax uses assessed value
     return agent + scrivener + taxes
 
 
+def is_renovated(listing):
+    title = listing.get("title") or ""
+    return any(w in title for w in RENO_WORDS)
+
+
 # ---------- AirROI only ----------
-def airroi_inputs(airroi, jpy_per_usd):
-    """Nightly rate (USD) and occupancy (0-1) from AirROI. None if missing."""
-    if not airroi:
+def airroi_inputs(est):
+    """est = main.py's cached AirROI result {"revenue", "occupancy" (%), "adr" (USD)}.
+    Returns (nightly rate USD, occupancy 0-1) or None if AirROI gave no usable data."""
+    if not est:
         return None
-
-    def p50(key):
-        p = (airroi.get("percentiles") or {}).get(key) or {}
-        return p.get("p50") or airroi.get(key)
-
-    adr, occ = p50("average_daily_rate"), p50("occupancy")
+    adr, occ, rev = est.get("adr"), est.get("occupancy"), est.get("revenue")
+    if occ and occ > 1:                                 # 41 -> 0.41
+        occ = occ / 100
+    if not adr and rev and occ:                         # still AirROI data, just derived
+        adr = rev / (occ * 365)
     if not adr or not occ:
         return None
-    if str(airroi.get("currency", "USD")).upper() == "JPY":
-        adr = adr / jpy_per_usd
-    if occ > 1:                                           # 41 -> 0.41
-        occ = occ / 100
     return round(adr), round(occ, 2)
 
 
-# ---------- estimate ----------
+# ---------- estimate (USD) ----------
 def _r100(usd):
     return round(usd / 100) * 100
 
 
-def estimate(price_jpy, year_built, airroi, jpy_per_usd, floor_m2=None, renovated=False):
-    rental = airroi_inputs(airroi, jpy_per_usd)
+def estimate(price_jpy, year_built, airroi_est, fx, floor_m2=None,
+             renovated=False, yearly_fees_jpy=0):
+    """fx = USD per 1 JPY (same as main.py, e.g. 0.0067). None = no AirROI data."""
+    rental = airroi_inputs(airroi_est)
     if rental is None:
         return None
     adr, occ = rental
 
     gross = adr * occ * NIGHTS
-    net = _r100(gross * (1 - MGMT_PCT))
+    fees_yearly = round((yearly_fees_jpy or 0) * fx)
+    net = _r100(gross * (1 - MGMT_PCT) - fees_yearly)
 
-    house = _r100(price_jpy / jpy_per_usd)
-    reno = _r100(reno_jpy(year_built, floor_m2, renovated) / jpy_per_usd)
-    fees = _r100(fees_jpy(price_jpy) / jpy_per_usd)
+    house = round(price_jpy * fx)
+    reno = _r100(reno_jpy(year_built, floor_m2, renovated) * fx)
+    fees = _r100(fees_jpy(price_jpy) * fx)
     all_in = house + reno + fees
 
     return {
         "source": "AirROI",
         "house": house, "reno": reno, "fees": fees, "all_in": all_in,
         "adr": adr, "occ": occ, "nights": NIGHTS,
-        "gross": round(gross), "mgmt_pct": MGMT_PCT, "net": net,
+        "gross": round(gross), "mgmt_pct": MGMT_PCT, "fees_yearly": fees_yearly,
+        "net": net,
         "roi": net / all_in if all_in else 0,
         "monthly": round(net / 12),
         "breakeven_yrs": all_in / net if net > 0 else None,
+        "renovated": renovated,
     }
 
 
 def yield_points(e):
+    """Ranking bonus: location stays the main score, this only adjusts it."""
     if e is None:
         return -5
     r = e["roi"]
@@ -93,26 +114,36 @@ def yield_points(e):
     return -10
 
 
-# ---------- caption ----------
+# ---------- text ----------
 def fmt_k(usd):
+    if usd == 0:
+        return "FREE"
     return "$" + f"{usd / 1000:.1f}".removesuffix(".0") + "k"
 
 
-def caption_text(e, drive_mins=None, resort=None):
+def show_yield(e):
+    return e["roi"] <= MAX_SHOWN_ROI
+
+
+def caption_text(e, headline=None):
+    """The ROI block of the caption. None if the house loses money."""
     if e is None or e["net"] <= 0:
         return None
+    head = headline or ""
+    if show_yield(e):
+        head = f"{head} {e['roi'] * 100:.0f}% net yield.".strip()
 
-    head = []
-    if drive_mins is not None and resort:
-        head.append(f"{round(drive_mins)} mins drive to {resort}.")
-    if e["roi"] <= MAX_SHOWN_ROI:
-        head.append(f"{e['roi'] * 100:.0f}% net yield.")
+    after = f"After {e['mgmt_pct'] * 100:.0f}% management"
+    if e["fees_yearly"]:
+        after += f" & ${e['fees_yearly']:,} yearly fees"
 
     body = [
-        f"Costs: House {fmt_k(e['house'])} + Reno {fmt_k(e['reno'])} + Fees {fmt_k(e['fees'])} = {fmt_k(e['all_in'])} in",
+        f"Costs: House {fmt_k(e['house'])} + Reno {fmt_k(e['reno'])} + "
+        f"Fees {fmt_k(e['fees'])} = {fmt_k(e['all_in'])} in",
         f"Rental: ${e['adr']}/night x {e['occ'] * 100:.0f}% x {e['nights']} days",
-        f"After {e['mgmt_pct'] * 100:.0f}% management: {fmt_k(e['net'])}/yr net",
+        f"{after}: {fmt_k(e['net'])}/yr net",
         "",
-        f"Avg. monthly income: ~${e['monthly']:,} net / Break even {e['breakeven_yrs']:.1f} yrs",
+        f"Avg. monthly income: ~${e['monthly']:,} net / "
+        f"Break even {e['breakeven_yrs']:.1f} yrs",
     ]
-    return "\n".join(([" ".join(head), ""] if head else []) + body)
+    return "\n".join(([head, ""] if head else []) + body)
