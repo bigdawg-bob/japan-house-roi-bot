@@ -129,6 +129,126 @@
    "light_ok": true,
    "score": 7,
    "why": "Night Kyoto street dark sky for overlay"
+  },
+  "pexels:34856227|day|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Overcast lake boat scene with people"
+  },
+  "pexels:33314894|day|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Trees frame overcast lake scene"
+  },
+  "pexels:9809750|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 5,
+   "why": "dark sky busy twigs not Japan"
+  },
+  "pexels:33448127|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 5,
+   "why": "busy generic stars over dark trees"
+  },
+  "pexels:29279927|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": true,
+   "japan": false,
+   "landmark": false,
+   "light_ok": false,
+   "score": 3,
+   "why": "Fire closeup, person, not Japan ski"
+  },
+  "pexels:11787616|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 3,
+   "why": "dark flares, not ski resort"
+  },
+  "pexels:38173710|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Starry sky not Japan or ski resort"
+  },
+  "pexels:9740520|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": true,
+   "japan": false,
+   "landmark": false,
+   "light_ok": false,
+   "score": 1,
+   "why": "Indoor kids red light, unrelated scene"
+  },
+  "pexels:36053215|dusk|generic": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 6,
+   "why": "Scenic snow village too bright for white text"
+  },
+  "pexels:17727740|dusk|generic": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 4,
+   "why": "Busy bright snow hides white text"
+  },
+  "pexels:14867064|dusk|generic": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": false,
+   "score": 5,
+   "why": "busy snowy village people daytime"
+  },
+  "pexels:6279604|dusk|generic": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Snowy night lights, busy road streaks"
   }
  }
 }

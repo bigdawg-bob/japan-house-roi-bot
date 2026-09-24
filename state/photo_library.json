@@ -29,8 +29,8 @@
   "kind": "ski",
   "generic": false,
   "added": "2026-09-24T20:41:03+09:00",
-  "uses": 4,
-  "last": "2026-09-24T22:15:57+09:00"
+  "uses": 5,
+  "last": "2026-09-24T23:16:13+09:00"
  },
  "3d9af773508aa589": {
   "id": "house:https://akiya.sumai.biz/wp-content/uploads/2025/08/902kt-1.jpg",
@@ -64,5 +64,16 @@
   "added": "2026-09-24T22:32:10+09:00",
   "uses": 1,
   "last": "2026-09-24T22:32:10+09:00"
+ },
+ "4c8fb638974dfafb": {
+  "id": "pexels:33314894",
+  "credit": "Photo: Grace L. / Pexels",
+  "role": "area",
+  "mood": null,
+  "kind": "ski",
+  "generic": false,
+  "added": "2026-09-24T23:16:13+09:00",
+  "uses": 2,
+  "last": "2026-09-24T23:16:13+09:00"
  }
 }
