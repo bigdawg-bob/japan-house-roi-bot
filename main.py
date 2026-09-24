@@ -1382,7 +1382,7 @@ def area_slide(pic, h, l, e, usd=None):
     real = show_yield(e) and yrs                        # same rule as slide 1 (hide if > 60%)
 
     # top: handle + title on one line
-    put(d, (60, 60), HANDLE, cfont("sans", 24, 300), w70, "la", 1, 2)
+    put(d, (60, 62), HANDLE, cfont("sans", 24, 300), w70, "la", 1, 2)
     put(d, (cx, 62), "THE PAYBACK", cfont("sans", 22, 300), w60, "mt", 6, 0)
 
     if real:
