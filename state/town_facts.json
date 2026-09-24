@@ -1,14 +1,14 @@
 {
  "Nozawa Onsen": {
   "v": {
-   "tagline": "Traditional village with snow onsen",
-   "facts": [
-    "Traditional village with ski slopes at the edge.",
-    "Ski season lasts from late November to early May.",
-    "Over ten meters of snow, thirteen public hot springs and Alps views.",
-    "Two hours from Tokyo by bullet train and bus."
+   "known_for": "Authentic Japanese ski village",
+   "visitors": "715k tourists/yr",
+   "guests": [
+    "Australian ski tourists",
+    "Japanese onsen visitors",
+    "Western snowboarders"
    ]
   },
-  "d": "2026-09-24T20:41:03+09:00"
+  "d": "2026-09-24T21:16:36+09:00"
  }
 }
