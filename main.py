@@ -1,8 +1,10 @@
 """
 Daily "cheap Japanese house near a ski resort / onsen / sight / beach / nature" bot.
 Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
-      -> keep houses under MAX_PRICE_USD within a ~45-min drive of a hook
-      -> rank by LOCATION first (how close, how famous, how many attractions)
+      -> keep houses under MAX_PRICE_USD roughly near a hook (straight-line pre-filter)
+      -> real ROAD drive times for the best-located houses (Google Routes API if
+         GOOGLE_MAPS_KEY is set, otherwise free OSRM / OpenStreetMap), cached
+      -> keep houses within MAX_DRIVE_MIN by road, rank by LOCATION first
       -> for the best-located houses: read yearly fees (skip if > 15% of price)
          and get an AirROI estimate (cached)
       -> final score = attraction points + yield points + build-year points
@@ -68,17 +70,28 @@ def _weights(s):
 
 KIND_WEIGHT = _weights(_env("HOOK_PRIORITY", "ski=1.0,onsen=1.0,sight=0.9,beach=0.9,nature=0.8"))
 
-# travel-time estimate (no routing API; straight line -> road distance -> minutes)
-ROAD_FACTOR = 1.3     # roads are ~30% longer than a straight line
-DRIVE_KMH   = 40      # average rural driving speed
-WALK_KMH    = 4.8
-MAX_KM      = MAX_DRIVE_MIN / 60 * DRIVE_KMH / ROAD_FACTOR   # ≈ 23 km straight line
+# ── travel time ──
+# Real road times: Google Routes API (if GOOGLE_MAPS_KEY) or OSRM (free, OpenStreetMap).
+ROUTER        = _env("ROUTER", "auto").lower()          # auto | google | osrm | none
+GOOGLE_KEY    = os.getenv("GOOGLE_MAPS_KEY")
+OSRM_URL      = _env("OSRM_URL", "https://router.project-osrm.org").rstrip("/")
+OSRM_SLOWDOWN = float(_env("OSRM_SLOWDOWN", "1.2"))     # OSRM is usually a bit faster than Google
+ROUTE_TOP     = int(_env("ROUTE_TOP", "60"))            # new routing requests per run
+GOOGLE_CACHE_DAYS = 30                                   # Google terms: don't keep results long
+OSRM_CACHE_DAYS   = 365
+# Fallback estimate (routing failed / not routed): deliberately cautious for mountain roads.
+ROAD_FACTOR   = 1.4       # roads are ~40% longer than a straight line
+DRIVE_KMH     = 32        # average speed on rural / mountain roads
+WALK_KMH      = 4.8
+PREFILTER     = 1.5       # keep hooks up to 1.5 x MAX_DRIVE_MIN (estimate) until routed
+WALK_KM       = MAX_WALK_MIN / 60 * WALK_KMH                 # ≈ 1.2 km by road
 
 ROOT          = Path(__file__).parent
 STATE         = ROOT / "state"
 POSTED_FILE   = STATE / "posted.json"
 AIRROI_CACHE  = STATE / "airroi_cache.json"
 FEE_CACHE     = STATE / "fees_cache.json"
+ROUTE_CACHE   = STATE / "routes_cache.json"
 ROTATION_FILE = STATE / "rotation.json"
 OUT           = ROOT / "out"
 JST           = timezone(timedelta(hours=9))
@@ -263,25 +276,9 @@ def haversine(lat1, lng1, lat2, lng2):
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
     return 6371 * 2 * math.asin(math.sqrt(a))
 
-def drive_min(km): return km * ROAD_FACTOR / DRIVE_KMH * 60
-def walk_min(km):  return km * ROAD_FACTOR / WALK_KMH * 60
-
-def nearby_hooks(lat, lng):
-    """Enabled attractions within MAX_DRIVE_MIN, closest first: [(kind, name, km)]"""
-    hits = []
-    for kind, name, a, b in HOOKS:
-        if kind not in ENABLED:
-            continue
-        km = haversine(lat, lng, a, b)
-        if drive_min(km) <= MAX_DRIVE_MIN:
-            hits.append((kind, name, km))
-    return sorted(hits, key=lambda h: h[2])
-
-def fmt_trip(km, l):
-    """'~10 min walk' only when we know the town; otherwise a drive estimate."""
-    if l.get("geo_level") == "town" and walk_min(km) <= MAX_WALK_MIN:
-        return f"~{max(5, round(walk_min(km) / 5) * 5)} min walk"
-    return f"~{max(5, round(drive_min(km) / 5) * 5)} min drive"
+def est_drive_min(km):
+    """Rough fallback: straight line -> road distance -> minutes (cautious)."""
+    return km * ROAD_FACTOR / DRIVE_KMH * 60
 
 def fmt_usd(v): return "FREE" if v == 0 else (f"${v/1000:.0f}K" if v >= 1000 else f"${v:.0f}")
 def fmt_yen(v): return "FREE" if v == 0 else (f"¥{v/1e6:.1f}M" if v >= 1e6 else f"¥{v/1e3:.0f}K")
@@ -297,22 +294,180 @@ def save_json(p, data):
     p.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+# ─── nearby attractions ──────────────────────────────────────────────
+def nearby_hooks(lat, lng):
+    """Enabled attractions roughly in range (loose pre-filter, refined by road routing).
+    Each hook: {kind, name, lat, lng, km (straight), road_km, min, routed}"""
+    hits = []
+    for kind, name, a, b in HOOKS:
+        if kind not in ENABLED:
+            continue
+        km = haversine(lat, lng, a, b)
+        mins = est_drive_min(km)
+        if mins <= MAX_DRIVE_MIN * PREFILTER:
+            hits.append({"kind": kind, "name": name, "lat": a, "lng": b, "km": km,
+                         "road_km": km * ROAD_FACTOR, "min": mins, "routed": False})
+    return sorted(hits, key=lambda h: h["min"])
+
+def fmt_trip(h, l):
+    """'~8 min walk' only when the house position is precise (district level) and the
+    road distance is short; exact minutes for short routed drives, else rounded."""
+    if l.get("geo_level") == "district" and h["road_km"] <= WALK_KM:
+        m = h["road_km"] / WALK_KMH * 60
+        return f"~{max(5, math.ceil(m / 5) * 5)} min walk"
+    m = h["min"]
+    if h.get("routed"):
+        m = max(1, round(m)) if m < 20 else int(round(m / 5) * 5)
+        return f"~{m} min drive"
+    return f"~{max(5, math.ceil(m / 5) * 5)} min drive"     # estimate: round UP
+
+def time_source(hooks):
+    if hooks and hooks[0].get("routed"):
+        return "Google Maps" if hooks[0].get("router") == "google" else "OpenStreetMap routing"
+    return "rough estimates"
+
+
+# ─── road routing (real drive times) ─────────────────────────────────
+def active_router():
+    if ROUTER == "auto":
+        return "google" if GOOGLE_KEY else "osrm"
+    if ROUTER == "google" and not GOOGLE_KEY:
+        print("ROUTER=google but GOOGLE_MAPS_KEY is missing -> using osrm")
+        return "osrm"
+    return ROUTER if ROUTER in ("google", "osrm") else "none"
+
+def route_google(lat, lng, dests):
+    """[(minutes, road_km) or None per destination], or None if the call failed."""
+    def wp(a, b):
+        return {"waypoint": {"location": {"latLng": {"latitude": a, "longitude": b}}}}
+    r = requests.post(
+        "https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix",
+        headers={"X-Goog-Api-Key": GOOGLE_KEY,
+                 "X-Goog-FieldMask": "originIndex,destinationIndex,duration,distanceMeters,condition"},
+        json={"origins": [wp(lat, lng)], "destinations": [wp(a, b) for a, b in dests],
+              "travelMode": "DRIVE", "routingPreference": "TRAFFIC_UNAWARE"},
+        timeout=30)
+    if not r.ok:
+        print(f"  Google routes {r.status_code}: {r.text[:200]}")
+        return None
+    out = [None] * len(dests)
+    for e in r.json():
+        if e.get("condition") != "ROUTE_EXISTS":
+            continue
+        i = e.get("destinationIndex", 0)                 # 0 is omitted in the JSON
+        secs = float(str(e.get("duration", "0s")).rstrip("s") or 0)
+        out[i] = (secs / 60, e.get("distanceMeters", 0) / 1000)
+    return out
+
+def route_osrm(lat, lng, dests):
+    """Free OSRM table service (OpenStreetMap data). Public server: max 1 request/second."""
+    coords = ";".join(f"{b:.6f},{a:.6f}" for a, b in [(lat, lng)] + list(dests))
+    try:
+        r = requests.get(f"{OSRM_URL}/table/v1/driving/{coords}",
+                         params={"sources": "0", "annotations": "duration,distance"},
+                         headers=scraper.UA, timeout=30)
+    finally:
+        time.sleep(1.1)
+    if not r.ok:
+        print(f"  OSRM {r.status_code}: {r.text[:200]}")
+        return None
+    data = r.json()
+    if data.get("code") != "Ok":
+        print(f"  OSRM: {data.get('code')} {data.get('message', '')}")
+        return None
+    durs = data["durations"][0][1:]
+    dists = (data.get("distances") or [[None] * (len(dests) + 1)])[0][1:]
+    return [None if d is None else (d / 60 * OSRM_SLOWDOWN, (m or 0) / 1000)
+            for d, m in zip(durs, dists)]
+
+def route_hooks(l, hooks, cache, router, allow_call):
+    """Replaces rough estimates with cached/real road times. Returns (made_call, ok)."""
+    base = f"{router}|{l['lat']:.4f},{l['lng']:.4f}|"
+    max_age = GOOGLE_CACHE_DAYS if router == "google" else OSRM_CACHE_DAYS
+    now = datetime.now(JST)
+
+    def fresh(key):
+        hit = cache.get(key)
+        return hit and (now - datetime.fromisoformat(hit["d"])).days < max_age
+
+    todo = [h for h in hooks if not fresh(base + h["name"])]
+    made, ok = False, True
+    if todo and allow_call:
+        made = True
+        try:
+            fn = route_google if router == "google" else route_osrm
+            res = fn(l["lat"], l["lng"], [(h["lat"], h["lng"]) for h in todo])
+        except (requests.RequestException, ValueError, KeyError, IndexError) as e:
+            print(f"  routing error {l['url']}: {e}")
+            res = None
+        if res is None:
+            ok = False                                    # keep estimates, retry next run
+        else:
+            stamp = now.isoformat(timespec="seconds")
+            for h, v in zip(todo, res):
+                cache[base + h["name"]] = {"v": v and [round(v[0], 1), round(v[1], 2)],
+                                           "d": stamp}
+    for h in hooks:
+        hit = cache.get(base + h["name"])
+        if not hit:
+            continue
+        if hit["v"] is None:
+            h["min"] = math.inf                           # no road route (island etc.)
+        else:
+            h["min"], h["road_km"] = hit["v"]
+        h["routed"], h["router"] = True, router
+    return made, ok
+
+def add_road_times(ranked):
+    """ranked = [(points, listing, hooks)] best first. Routes the best ones (ROUTE_TOP
+    new requests per run); cached routes are used for everyone."""
+    router = active_router()
+    if router == "none":
+        print("Road routing off (ROUTER=none) – using rough estimates")
+        return
+    cache = load_json(ROUTE_CACHE)
+    calls = fails = streak = 0
+    try:
+        for _, l, hooks in ranked:
+            allow = calls < ROUTE_TOP and streak < 3       # stop if the service is down
+            made, ok = route_hooks(l, hooks, cache, router, allow)
+            if made:
+                calls += 1
+                fails += not ok
+                streak = 0 if ok else streak + 1
+    finally:
+        save_json(ROUTE_CACHE, cache)
+    routed = sum(1 for _, _, hs in ranked if hs and hs[0].get("routed"))
+    print(f"Road times ({router}): {routed}/{len(ranked)} houses routed | "
+          f"{calls} new requests, {fails} failed")
+
+
 # ─── location score (the main ranking) ───────────────────────────────
 def rank_hooks(hooks, recent=()):
     """Scores the location. Returns (points, hooks with the BEST attraction first).
     Best = close + famous + preferred kind; a house near several attractions gets extra."""
     def value(h):
-        kind, name, km = h
-        v = CLOSE_PTS * max(0.0, 1 - drive_min(km) / MAX_DRIVE_MIN)
-        if name in FAMOUS:
+        v = CLOSE_PTS * max(0.0, 1 - h["min"] / MAX_DRIVE_MIN)
+        if h["name"] in FAMOUS:
             v += FAMOUS_BONUS
-        v *= KIND_WEIGHT.get(kind, 1.0)
-        if name in recent:
+        v *= KIND_WEIGHT.get(h["kind"], 1.0)
+        if h["name"] in recent:
             v -= REPEAT_PENALTY                      # variety: not Hakuba every day
         return v
     ordered = sorted(hooks, key=value, reverse=True)
     extra = EXTRA_HOOK_PTS * min(len(hooks) - 1, MAX_EXTRA_HOOKS)
     return round(value(ordered[0]) + extra, 1), ordered
+
+def finalize(rough, recent):
+    """Drops attractions beyond MAX_DRIVE_MIN (real road time where known) and re-ranks."""
+    out = []
+    for _, l, hooks in rough:
+        hooks = sorted((h for h in hooks if h["min"] <= MAX_DRIVE_MIN), key=lambda h: h["min"])
+        if hooks:
+            hp, hooks = rank_hooks(hooks, recent)
+            out.append((hp, l, hooks))
+    out.sort(key=lambda c: (c[0], -c[1]["price_yen"]), reverse=True)
+    return out
 
 
 # ─── build-year score (adjustment, -10 .. +5) ────────────────────────
@@ -577,21 +732,21 @@ def yield_text(usd, est, fees_usd):
     return f"{net / usd * 100:.0f}% est. yield after fees"
 
 def cover_slide(photo, l, hooks, usd, est, fees_usd):
-    kind, name, km = hooks[0]
+    h0 = hooks[0]
     img = ImageOps.fit(photo, (W, H), Image.LANCZOS) if photo else Image.new("RGB", (W, H), (24, 44, 70))
     img = darken_bottom(img)
     d = ImageDraw.Draw(img)
-    draw_text(d, (60, 60), KINDS[kind]["banner"], 44, (180, 220, 255))
+    draw_text(d, (60, 60), KINDS[h0["kind"]]["banner"], 44, (180, 220, 255))
     yt = yield_text(usd, est, fees_usd)
     if yt:
         draw_text(d, (60, 125), yt, 48, (140, 255, 170))
     y = H - 480 - (55 if len(hooks) > 1 else 0)
     y = draw_text(d, (60, y), fmt_usd(usd), 150)
     y = draw_text(d, (60, y + 10), fmt_yen(l["price_yen"]), 56, (230, 230, 230))
-    y = draw_text(d, (60, y + 20), f"{fmt_trip(km, l)} to {name}", 54)
+    y = draw_text(d, (60, y + 20), f"{fmt_trip(h0, l)} to {h0['name']}", 54)
     if len(hooks) > 1:
-        _, n2, km2 = hooks[1]
-        y = draw_text(d, (60, y), f"+ {n2}, {fmt_trip(km2, l)}", 44, (200, 230, 255))
+        h1 = hooks[1]
+        y = draw_text(d, (60, y), f"+ {h1['name']}, {fmt_trip(h1, l)}", 44, (200, 230, 255))
     draw_text(d, (60, y + 5), f"{PREF_EN.get(l['pref'], l['pref'])}, Japan", 48, (200, 200, 200))
     return img
 
@@ -604,17 +759,17 @@ def photo_slide(photo, l):
     return img
 
 def stats_slide(l, hooks, usd, est, fees_yen, fees_usd):
-    kind, name, km = hooks[0]
+    h0 = hooks[0]
     img = Image.new("RGB", (W, H), (18, 28, 45))
     d = ImageDraw.Draw(img)
     y = draw_text(d, (60, 70), "THE NUMBERS", 64, (180, 220, 255)) + 30
     price_txt = "FREE" if l["price_yen"] == 0 else f"{fmt_usd(usd)}  ({fmt_yen(l['price_yen'])})"
     rows = [("Price", price_txt),
             ("Location", f"{PREF_EN.get(l['pref'], l['pref'])}, Japan"),
-            (KINDS[kind]["label"].capitalize(), f"{name}, {fmt_trip(km, l)}")]
+            (KINDS[h0["kind"]]["label"].capitalize(), f"{h0['name']}, {fmt_trip(h0, l)}")]
     if len(hooks) > 1:
-        _, n2, km2 = hooks[1]
-        rows.append(("Also nearby", f"{n2}, {fmt_trip(km2, l)}"))
+        h1 = hooks[1]
+        rows.append(("Also nearby", f"{h1['name']}, {fmt_trip(h1, l)}"))
     house = []
     if l.get("bedrooms"):
         house.append(f"{l['bedrooms']} rooms")
@@ -641,7 +796,8 @@ def stats_slide(l, hooks, usd, est, fees_yen, fees_usd):
             y = draw_text(d, (60, y), line, 52)
         y += 16
     place = "town" if l.get("geo_level") == "town" else "district"
-    note = f"Travel times are estimates from the {place} centre, not the exact house."
+    note = (f"Drive times: {time_source(hooks)}, from the {place} centre, "
+            f"not the exact house.")
     yy = H - 160
     for line in textwrap.wrap(note, 48) + ["Link to the listing in the caption."]:
         yy = draw_text(d, (60, yy), line, 30, (150, 150, 150))
@@ -672,16 +828,18 @@ def build_slides(l, hooks, usd, est, fees_yen, fees_usd):
 
 # ─── caption ─────────────────────────────────────────────────────────
 def build_caption(l, hooks, usd, est, fees_yen, fees_usd):
-    kind, name, km = hooks[0]
+    h0 = hooks[0]
     pref = PREF_EN.get(l["pref"], l["pref"])
     price_line = ("💴 Price: FREE 🎉" if l["price_yen"] == 0
                   else f"💴 Price: {fmt_yen(l['price_yen'])} (≈ {fmt_usd(usd)})")
-    lines = [f"{KINDS[kind]['emoji']} {fmt_usd(usd)} house, {fmt_trip(km, l)} to {name}",
+    lines = [f"{KINDS[h0['kind']]['emoji']} {fmt_usd(usd)} house, "
+             f"{fmt_trip(h0, l)} to {h0['name']}",
              "",
              price_line,
              f"📍 {l['location']} ({pref})"]
     if len(hooks) > 1:
-        also = ", ".join(f"{KINDS[k]['emoji']} {n} ({fmt_trip(d, l)})" for k, n, d in hooks[1:4])
+        also = ", ".join(f"{KINDS[h['kind']]['emoji']} {h['name']} ({fmt_trip(h, l)})"
+                         for h in hooks[1:4])
         lines.append(f"🗺 Also near: {also}")
     if l.get("bedrooms"):
         lines.append(f"🛏 Rooms: {l['bedrooms']}")
@@ -697,9 +855,11 @@ def build_caption(l, hooks, usd, est, fees_yen, fees_usd):
             net = net_revenue(est, fees_usd)
             lines.append(f"💰 Yield after fees: ~{net / usd * 100:.0f}% before tax & renovation")
     place = "town" if l.get("geo_level") == "town" else "district"
-    kind_tags = " ".join(dict.fromkeys(KINDS[k]["tags"] for k, _, _ in hooks))
+    src = time_source(hooks)
+    credit = " (© OpenStreetMap contributors)" if src == "OpenStreetMap routing" else ""
+    kind_tags = " ".join(dict.fromkeys(KINDS[h["kind"]]["tags"] for h in hooks))
     lines += ["",
-              f"Travel times are estimates ({place} centre).",
+              f"Drive times: {src}{credit}, from the {place} centre.",
               f"Source & photos: {site_info(l)[0]}",
               f"🔗 {l['url']}",
               "",
@@ -780,11 +940,12 @@ def pick(ranked, fx, last_source=None):
             if age_label == "built ?":
                 no_year += 1
             total = hp + yp + ap
-            kind, name, km = hooks[0]
+            h0 = hooks[0]
+            how = "road" if h0.get("routed") else "est."
             ytxt = "no Airbnb data" if y is None else f"yield {y:.0f}%"
             print(f"  [{l.get('source')}] {l['location']} {fmt_yen(l['price_yen'])} | "
-                  f"{name} {fmt_trip(km, l)} | location {hp:.0f} + {ytxt} ({yp:+.0f}) "
-                  f"+ {age_label} ({ap:+.0f}) = {total:.0f}")
+                  f"{h0['name']} {fmt_trip(h0, l)} ({how}) | location {hp:.0f} + {ytxt} "
+                  f"({yp:+.0f}) + {age_label} ({ap:+.0f}) = {total:.0f}")
             scored.append((total, hp, l, hooks, est, fees))
     finally:
         save_json(AIRROI_CACHE, ac)                       # never pay twice
@@ -814,22 +975,33 @@ def main():
     last_source = rot.get("last_source")
     recent = rot.get("recent_hooks", [])
 
-    cands, per_kind, per_src = [], {}, {}
+    # 1) rough pre-filter + ranking with straight-line estimates
+    rough = []
     for l in listings:
         if already_posted(l, posted):
             continue
         if l.get("price_yen") is None or l["price_yen"] > max_yen:
             continue
+        if l.get("lat") is None or l.get("lng") is None:
+            continue
         hooks = nearby_hooks(l["lat"], l["lng"])
         if not hooks:
             continue
         hp, hooks = rank_hooks(hooks, recent)
-        cands.append((hp, l, hooks))
-        per_kind[hooks[0][0]] = per_kind.get(hooks[0][0], 0) + 1
+        rough.append((hp, l, hooks))
+    rough.sort(key=lambda c: (c[0], -c[1]["price_yen"]), reverse=True)
+
+    # 2) real road times for the best ones, then strict MAX_DRIVE_MIN filter + re-rank
+    add_road_times(rough)
+    cands = finalize(rough, recent)
+
+    per_kind, per_src = {}, {}
+    for _, l, hooks in cands:
+        per_kind[hooks[0]["kind"]] = per_kind.get(hooks[0]["kind"], 0) + 1
         per_src[l.get("source")] = per_src.get(l.get("source"), 0) + 1
-    print(f"Candidates: {len(cands)} {per_kind} by site {per_src}  "
-          f"(≤ ${MAX_PRICE_USD:,.0f} = ¥{max_yen:,.0f}, "
-          f"≤ {MAX_DRIVE_MIN:.0f} min drive ≈ {MAX_KM:.0f} km, enabled: {', '.join(sorted(ENABLED))})")
+    print(f"Candidates: {len(cands)} of {len(rough)} pre-filtered {per_kind} by site {per_src}  "
+          f"(≤ ${MAX_PRICE_USD:,.0f} = ¥{max_yen:,.0f}, ≤ {MAX_DRIVE_MIN:.0f} min drive, "
+          f"enabled: {', '.join(sorted(ENABLED))})")
     if recent:
         print(f"Recently featured (penalised): {', '.join(recent)}")
 
@@ -837,7 +1009,6 @@ def main():
         tg_text(f"No deal today ({today}) – no new houses near any attraction.")
         return
 
-    cands.sort(key=lambda c: (c[0], -c[1]["price_yen"]), reverse=True)   # best location first
     l, hooks, est, fees = pick(cands, fx, last_source)
     if l is None:
         tg_text(f"No deal today ({today}) – every candidate failed the fee "
@@ -847,10 +1018,10 @@ def main():
     usd = l["price_yen"] * fx
     fees_yen = fees or 0
     fees_usd = fees_yen * fx
-    kind, name, km = hooks[0]
+    h0 = hooks[0]
     print(f"PICK [{l.get('source')}]: {l['location']} {fmt_yen(l['price_yen'])} "
-          f"{fmt_trip(km, l)} to {name} ({kind}), {age_points(l.get('year_built'))[1]}"
-          f"\n  {l['url']}")
+          f"{fmt_trip(h0, l)} to {h0['name']} ({h0['kind']}, {time_source(hooks)}), "
+          f"{age_points(l.get('year_built'))[1]}\n  {l['url']}")
 
     paths = build_slides(l, hooks, usd, est, fees_yen, fees_usd)
     caption = build_caption(l, hooks, usd, est, fees_yen, fees_usd)
@@ -862,7 +1033,7 @@ def main():
             posted[u] = today
         posted["fp:" + l["fp"]] = today
         save_json(POSTED_FILE, posted)
-        recent = ([name] + [h for h in recent if h != name])[:RECENT_HOOKS]
+        recent = ([h0["name"]] + [h for h in recent if h != h0["name"]])[:RECENT_HOOKS]
         save_json(ROTATION_FILE, {"last_source": l.get("source"), "date": today,
                                   "recent_hooks": recent})
         print("Saved to state/posted.json")
