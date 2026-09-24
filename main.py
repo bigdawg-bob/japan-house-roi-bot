@@ -1,9 +1,9 @@
 """
 Daily "cheap Japanese house near a ski resort" bot.
-Flow: scraper.scrape() -> keep houses within MAX_KM of a ski resort -> pick one
-      not posted before -> exchange rate + optional AirROI estimate
+Flow: scraper.scrape() -> keep houses within MAX_KM of a ski resort
+      -> ask AirROI about the cheapest few (results cached in state/airroi_cache.json)
+      -> post the one with the best Airbnb yield (or the cheapest if AirROI has no data)
       -> 1080x1350 slides -> Telegram (album + copyable caption).
-Local test without sending anything:  DRY_RUN=1 python main.py
 """
 import io, json, math, os, textwrap
 from datetime import datetime, timezone, timedelta
@@ -15,25 +15,29 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 import scraper
 
 # ─── settings ────────────────────────────────────────────────────────
-MAX_KM         = float(os.getenv("MAX_KM", "30"))          # max distance to a resort
-MAX_PRICE_YEN  = float(os.getenv("MAX_PRICE_YEN", "5000000"))
-MAX_PHOTOS     = 5                                          # photo slides after cover
-W, H           = 1080, 1350                                 # Instagram portrait
-FX_FALLBACK    = 0.0067                                     # USD per JPY if API fails
-DRY_RUN        = os.getenv("DRY_RUN") == "1"
+MAX_KM           = float(os.getenv("MAX_KM", "30"))         # max distance to a resort
+MAX_PRICE_YEN    = float(os.getenv("MAX_PRICE_YEN", "5000000"))
+MAX_AIRROI_CALLS = int(os.getenv("MAX_AIRROI_CALLS", "15"))  # paid calls per run
+CHECK_TOP        = int(os.getenv("CHECK_TOP", "15"))         # cheapest N houses checked
+CACHE_DAYS       = 90                                         # re-ask AirROI after this
+MAX_PHOTOS       = 5                                          # photo slides after cover
+W, H             = 1080, 1350                                 # Instagram portrait
+FX_FALLBACK      = 0.0067                                     # USD per JPY if API fails
+DRY_RUN          = os.getenv("DRY_RUN") == "1"
 
-ROOT        = Path(__file__).parent
-STATE       = ROOT / "state"
-POSTED_FILE = STATE / "posted.json"
-OUT         = ROOT / "out"
-JST         = timezone(timedelta(hours=9))
+ROOT         = Path(__file__).parent
+STATE        = ROOT / "state"
+POSTED_FILE  = STATE / "posted.json"
+AIRROI_CACHE = STATE / "airroi_cache.json"
+OUT          = ROOT / "out"
+JST          = timezone(timedelta(hours=9))
 
 BOT_TOKEN   = os.getenv("BOT_TOKEN")
 CHAT_ID     = os.getenv("CHAT_ID")
 AIRROI_KEY  = os.getenv("AIRROI_API_KEY") or os.getenv("AIRROI_KEY")
 AIRROI_URL  = os.getenv("AIRROI_URL", "https://api.airroi.com/calculator/estimate")
 
-# (name, lat, lng) – approximate base-area coordinates, check on Google Maps
+# (name, lat, lng) – approximate base-area coordinates
 SKI_RESORTS = [
     ("Niseko Grand Hirafu", 42.862, 140.698),
     ("Rusutsu",             42.748, 140.555),
@@ -91,7 +95,10 @@ def fmt_usd(v):   return "FREE" if v == 0 else (f"${v/1000:.0f}K" if v >= 1000 e
 def fmt_yen(v):   return "FREE" if v == 0 else (f"¥{v/1e6:.1f}M" if v >= 1e6 else f"¥{v/1e3:.0f}K")
 
 def load_json(p):
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    except ValueError:
+        return {}
 
 def save_json(p, data):
     p.parent.mkdir(exist_ok=True)
@@ -112,11 +119,12 @@ def get_fx():
     return FX_FALLBACK
 
 
-# ─── AirROI (optional) ───────────────────────────────────────────────
+# ─── AirROI ──────────────────────────────────────────────────────────
 def find_num(obj, names):
+    """First number whose key is in names; checks the top level before going deeper."""
     if isinstance(obj, dict):
         for k, v in obj.items():
-            if k.lower() in names and isinstance(v, (int, float)):
+            if k.lower() in names and isinstance(v, (int, float)) and not isinstance(v, bool):
                 return float(v)
         for v in obj.values():
             n = find_num(v, names)
@@ -129,31 +137,52 @@ def find_num(obj, names):
                 return n
     return None
 
-def airroi_estimate(lat, lng, rooms):
-    if not AIRROI_KEY:
-        print("AirROI: no key, skipping")
-        return None
-    beds = max(1, min((rooms or 4) - 1, 5))
+def bedrooms_for(l):
+    rooms = l.get("bedrooms")          # "4LDK" -> 4 bedrooms
+    return max(1, min(rooms or 3, 5))
+
+def airroi_call(lat, lng, beds):
+    """Returns (estimate or None, ok_to_cache)."""
     params = {"lat": lat, "lng": lng, "bedrooms": beds, "baths": 1,
               "guests": beds * 2, "currency": "usd"}
     try:
         r = requests.get(AIRROI_URL, params=params,
                          headers={"X-API-KEY": AIRROI_KEY}, timeout=30)
-        print(f"AirROI raw {r.status_code}: {r.text[:600]}")
+        print(f"AirROI {r.status_code}: {r.text[:600]}")
         if not r.ok:
-            return None
+            # 4xx other than auth/limit = no data for this spot -> cache it
+            return None, r.status_code in (400, 404, 422)
         data = r.json()
     except Exception as e:
         print(f"AirROI error: {e}")
-        return None
-    rev = find_num(data, {"revenue", "annual_revenue", "ltm_revenue", "revenue_ltm", "yearly_revenue"})
+        return None, False
+    rev = find_num(data, {"revenue", "annual_revenue", "ltm_revenue", "revenue_ltm",
+                          "yearly_revenue", "total_revenue", "projected_revenue"})
     occ = find_num(data, {"occupancy", "occupancy_rate", "ltm_occupancy"})
     adr = find_num(data, {"adr", "average_daily_rate", "ltm_adr", "daily_rate"})
     if occ is not None and occ <= 1:
         occ *= 100
-    if rev is None and adr is None:
+    if rev is None and adr and occ:
+        rev = adr * occ / 100 * 365
+    if not rev and not adr:
+        return None, True
+    return {"revenue": rev, "occupancy": occ, "adr": adr}, True
+
+def get_estimate(l, cache, budget):
+    beds = bedrooms_for(l)
+    key = f"{l['lat']:.3f},{l['lng']:.3f},{beds}"
+    hit = cache.get(key)
+    if hit:
+        age = (datetime.now(JST) - datetime.fromisoformat(hit["date"])).days
+        if age < CACHE_DAYS:
+            return hit["est"]
+    if budget["left"] <= 0:
         return None
-    return {"revenue": rev, "occupancy": occ, "adr": adr}
+    budget["left"] -= 1
+    est, cacheable = airroi_call(l["lat"], l["lng"], beds)
+    if cacheable:
+        cache[key] = {"date": datetime.now(JST).isoformat(timespec="seconds"), "est": est}
+    return est
 
 
 # ─── slides ──────────────────────────────────────────────────────────
@@ -197,11 +226,21 @@ def download(url):
         print(f"  photo error {url}: {e}")
         return None
 
-def cover_slide(photo, l, resort, km, usd):
+def yield_text(usd, est):
+    if not est or not est.get("revenue"):
+        return None
+    if usd == 0:
+        return "Free house + Airbnb income"
+    return f"{est['revenue'] / usd * 100:.0f}% est. Airbnb yield"
+
+def cover_slide(photo, l, resort, km, usd, est):
     img = ImageOps.fit(photo, (W, H), Image.LANCZOS) if photo else Image.new("RGB", (W, H), (24, 44, 70))
     img = darken_bottom(img)
     d = ImageDraw.Draw(img)
     draw_text(d, (60, 60), "JAPAN SKI AKIYA", 44, (180, 220, 255))
+    yt = yield_text(usd, est)
+    if yt:
+        draw_text(d, (60, 125), yt, 48, (140, 255, 170))
     y = H - 480
     y = draw_text(d, (60, y), fmt_usd(usd), 150)
     y = draw_text(d, (60, y + 10), fmt_yen(l["price_yen"]), 56, (230, 230, 230))
@@ -222,28 +261,31 @@ def stats_slide(l, resort, km, usd, est):
     rows = [("Price", f"{fmt_usd(usd)}  ({fmt_yen(l['price_yen'])})"),
             ("Location", f"{PREF_EN.get(l['pref'], l['pref'])}, Japan"),
             ("Nearest ski resort", f"{resort}, {fmt_dist(km)}")]
+    house = []
     if l.get("bedrooms"):
-        rows.append(("Rooms", str(l["bedrooms"])))
+        house.append(f"{l['bedrooms']} rooms")
     if l.get("year_built"):
-        rows.append(("Built", str(l["year_built"])))
+        house.append(f"built {l['year_built']}")
     if l.get("area_m2"):
-        rows.append(("Floor area", f"{l['area_m2']:.0f} m²"))
+        house.append(f"{l['area_m2']:.0f} m²")
+    if house:
+        rows.append(("House", " · ".join(house)))
     if est:
         if est.get("revenue"):
             rows.append(("Airbnb est. revenue", f"${est['revenue']:,.0f} / year"))
+            yt = yield_text(usd, est)
+            if yt and usd > 0:
+                rows.append(("Gross yield (before costs)", f"{est['revenue'] / usd * 100:.0f}%"))
         if est.get("adr"):
-            occ = f", {est['occupancy']:.0f}% occupied" if est.get("occupancy") else ""
+            occ = f", {est['occupancy']:.0f}% booked" if est.get("occupancy") else ""
             rows.append(("Nightly rate est.", f"${est['adr']:,.0f}{occ}"))
     for label, value in rows:
         y = draw_text(d, (60, y), label.upper(), 34, (140, 160, 190))
         for line in textwrap.wrap(value, 30):
             y = draw_text(d, (60, y), line, 52)
         y += 22
-    note = "Distance measured from the district centre, not the exact house."
-    if l.get("geo_level") == "town":
-        note = "Distance measured from the town centre, not the exact house."
-    for line in textwrap.wrap(note, 48):
-        y = draw_text(d, (60, H - 170 + (y - y)), line, 30, (150, 150, 150)) if False else y
+    place = "town" if l.get("geo_level") == "town" else "district"
+    note = f"Distance measured from the {place} centre, not the exact house."
     yy = H - 160
     for line in textwrap.wrap(note, 48) + ["Link to the listing in the caption."]:
         yy = draw_text(d, (60, yy), line, 30, (150, 150, 150))
@@ -261,7 +303,7 @@ def build_slides(l, resort, km, usd, est):
         if img:
             photos.append(img)
     print(f"Photos downloaded: {len(photos)}")
-    slides = [cover_slide(photos[0] if photos else None, l, resort, km, usd)]
+    slides = [cover_slide(photos[0] if photos else None, l, resort, km, usd, est)]
     slides += [photo_slide(p) for p in photos[1:MAX_PHOTOS + 1]]
     slides.append(stats_slide(l, resort, km, usd, est))
     paths = []
@@ -287,9 +329,11 @@ def build_caption(l, resort, km, usd, est):
         lines.append(f"📐 Floor area: {l['area_m2']:.0f} m²")
     if est and est.get("revenue"):
         lines.append(f"📈 Airbnb estimate: ${est['revenue']:,.0f}/year (AirROI, rough)")
+        if usd > 0:
+            lines.append(f"💰 Gross yield: ~{est['revenue'] / usd * 100:.0f}% before costs & renovation")
     lines += ["",
               "Distance is approximate (district centre).",
-              f"Source & photos: Sumai空き家 / local akiya bank",
+              "Source & photos: Sumai空き家 / local akiya bank",
               f"🔗 {l['url']}",
               "",
               "#akiya #japanhouse #cheaphouse #skijapan #japow #moveto" + pref.lower()
@@ -331,6 +375,40 @@ def tg_album(paths, caption):
     return r.ok
 
 
+# ─── picking ─────────────────────────────────────────────────────────
+def pick(cands, fx):
+    """Best Airbnb yield among the cheapest CHECK_TOP; cheapest if no AirROI data."""
+    if not AIRROI_KEY:
+        print("AirROI: no AIRROI_API_KEY secret, posting the cheapest house")
+        l, resort, km = cands[0]
+        return l, resort, km, None
+
+    cache = load_json(AIRROI_CACHE)
+    budget = {"left": MAX_AIRROI_CALLS}
+    scored = []
+    try:
+        for l, resort, km in cands[:CHECK_TOP]:
+            est = get_estimate(l, cache, budget)
+            if not est or not est.get("revenue"):
+                continue
+            usd = l["price_yen"] * fx
+            yld = est["revenue"] / max(usd, 1)          # free houses rank first
+            print(f"  {l['location']} {fmt_yen(l['price_yen'])} -> "
+                  f"${est['revenue']:,.0f}/yr = {yld*100:.0f}%")
+            scored.append((yld, -l["price_yen"], l, resort, km, est))
+    finally:
+        save_json(AIRROI_CACHE, cache)                   # never pay twice
+    print(f"AirROI calls used this run: {MAX_AIRROI_CALLS - budget['left']}")
+
+    if not scored:
+        print("AirROI: no usable estimates, posting the cheapest house")
+        l, resort, km = cands[0]
+        return l, resort, km, None
+    scored.sort(key=lambda s: (s[0], s[1]), reverse=True)
+    _, _, l, resort, km, est = scored[0]
+    return l, resort, km, est
+
+
 # ─── main ────────────────────────────────────────────────────────────
 def main():
     today = datetime.now(JST).strftime("%Y-%m-%d")
@@ -354,12 +432,11 @@ def main():
         return
 
     cands.sort(key=lambda c: (c[0]["price_yen"], c[2]))       # cheapest, then closest
-    l, resort, km = cands[0]
     fx = get_fx()
+    l, resort, km, est = pick(cands, fx)
     usd = l["price_yen"] * fx
     print(f"PICK: {l['location']} {fmt_yen(l['price_yen'])} {fmt_dist(km)} to {resort}\n  {l['url']}")
 
-    est = airroi_estimate(l["lat"], l["lng"], l.get("bedrooms"))
     paths = build_slides(l, resort, km, usd, est)
     caption = build_caption(l, resort, km, usd, est)
     (OUT / "caption.txt").write_text(caption, encoding="utf-8")
