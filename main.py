@@ -1,11 +1,12 @@
 """
-Daily "cheap Japanese house near a ski resort" bot.
-Flow: scraper.scrape() -> keep houses within MAX_KM of a ski resort
-      -> ask AirROI about the cheapest few (results cached in state/airroi_cache.json)
-      -> post the one with the best Airbnb yield (or the cheapest if AirROI has no data)
+Daily "cheap Japanese house near a ski resort / onsen / sight / beach / nature" bot.
+Flow: scraper.scrape() -> keep houses under MAX_PRICE_USD within a ~45-min drive of a hook
+      -> read yearly fees from the listing page, skip if > 15% of the price
+      -> AirROI estimate (cached) -> post the ONE highest-scoring house
       -> 1080x1350 slides -> Telegram (album + copyable caption).
+Score = (Airbnb revenue - yearly fees) / price.  No AirROI data -> cheapest house.
 """
-import io, json, math, os, textwrap
+import io, json, math, os, re, textwrap, time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -15,20 +16,30 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 import scraper
 
 # ─── settings ────────────────────────────────────────────────────────
-MAX_KM           = float(os.getenv("MAX_KM", "30"))         # max distance to a resort
-MAX_PRICE_YEN    = float(os.getenv("MAX_PRICE_YEN", "5000000"))
-MAX_AIRROI_CALLS = int(os.getenv("MAX_AIRROI_CALLS", "15"))  # paid calls per run
-CHECK_TOP        = int(os.getenv("CHECK_TOP", "15"))         # cheapest N houses checked
-CACHE_DAYS       = 90                                         # re-ask AirROI after this
-MAX_PHOTOS       = 5                                          # photo slides after cover
-W, H             = 1080, 1350                                 # Instagram portrait
-FX_FALLBACK      = 0.0067                                     # USD per JPY if API fails
+MAX_PRICE_USD    = float(os.getenv("MAX_PRICE_USD", "100000"))
+MAX_DRIVE_MIN    = float(os.getenv("MAX_DRIVE_MIN", "45"))
+MAX_WALK_MIN     = float(os.getenv("MAX_WALK_MIN", "15"))
+FEE_LIMIT        = float(os.getenv("FEE_LIMIT_PCT", "15")) / 100   # yearly fees vs price
+MAX_AIRROI_CALLS = int(os.getenv("MAX_AIRROI_CALLS", "15"))        # paid calls per run
+CACHE_DAYS       = 90                                               # re-ask AirROI after this
+MAX_PHOTOS       = 5
+W, H             = 1080, 1350
+FX_FALLBACK      = 0.0067
 DRY_RUN          = os.getenv("DRY_RUN") == "1"
+ENABLED          = set(os.getenv("HOOK_KINDS", "ski,onsen,sight,beach,nature")
+                       .replace(" ", "").split(","))
+
+# travel-time estimate (no routing API; straight line -> road distance -> minutes)
+ROAD_FACTOR = 1.3     # roads are ~30% longer than a straight line
+DRIVE_KMH   = 40      # average rural driving speed
+WALK_KMH    = 4.8
+MAX_KM      = MAX_DRIVE_MIN / 60 * DRIVE_KMH / ROAD_FACTOR   # ≈ 23 km straight line
 
 ROOT         = Path(__file__).parent
 STATE        = ROOT / "state"
 POSTED_FILE  = STATE / "posted.json"
 AIRROI_CACHE = STATE / "airroi_cache.json"
+FEE_CACHE    = STATE / "fees_cache.json"
 OUT          = ROOT / "out"
 JST          = timezone(timedelta(hours=9))
 
@@ -37,31 +48,133 @@ CHAT_ID     = os.getenv("CHAT_ID")
 AIRROI_KEY  = os.getenv("AIRROI_API_KEY") or os.getenv("AIRROI_KEY")
 AIRROI_URL  = os.getenv("AIRROI_URL", "https://api.airroi.com/calculator/estimate")
 
-# (name, lat, lng) – approximate base-area coordinates
-SKI_RESORTS = [
-    ("Niseko Grand Hirafu", 42.862, 140.698),
-    ("Rusutsu",             42.748, 140.555),
-    ("Kiroro",              43.075, 140.985),
-    ("Furano",              43.332, 142.358),
-    ("Hakkoda",             40.656, 140.858),
-    ("APPI Kogen",          40.003, 140.966),
-    ("Kazuno Hanawa",       40.190, 140.750),
-    ("Tazawako",            39.752, 140.726),
-    ("Zao Onsen",           38.166, 140.415),
-    ("Gassan",              38.528, 140.020),
-    ("Aizu Takatsue",       37.117, 139.563),
-    ("Oze Iwakura",         36.820, 139.200),
-    ("Minakami",            36.830, 138.930),
-    ("GALA Yuzawa",         36.947, 138.804),
-    ("Naeba",               36.790, 138.760),
-    ("Myoko Akakura",       36.887, 138.172),
-    ("Madarao Kogen",       36.863, 138.297),
-    ("Nozawa Onsen",        36.922, 138.444),
-    ("Shiga Kogen",         36.707, 138.508),
-    ("Hakuba Happo-one",    36.700, 137.832),
-    ("Hakuba Goryu",        36.670, 137.830),
-    ("Hakuba Cortina",      36.797, 137.853),
-    ("Hida Nagareha",       36.325, 137.330),
+KINDS = {
+    "ski":    {"label": "ski resort", "emoji": "🏔", "banner": "JAPAN SKI AKIYA",
+               "tags": "#skijapan #japow"},
+    "onsen":  {"label": "onsen town", "emoji": "♨️", "banner": "JAPAN ONSEN AKIYA",
+               "tags": "#onsen #温泉 #hotspring"},
+    "sight":  {"label": "famous sight", "emoji": "⛩", "banner": "RURAL JAPAN AKIYA",
+               "tags": "#ruraljapan #visitjapan"},
+    "beach":  {"label": "beach", "emoji": "🏖", "banner": "JAPAN BEACH AKIYA",
+               "tags": "#japanbeach #beachhouse"},
+    "nature": {"label": "nature spot", "emoji": "🌲", "banner": "JAPAN NATURE AKIYA",
+               "tags": "#japannature #countryside"},
+}
+
+# (kind, name, lat, lng) – approximate centre coordinates (starter list)
+HOOKS = [
+    # ── ski resorts ──
+    ("ski", "Niseko Grand Hirafu", 42.862, 140.698),
+    ("ski", "Rusutsu",             42.748, 140.555),
+    ("ski", "Kiroro",              43.075, 140.985),
+    ("ski", "Furano",              43.332, 142.358),
+    ("ski", "Hakkoda",             40.656, 140.858),
+    ("ski", "APPI Kogen",          40.003, 140.966),
+    ("ski", "Kazuno Hanawa",       40.190, 140.750),
+    ("ski", "Tazawako",            39.752, 140.726),
+    ("ski", "Zao Onsen",           38.166, 140.415),
+    ("ski", "Gassan",              38.528, 140.020),
+    ("ski", "Aizu Takatsue",       37.117, 139.563),
+    ("ski", "Oze Iwakura",         36.820, 139.200),
+    ("ski", "Minakami",            36.830, 138.930),
+    ("ski", "GALA Yuzawa",         36.947, 138.804),
+    ("ski", "Naeba",               36.790, 138.760),
+    ("ski", "Myoko Akakura",       36.887, 138.172),
+    ("ski", "Madarao Kogen",       36.863, 138.297),
+    ("ski", "Nozawa Onsen",        36.922, 138.444),
+    ("ski", "Shiga Kogen",         36.707, 138.508),
+    ("ski", "Hakuba Happo-one",    36.700, 137.832),
+    ("ski", "Hakuba Goryu",        36.670, 137.830),
+    ("ski", "Hakuba Cortina",      36.797, 137.853),
+    ("ski", "Hida Nagareha",       36.325, 137.330),
+    # ── onsen towns ──
+    ("onsen", "Noboribetsu Onsen", 42.495, 141.146),
+    ("onsen", "Jozankei Onsen",    42.967, 141.163),
+    ("onsen", "Toyako Onsen",      42.567, 140.817),
+    ("onsen", "Nyuto Onsen",       39.805, 140.773),
+    ("onsen", "Ginzan Onsen",      38.570, 140.530),
+    ("onsen", "Nasu Onsen",        37.090, 139.960),
+    ("onsen", "Kinugawa Onsen",    36.830, 139.720),
+    ("onsen", "Kusatsu Onsen",     36.620, 138.596),
+    ("onsen", "Ikaho Onsen",       36.497, 138.922),
+    ("onsen", "Shibu Onsen",       36.735, 138.425),
+    ("onsen", "Bessho Onsen",      36.356, 138.157),
+    ("onsen", "Hakone Yumoto",     35.233, 139.105),
+    ("onsen", "Atami",             35.096, 139.071),
+    ("onsen", "Shuzenji Onsen",    34.970, 138.927),
+    ("onsen", "Gero Onsen",        35.806, 137.244),
+    ("onsen", "Okuhida Onsen",     36.230, 137.560),
+    ("onsen", "Wakura Onsen",      37.090, 136.915),
+    ("onsen", "Yamanaka Onsen",    36.247, 136.374),
+    ("onsen", "Kinosaki Onsen",    35.626, 134.810),
+    ("onsen", "Arima Onsen",       34.797, 135.247),
+    ("onsen", "Shirahama Onsen",   33.680, 135.345),
+    ("onsen", "Misasa Onsen",      35.411, 133.881),
+    ("onsen", "Tamatsukuri Onsen", 35.420, 133.011),
+    ("onsen", "Dogo Onsen",        33.852, 132.786),
+    ("onsen", "Beppu",             33.280, 131.500),
+    ("onsen", "Yufuin",            33.265, 131.355),
+    ("onsen", "Kurokawa Onsen",    33.077, 131.141),
+    ("onsen", "Unzen Onsen",       32.760, 130.263),
+    ("onsen", "Ureshino Onsen",    33.100, 129.990),
+    ("onsen", "Kirishima Onsen",   31.870, 130.850),
+    ("onsen", "Ibusuki",           31.230, 130.640),
+    # ── famous sights ──
+    ("sight", "Kakunodate",              39.595, 140.562),
+    ("sight", "Hiraizumi",               38.990, 141.120),
+    ("sight", "Nikko",                   36.750, 139.600),
+    ("sight", "Karuizawa",               36.343, 138.635),
+    ("sight", "Lake Kawaguchiko (Fuji)", 35.500, 138.768),
+    ("sight", "Matsumoto Castle",        36.239, 137.969),
+    ("sight", "Shirakawa-go",            36.257, 136.906),
+    ("sight", "Takayama old town",       36.141, 137.252),
+    ("sight", "Tsumago (Kiso Valley)",   35.578, 137.596),
+    ("sight", "Kanazawa",                36.560, 136.660),
+    ("sight", "Miyama Thatched Village", 35.316, 135.562),
+    ("sight", "Amanohashidate",          35.570, 135.190),
+    ("sight", "Himeji Castle",           34.839, 134.694),
+    ("sight", "Koyasan",                 34.213, 135.586),
+    ("sight", "Ise Grand Shrine",        34.455, 136.725),
+    ("sight", "Kumano Hongu Taisha",     33.835, 135.772),
+    ("sight", "Izumo Taisha",            35.402, 132.685),
+    ("sight", "Miyajima",                34.296, 132.320),
+    ("sight", "Naoshima",                34.460, 133.995),
+    # ── beaches ──
+    ("beach", "Kujukuri Beach",           35.530, 140.450),
+    ("beach", "Onjuku Beach",             35.183, 140.353),
+    ("beach", "Hayama / Zushi",           35.270, 139.580),
+    ("beach", "Shirahama Beach (Izu)",    34.690, 138.980),
+    ("beach", "Chirihama",                36.900, 136.760),
+    ("beach", "Kotohikihama",             35.700, 135.030),
+    ("beach", "Takeno Beach",             35.660, 134.760),
+    ("beach", "Shirarahama (Wakayama)",   33.679, 135.342),
+    ("beach", "Katsurahama",              33.497, 133.575),
+    ("beach", "Itoshima",                 33.600, 130.200),
+    ("beach", "Aoshima (Miyazaki)",       31.800, 131.470),
+    ("beach", "Amami Oshima",             28.400, 129.470),
+    ("beach", "Onna coast (Okinawa)",     26.500, 127.850),
+    ("beach", "Emerald Beach (Motobu)",   26.694, 127.878),
+    ("beach", "Miyakojima",               24.800, 125.280),
+    ("beach", "Kabira Bay (Ishigaki)",    24.453, 124.146),
+    # ── nature ──
+    ("nature", "Shiretoko",                44.070, 145.000),
+    ("nature", "Lake Akan",                43.430, 144.090),
+    ("nature", "Biei",                     43.590, 142.470),
+    ("nature", "Sounkyo (Daisetsuzan)",    43.720, 142.950),
+    ("nature", "Lake Towada & Oirase",     40.460, 140.900),
+    ("nature", "Shirakami-Sanchi",         40.560, 139.970),
+    ("nature", "Urabandai",                37.660, 140.080),
+    ("nature", "Oze",                      36.930, 139.260),
+    ("nature", "Chichibu / Nagatoro",      36.110, 139.110),
+    ("nature", "Kamikochi",                36.250, 137.640),
+    ("nature", "Kurobe Gorge",             36.810, 137.580),
+    ("nature", "Yoshino",                  34.370, 135.860),
+    ("nature", "Nachi Falls",              33.668, 135.890),
+    ("nature", "Iya Valley",               33.875, 133.835),
+    ("nature", "Shimanto River",           33.000, 132.930),
+    ("nature", "Takachiho Gorge",          32.700, 131.300),
+    ("nature", "Mt Aso",                   32.950, 131.100),
+    ("nature", "Yakushima",                30.350, 130.530),
 ]
 
 PREF_EN = {
@@ -87,12 +200,28 @@ def haversine(lat1, lng1, lat2, lng2):
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
     return 6371 * 2 * math.asin(math.sqrt(a))
 
-def nearest_hook(lat, lng):
-    return min(((n, haversine(lat, lng, a, b)) for n, a, b in SKI_RESORTS), key=lambda x: x[1])
+def drive_min(km): return km * ROAD_FACTOR / DRIVE_KMH * 60
+def walk_min(km):  return km * ROAD_FACTOR / WALK_KMH * 60
 
-def fmt_dist(km): return "<1 km" if km < 1 else f"~{km:.0f} km"
-def fmt_usd(v):   return "FREE" if v == 0 else (f"${v/1000:.0f}K" if v >= 1000 else f"${v:.0f}")
-def fmt_yen(v):   return "FREE" if v == 0 else (f"¥{v/1e6:.1f}M" if v >= 1e6 else f"¥{v/1e3:.0f}K")
+def nearby_hooks(lat, lng):
+    """Enabled attractions within MAX_DRIVE_MIN, closest first: [(kind, name, km)]"""
+    hits = []
+    for kind, name, a, b in HOOKS:
+        if kind not in ENABLED:
+            continue
+        km = haversine(lat, lng, a, b)
+        if drive_min(km) <= MAX_DRIVE_MIN:
+            hits.append((kind, name, km))
+    return sorted(hits, key=lambda h: h[2])
+
+def fmt_trip(km, l):
+    """'~10 min walk' only when we know the town; otherwise a drive estimate."""
+    if l.get("geo_level") == "town" and walk_min(km) <= MAX_WALK_MIN:
+        return f"~{max(5, round(walk_min(km) / 5) * 5)} min walk"
+    return f"~{max(5, round(drive_min(km) / 5) * 5)} min drive"
+
+def fmt_usd(v): return "FREE" if v == 0 else (f"${v/1000:.0f}K" if v >= 1000 else f"${v:.0f}")
+def fmt_yen(v): return "FREE" if v == 0 else (f"¥{v/1e6:.1f}M" if v >= 1e6 else f"¥{v/1e3:.0f}K")
 
 def load_json(p):
     try:
@@ -119,9 +248,57 @@ def get_fx():
     return FX_FALLBACK
 
 
+# ─── yearly fees (management / repair fund / onsen / land rent) ──────
+FEE_LABELS = ["管理費", "修繕積立金", "修繕積立費", "共益費",
+              "温泉使用料", "温泉利用料", "温泉維持費", "借地料", "地代"]
+
+def parse_fees(html):
+    """Returns (yearly_yen, {label: yearly_yen}). Monthly amounts x12 unless '年' is written."""
+    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.S | re.I)
+    text = re.sub(r"<[^>]+>|&nbsp;", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    text = text.translate(str.maketrans("０１２３４５６７８９，．", "0123456789,."))
+    items = {}
+    for label in FEE_LABELS:
+        for m in re.finditer(label, text):
+            win = text[m.end(): m.end() + 40]
+            cuts = [win.find(o) for o in FEE_LABELS if o != label and o in win]
+            if cuts:
+                win = win[:min(cuts)]            # don't read the next fee's number
+            n = re.search(r"(\d[\d,]*(?:\.\d+)?)\s*(万)?\s*円", win)
+            if not n:
+                continue
+            yen = float(n.group(1).replace(",", "")) * (10000 if n.group(2) else 1)
+            items[label] = yen if "年" in win[:n.start()] else yen * 12
+            break
+    return sum(items.values()), items
+
+def yearly_fees(l, fee_cache):
+    """Yearly fees in yen, or None if the page couldn't be read."""
+    if l.get("fees_yearly_yen") is not None:
+        return l["fees_yearly_yen"]
+    if l["url"] in fee_cache:
+        return fee_cache[l["url"]]["yearly"]
+    try:
+        r = requests.get(l["url"], headers=scraper.UA, timeout=30)
+        if not r.ok:
+            return None
+        if not r.encoding or r.encoding.lower() == "iso-8859-1":
+            r.encoding = r.apparent_encoding
+        yearly, items = parse_fees(r.text)
+    except Exception as e:
+        print(f"  fee check error {l['url']}: {e}")
+        return None
+    finally:
+        time.sleep(1)                              # be polite to the site
+    fee_cache[l["url"]] = {"yearly": yearly, "items": items}
+    if items:
+        print(f"  fees {l['url']}: {items}")
+    return yearly
+
+
 # ─── AirROI ──────────────────────────────────────────────────────────
 def find_num(obj, names):
-    """First number whose key is in names; checks the top level before going deeper."""
     if isinstance(obj, dict):
         for k, v in obj.items():
             if k.lower() in names and isinstance(v, (int, float)) and not isinstance(v, bool):
@@ -138,8 +315,7 @@ def find_num(obj, names):
     return None
 
 def bedrooms_for(l):
-    rooms = l.get("bedrooms")          # "4LDK" -> 4 bedrooms
-    return max(1, min(rooms or 3, 5))
+    return max(1, min(l.get("bedrooms") or 3, 5))
 
 def airroi_call(lat, lng, beds):
     """Returns (estimate or None, ok_to_cache)."""
@@ -150,7 +326,6 @@ def airroi_call(lat, lng, beds):
                          headers={"X-API-KEY": AIRROI_KEY}, timeout=30)
         print(f"AirROI {r.status_code}: {r.text[:600]}")
         if not r.ok:
-            # 4xx other than auth/limit = no data for this spot -> cache it
             return None, r.status_code in (400, 404, 422)
         data = r.json()
     except Exception as e:
@@ -168,20 +343,20 @@ def airroi_call(lat, lng, beds):
         return None, True
     return {"revenue": rev, "occupancy": occ, "adr": adr}, True
 
-def get_estimate(l, cache, budget):
-    beds = bedrooms_for(l)
-    key = f"{l['lat']:.3f},{l['lng']:.3f},{beds}"
-    hit = cache.get(key)
-    if hit:
-        age = (datetime.now(JST) - datetime.fromisoformat(hit["date"])).days
-        if age < CACHE_DAYS:
-            return hit["est"]
-    if budget["left"] <= 0:
-        return None
-    budget["left"] -= 1
-    est, cacheable = airroi_call(l["lat"], l["lng"], beds)
+def est_key(l):
+    return f"{l['lat']:.3f},{l['lng']:.3f},{bedrooms_for(l)}"
+
+def cached_estimate(l, cache):
+    """(found, estimate) – found=True means no paid call needed."""
+    hit = cache.get(est_key(l))
+    if hit and (datetime.now(JST) - datetime.fromisoformat(hit["date"])).days < CACHE_DAYS:
+        return True, hit["est"]
+    return False, None
+
+def fetch_estimate(l, cache):
+    est, cacheable = airroi_call(l["lat"], l["lng"], bedrooms_for(l))
     if cacheable:
-        cache[key] = {"date": datetime.now(JST).isoformat(timespec="seconds"), "est": est}
+        cache[est_key(l)] = {"date": datetime.now(JST).isoformat(timespec="seconds"), "est": est}
     return est
 
 
@@ -201,9 +376,13 @@ def font(size):
     except TypeError:
         return ImageFont.load_default()
 
-def draw_text(d, xy, s, size, fill=(255, 255, 255)):
+def draw_text(d, xy, s, size, fill=(255, 255, 255), maxw=W - 120):
+    """Draws text with a shadow; shrinks the font if the line is too wide."""
     x, y = xy
     f = font(size)
+    while size > 20 and d.textlength(s, font=f) > maxw:
+        size -= 2
+        f = font(size)
     d.text((x + 3, y + 3), s, font=f, fill=(0, 0, 0))
     d.text((x, y), s, font=f, fill=fill)
     return y + int(size * 1.25)
@@ -226,25 +405,33 @@ def download(url):
         print(f"  photo error {url}: {e}")
         return None
 
-def yield_text(usd, est):
-    if not est or not est.get("revenue"):
+def net_revenue(est, fees_usd):
+    return est["revenue"] - fees_usd if est and est.get("revenue") else None
+
+def yield_text(usd, est, fees_usd):
+    net = net_revenue(est, fees_usd)
+    if net is None:
         return None
     if usd == 0:
         return "Free house + Airbnb income"
-    return f"{est['revenue'] / usd * 100:.0f}% est. Airbnb yield"
+    return f"{net / usd * 100:.0f}% est. yield after fees"
 
-def cover_slide(photo, l, resort, km, usd, est):
+def cover_slide(photo, l, hooks, usd, est, fees_usd):
+    kind, name, km = hooks[0]
     img = ImageOps.fit(photo, (W, H), Image.LANCZOS) if photo else Image.new("RGB", (W, H), (24, 44, 70))
     img = darken_bottom(img)
     d = ImageDraw.Draw(img)
-    draw_text(d, (60, 60), "JAPAN SKI AKIYA", 44, (180, 220, 255))
-    yt = yield_text(usd, est)
+    draw_text(d, (60, 60), KINDS[kind]["banner"], 44, (180, 220, 255))
+    yt = yield_text(usd, est, fees_usd)
     if yt:
         draw_text(d, (60, 125), yt, 48, (140, 255, 170))
-    y = H - 480
+    y = H - 480 - (55 if len(hooks) > 1 else 0)
     y = draw_text(d, (60, y), fmt_usd(usd), 150)
     y = draw_text(d, (60, y + 10), fmt_yen(l["price_yen"]), 56, (230, 230, 230))
-    y = draw_text(d, (60, y + 20), f"{fmt_dist(km)} to {resort}", 54)
+    y = draw_text(d, (60, y + 20), f"{fmt_trip(km, l)} to {name}", 54)
+    if len(hooks) > 1:
+        _, n2, km2 = hooks[1]
+        y = draw_text(d, (60, y), f"+ {n2}, {fmt_trip(km2, l)}", 44, (200, 230, 255))
     draw_text(d, (60, y + 5), f"{PREF_EN.get(l['pref'], l['pref'])}, Japan", 48, (200, 200, 200))
     return img
 
@@ -254,13 +441,17 @@ def photo_slide(photo):
     draw_text(d, (W - 470, H - 70), "Photo: akiya.sumai.biz", 32, (235, 235, 235))
     return img
 
-def stats_slide(l, resort, km, usd, est):
+def stats_slide(l, hooks, usd, est, fees_yen, fees_usd):
+    kind, name, km = hooks[0]
     img = Image.new("RGB", (W, H), (18, 28, 45))
     d = ImageDraw.Draw(img)
     y = draw_text(d, (60, 70), "THE NUMBERS", 64, (180, 220, 255)) + 30
     rows = [("Price", f"{fmt_usd(usd)}  ({fmt_yen(l['price_yen'])})"),
             ("Location", f"{PREF_EN.get(l['pref'], l['pref'])}, Japan"),
-            ("Nearest ski resort", f"{resort}, {fmt_dist(km)}")]
+            (f"Nearest {KINDS[kind]['label']}", f"{name}, {fmt_trip(km, l)}")]
+    if len(hooks) > 1:
+        _, n2, km2 = hooks[1]
+        rows.append(("Also nearby", f"{n2}, {fmt_trip(km2, l)}"))
     house = []
     if l.get("bedrooms"):
         house.append(f"{l['bedrooms']} rooms")
@@ -270,12 +461,14 @@ def stats_slide(l, resort, km, usd, est):
         house.append(f"{l['area_m2']:.0f} m²")
     if house:
         rows.append(("House", " · ".join(house)))
+    if fees_yen:
+        rows.append(("Yearly fees", f"{fmt_yen(fees_yen)} (≈ {fmt_usd(fees_usd)})"))
     if est:
         if est.get("revenue"):
             rows.append(("Airbnb est. revenue", f"${est['revenue']:,.0f} / year"))
-            yt = yield_text(usd, est)
-            if yt and usd > 0:
-                rows.append(("Gross yield (before costs)", f"{est['revenue'] / usd * 100:.0f}%"))
+            if usd > 0:
+                net = net_revenue(est, fees_usd)
+                rows.append(("Yield after fees", f"{net / usd * 100:.0f}% (before tax & renovation)"))
         if est.get("adr"):
             occ = f", {est['occupancy']:.0f}% booked" if est.get("occupancy") else ""
             rows.append(("Nightly rate est.", f"${est['adr']:,.0f}{occ}"))
@@ -283,15 +476,15 @@ def stats_slide(l, resort, km, usd, est):
         y = draw_text(d, (60, y), label.upper(), 34, (140, 160, 190))
         for line in textwrap.wrap(value, 30):
             y = draw_text(d, (60, y), line, 52)
-        y += 22
+        y += 16
     place = "town" if l.get("geo_level") == "town" else "district"
-    note = f"Distance measured from the {place} centre, not the exact house."
+    note = f"Travel times are estimates from the {place} centre, not the exact house."
     yy = H - 160
     for line in textwrap.wrap(note, 48) + ["Link to the listing in the caption."]:
         yy = draw_text(d, (60, yy), line, 30, (150, 150, 150))
     return img
 
-def build_slides(l, resort, km, usd, est):
+def build_slides(l, hooks, usd, est, fees_yen, fees_usd):
     OUT.mkdir(exist_ok=True)
     for old in OUT.glob("slide_*.jpg"):
         old.unlink()
@@ -303,9 +496,9 @@ def build_slides(l, resort, km, usd, est):
         if img:
             photos.append(img)
     print(f"Photos downloaded: {len(photos)}")
-    slides = [cover_slide(photos[0] if photos else None, l, resort, km, usd, est)]
+    slides = [cover_slide(photos[0] if photos else None, l, hooks, usd, est, fees_usd)]
     slides += [photo_slide(p) for p in photos[1:MAX_PHOTOS + 1]]
-    slides.append(stats_slide(l, resort, km, usd, est))
+    slides.append(stats_slide(l, hooks, usd, est, fees_yen, fees_usd))
     paths = []
     for i, s in enumerate(slides, 1):
         p = OUT / f"slide_{i}.jpg"
@@ -315,29 +508,38 @@ def build_slides(l, resort, km, usd, est):
 
 
 # ─── caption ─────────────────────────────────────────────────────────
-def build_caption(l, resort, km, usd, est):
+def build_caption(l, hooks, usd, est, fees_yen, fees_usd):
+    kind, name, km = hooks[0]
     pref = PREF_EN.get(l["pref"], l["pref"])
-    lines = [f"🏔 {fmt_usd(usd)} house {fmt_dist(km)} from {resort}",
+    lines = [f"{KINDS[kind]['emoji']} {fmt_usd(usd)} house, {fmt_trip(km, l)} to {name}",
              "",
              f"💴 Price: {fmt_yen(l['price_yen'])} (≈ {fmt_usd(usd)})",
              f"📍 {l['location']} ({pref})"]
+    if len(hooks) > 1:
+        also = ", ".join(f"{KINDS[k]['emoji']} {n} ({fmt_trip(d, l)})" for k, n, d in hooks[1:4])
+        lines.append(f"🗺 Also near: {also}")
     if l.get("bedrooms"):
         lines.append(f"🛏 Rooms: {l['bedrooms']}")
     if l.get("year_built"):
         lines.append(f"🏗 Built: {l['year_built']}")
     if l.get("area_m2"):
         lines.append(f"📐 Floor area: {l['area_m2']:.0f} m²")
+    if fees_yen:
+        lines.append(f"🧾 Yearly fees: {fmt_yen(fees_yen)} (≈ {fmt_usd(fees_usd)})")
     if est and est.get("revenue"):
         lines.append(f"📈 Airbnb estimate: ${est['revenue']:,.0f}/year (AirROI, rough)")
         if usd > 0:
-            lines.append(f"💰 Gross yield: ~{est['revenue'] / usd * 100:.0f}% before costs & renovation")
+            net = net_revenue(est, fees_usd)
+            lines.append(f"💰 Yield after fees: ~{net / usd * 100:.0f}% before tax & renovation")
+    place = "town" if l.get("geo_level") == "town" else "district"
+    kind_tags = " ".join(dict.fromkeys(KINDS[k]["tags"] for k, _, _ in hooks))
     lines += ["",
-              "Distance is approximate (district centre).",
+              f"Travel times are estimates ({place} centre).",
               "Source & photos: Sumai空き家 / local akiya bank",
               f"🔗 {l['url']}",
               "",
-              "#akiya #japanhouse #cheaphouse #skijapan #japow #moveto" + pref.lower()
-              + " #japanrealestate #空き家 #古民家"]
+              f"#akiya #japanhouse #cheaphouse {kind_tags} #moveto{pref.lower()}"
+              " #japanrealestate #空き家 #古民家"]
     return "\n".join(lines)
 
 
@@ -377,68 +579,96 @@ def tg_album(paths, caption):
 
 # ─── picking ─────────────────────────────────────────────────────────
 def pick(cands, fx):
-    """Best Airbnb yield among the cheapest CHECK_TOP; cheapest if no AirROI data."""
-    if not AIRROI_KEY:
-        print("AirROI: no AIRROI_API_KEY secret, posting the cheapest house")
-        l, resort, km = cands[0]
-        return l, resort, km, None
-
-    cache = load_json(AIRROI_CACHE)
-    budget = {"left": MAX_AIRROI_CALLS}
-    scored = []
+    """Highest (revenue - fees) / price. Cached estimates are free; new ones limited
+    to MAX_AIRROI_CALLS (cheapest first). Fallback: cheapest house passing the fee rule."""
+    ac, fc = load_json(AIRROI_CACHE), load_json(FEE_CACHE)
+    budget = MAX_AIRROI_CALLS
+    scored, fallback, skipped = [], None, 0
     try:
-        for l, resort, km in cands[:CHECK_TOP]:
-            est = get_estimate(l, cache, budget)
+        for l, hooks in cands:
+            found, est = cached_estimate(l, ac) if AIRROI_KEY else (False, None)
+            can_score = bool(AIRROI_KEY) and (found or budget > 0)
+            if fallback is not None and not can_score:
+                continue
+            fees = yearly_fees(l, fc)
+            if fees is not None and fees > FEE_LIMIT * l["price_yen"]:
+                skipped += 1
+                print(f"  skip, fees {fmt_yen(fees)}/yr > {FEE_LIMIT:.0%} of "
+                      f"{fmt_yen(l['price_yen'])}: {l['url']}")
+                continue
+            if fallback is None:
+                fallback = (l, hooks, None, fees)
+            if not AIRROI_KEY:
+                break
+            if not can_score:
+                continue
+            if not found:
+                budget -= 1
+                est = fetch_estimate(l, ac)
             if not est or not est.get("revenue"):
                 continue
             usd = l["price_yen"] * fx
-            yld = est["revenue"] / max(usd, 1)          # free houses rank first
+            net = est["revenue"] - (fees or 0) * fx
+            score = net / max(usd, 1)                     # free houses rank first
             print(f"  {l['location']} {fmt_yen(l['price_yen'])} -> "
-                  f"${est['revenue']:,.0f}/yr = {yld*100:.0f}%")
-            scored.append((yld, -l["price_yen"], l, resort, km, est))
+                  f"${est['revenue']:,.0f}/yr, fees {fmt_yen(fees or 0)} = {score*100:.0f}%")
+            scored.append((score, -l["price_yen"], l, hooks, est, fees))
     finally:
-        save_json(AIRROI_CACHE, cache)                   # never pay twice
-    print(f"AirROI calls used this run: {MAX_AIRROI_CALLS - budget['left']}")
+        save_json(AIRROI_CACHE, ac)                       # never pay twice
+        save_json(FEE_CACHE, fc)
+    print(f"Fee rule skipped: {skipped}  |  scored: {len(scored)}  |  "
+          f"AirROI calls used: {MAX_AIRROI_CALLS - budget}")
 
-    if not scored:
-        print("AirROI: no usable estimates, posting the cheapest house")
-        l, resort, km = cands[0]
-        return l, resort, km, None
-    scored.sort(key=lambda s: (s[0], s[1]), reverse=True)
-    _, _, l, resort, km, est = scored[0]
-    return l, resort, km, est
+    if scored:
+        scored.sort(key=lambda s: (s[0], s[1]), reverse=True)
+        _, _, l, hooks, est, fees = scored[0]
+        return l, hooks, est, fees
+    if fallback:
+        print("No AirROI data – posting the cheapest house that passes the fee rule")
+        return fallback
+    return None, None, None, None
 
 
 # ─── main ────────────────────────────────────────────────────────────
 def main():
     today = datetime.now(JST).strftime("%Y-%m-%d")
+    fx = get_fx()
+    max_yen = MAX_PRICE_USD / fx
     listings = scraper.scrape()
     posted = load_json(POSTED_FILE)
 
-    cands = []
+    cands, per_kind = [], {}
     for l in listings:
         if l["url"] in posted:
             continue
-        if l.get("price_yen") is None or l["price_yen"] > MAX_PRICE_YEN:
+        if l.get("price_yen") is None or l["price_yen"] > max_yen:
             continue
-        name, km = nearest_hook(l["lat"], l["lng"])
-        if km > MAX_KM:
+        hooks = nearby_hooks(l["lat"], l["lng"])
+        if not hooks:
             continue
-        cands.append((l, name, km))
-    print(f"Candidates within {MAX_KM:.0f} km of a ski resort: {len(cands)}")
+        cands.append((l, hooks))
+        per_kind[hooks[0][0]] = per_kind.get(hooks[0][0], 0) + 1
+    print(f"Candidates: {len(cands)} {per_kind}  (≤ ${MAX_PRICE_USD:,.0f} = ¥{max_yen:,.0f}, "
+          f"≤ {MAX_DRIVE_MIN:.0f} min drive ≈ {MAX_KM:.0f} km, enabled: {', '.join(sorted(ENABLED))})")
 
     if not cands:
-        tg_text(f"No deal today ({today}) – no new houses within {MAX_KM:.0f} km of a ski resort.")
+        tg_text(f"No deal today ({today}) – no new houses near any attraction.")
         return
 
-    cands.sort(key=lambda c: (c[0]["price_yen"], c[2]))       # cheapest, then closest
-    fx = get_fx()
-    l, resort, km, est = pick(cands, fx)
-    usd = l["price_yen"] * fx
-    print(f"PICK: {l['location']} {fmt_yen(l['price_yen'])} {fmt_dist(km)} to {resort}\n  {l['url']}")
+    cands.sort(key=lambda c: (c[0]["price_yen"], c[1][0][2]))   # cheapest, then closest
+    l, hooks, est, fees = pick(cands, fx)
+    if l is None:
+        tg_text(f"No deal today ({today}) – every candidate had yearly fees over {FEE_LIMIT:.0%} of the price.")
+        return
 
-    paths = build_slides(l, resort, km, usd, est)
-    caption = build_caption(l, resort, km, usd, est)
+    usd = l["price_yen"] * fx
+    fees_yen = fees or 0
+    fees_usd = fees_yen * fx
+    kind, name, km = hooks[0]
+    print(f"PICK: {l['location']} {fmt_yen(l['price_yen'])} {fmt_trip(km, l)} to {name} ({kind})\n  {l['url']}")
+
+    paths = build_slides(l, hooks, usd, est, fees_yen, fees_usd)
+    caption = build_caption(l, hooks, usd, est, fees_yen, fees_usd)
     (OUT / "caption.txt").write_text(caption, encoding="utf-8")
 
     ok = tg_album(paths, caption) and tg_text(caption)
