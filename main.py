@@ -15,6 +15,7 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
 """
 import io, json, math, os, re, textwrap, time
 from datetime import datetime, timezone, timedelta
+from functools import lru_cache
 from pathlib import Path
 
 import requests
@@ -30,6 +31,7 @@ from yield_calc import (estimate, yield_points, caption_text, is_renovated,
 def _env(name, default):
     return os.getenv(name) or default                 # empty string -> default
 
+HANDLE           = "@yama.yield"                      # top-left text on the cover
 MAX_PRICE_USD    = float(_env("MAX_PRICE_USD", "100000"))
 MAX_DRIVE_MIN    = float(_env("MAX_DRIVE_MIN", "45"))
 MAX_WALK_MIN     = float(_env("MAX_WALK_MIN", "15"))
@@ -667,12 +669,20 @@ def fetch_estimate(l, cache):
 
 
 # ─── slides ──────────────────────────────────────────────────────────
-FONT_PATHS = ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-              "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-              "DejaVuSans-Bold.ttf", "arialbd.ttf", "Arial Bold.ttf"]
+FONT_FILES = {
+    "bold":    [str(ROOT / "fonts" / "Inter-Bold.ttf"),
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                "DejaVuSans-Bold.ttf", "arialbd.ttf", "Arial Bold.ttf"],
+    "regular": [str(ROOT / "fonts" / "Inter-Regular.ttf"),
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                "DejaVuSans.ttf", "arial.ttf", "Arial.ttf"],
+}
 
-def font(size):
-    for p in FONT_PATHS:
+@lru_cache(maxsize=256)
+def cfont(style, size, weight=700):
+    """Cover font. weight >= 500 -> bold file, below -> regular file."""
+    key = "bold" if weight >= 500 else "regular"
+    for p in FONT_FILES[key] + FONT_FILES["bold"]:
         try:
             return ImageFont.truetype(p, size)
         except OSError:
@@ -681,6 +691,9 @@ def font(size):
         return ImageFont.load_default(size=size)
     except TypeError:
         return ImageFont.load_default()
+
+def font(size):
+    return cfont("sans", size, 700)
 
 def draw_text(d, xy, s, size, fill=(255, 255, 255), maxw=W - 120):
     """Draws text with a shadow; shrinks the font if the line is too wide."""
@@ -692,6 +705,51 @@ def draw_text(d, xy, s, size, fill=(255, 255, 255), maxw=W - 120):
     d.text((x + 3, y + 3), s, font=f, fill=(0, 0, 0))
     d.text((x, y), s, font=f, fill=fill)
     return y + int(size * 1.25)
+
+def text_width(d, s, f, track=0):
+    return d.textlength(s, font=f) + track * max(0, len(s) - 1)
+
+def fit_font(d, s, size, weight, track=0, maxw=W - 120, style="sans"):
+    """Largest font (starting at size) that makes the line fit maxw."""
+    while True:
+        f = cfont(style, size, weight)
+        if text_width(d, s, f, track) <= maxw or size <= 18:
+            return f
+        size -= 2
+
+def put(d, xy, s, f, fill, anchor="la", track=0, shadow=3):
+    """Text with a soft shadow; track = extra letter spacing in px."""
+    x, y = xy
+    if not track:
+        if shadow:
+            d.text((x + shadow, y + shadow), s, font=f, fill=(0, 0, 0), anchor=anchor)
+        d.text((x, y), s, font=f, fill=fill, anchor=anchor)
+        return
+    widths = [d.textlength(c, font=f) for c in s]
+    total = sum(widths) + track * (len(s) - 1)
+    if anchor[0] == "m":
+        x -= total / 2
+    elif anchor[0] == "r":
+        x -= total
+    char_anchor = "l" + anchor[1]
+    for c, w in zip(s, widths):
+        if shadow:
+            d.text((x + shadow, y + shadow), c, font=f, fill=(0, 0, 0), anchor=char_anchor)
+        d.text((x, y), c, font=f, fill=fill, anchor=char_anchor)
+        x += w + track
+
+def shade(img, base=60, top=0.16, bottom=0.55):
+    """Darkens the photo: light overall, stronger at the top (handle) and bottom (facts)."""
+    mask = Image.new("L", (1, H))
+    for y in range(H):
+        t = y / H
+        a = base
+        if t < top:
+            a = max(a, int(150 * (1 - t / top)))
+        if t > bottom:
+            a = max(a, int(base + (230 - base) * (t - bottom) / (1 - bottom)))
+        mask.putpixel((0, y), a)
+    return Image.composite(Image.new("RGB", (W, H)), img, mask.resize((W, H)))
 
 def darken_bottom(img, start=0.40):
     mask = Image.new("L", (1, H))
@@ -711,30 +769,61 @@ def download(url):
         print(f"  photo error {url}: {e}")
         return None
 
-def cover_yield_text(e):
-    if not e or e["net"] <= 0:
-        return None
-    if show_yield(e):
-        return f"{e['roi'] * 100:.0f}% net yield · ~${e['monthly']:,}/mo"
-    return f"Avg. monthly income ~${e['monthly']:,}"
+def cover_trip(h, l):
+    """'3 min to Ureshino Onsen' / '5 min walk to ...'"""
+    t = fmt_trip(h, l).lstrip("~").replace(" drive", "")
+    return f"{t} to {h['name']}"
+
+def cover_facts(l):
+    """'6BR · 1984' – parts the listing doesn't have are left out."""
+    parts = []
+    if l.get("bedrooms"):
+        parts.append(f"{l['bedrooms']}BR")
+    if l.get("year_built"):
+        parts.append(str(l["year_built"]))
+    return " · ".join(parts)
 
 def cover_slide(photo, l, hooks, usd, e):
     h0 = hooks[0]
+    cx, white = W // 2, (255, 255, 255)
+    soft, grey = (230, 230, 230), (200, 200, 200)
     img = ImageOps.fit(photo, (W, H), Image.LANCZOS) if photo else Image.new("RGB", (W, H), (24, 44, 70))
-    img = darken_bottom(img)
+    img = shade(img)
     d = ImageDraw.Draw(img)
-    draw_text(d, (60, 60), KINDS[h0["kind"]]["banner"], 44, (180, 220, 255))
-    yt = cover_yield_text(e)
-    if yt:
-        draw_text(d, (60, 125), yt, 48, (140, 255, 170))
-    y = H - 480 - (55 if len(hooks) > 1 else 0)
-    y = draw_text(d, (60, y), fmt_usd(usd), 150)
-    y = draw_text(d, (60, y + 10), fmt_yen(l["price_yen"]), 56, (230, 230, 230))
-    y = draw_text(d, (60, y + 20), f"{fmt_trip(h0, l)} to {h0['name']}", 54)
-    if len(hooks) > 1:
-        h1 = hooks[1]
-        y = draw_text(d, (60, y), f"+ {h1['name']}, {fmt_trip(h1, l)}", 44, (200, 230, 255))
-    draw_text(d, (60, y + 5), f"{PREF_EN.get(l['pref'], l['pref'])}, Japan", 48, (200, 200, 200))
+
+    price = "FREE" if l["price_yen"] == 0 else f"{fmt_usd(usd)} ({fmt_yen(l['price_yen'])})"
+    has_income = bool(e) and e["net"] > 0
+    if has_income and show_yield(e):
+        big, label = f"{e['roi'] * 100:.0f}%", "net yield"
+        sub = f"~ usd ${e['monthly']:,} / month income"
+        bottom_price = price
+    elif has_income:
+        big, label = f"${e['monthly']:,}", "month income (est.)"
+        sub = "usd, after management"
+        bottom_price = price
+    else:                                          # no income estimate -> price is the hero
+        big = "FREE" if l["price_yen"] == 0 else fmt_usd(usd)
+        label = "house price" if l["price_yen"] == 0 else fmt_yen(l["price_yen"])
+        sub, bottom_price = None, None
+
+    # (x, y, text, size, weight, colour, anchor, letter spacing)
+    items = [
+        (60, 60, HANDLE, 24, 500, white, "la", 2),
+        (cx, 640, big, 260, 700, white, "ms", 0),
+        (cx, 690, label, 48, 400, soft, "mt", 1),
+    ]
+    if sub:
+        items.append((cx, 770, sub, 36, 400, soft, "mt", 0))
+    if bottom_price:
+        items.append((cx, H - 330, bottom_price, 72, 700, white, "mt", 0))
+    items.append((cx, H - 235, cover_trip(h0, l), 44, 500, white, "mt", 0))
+    facts = cover_facts(l)
+    if facts:
+        items.append((cx, H - 165, facts, 34, 400, grey, "mt", 1))
+
+    for x, y, s, size, weight, fill, anchor, track in items:
+        f = fit_font(d, s, size, weight, track)
+        put(d, (x, y), s, f, fill, anchor, track, shadow=4 if size >= 100 else 2)
     return img
 
 def photo_slide(photo, l):
