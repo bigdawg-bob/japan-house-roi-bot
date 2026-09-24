@@ -1303,35 +1303,116 @@ def fmt_years(y):
     n = f"{y:.1f}".removesuffix(".0") if y < 10 else f"{y:.0f}"
     return f"~{n} year{'' if n == '1' else 's'}"
 
-def area_slide(pic, h, l, e):
+PLAYFAIR = FONT_DIR / "Serif-Playfair.ttf"        # Playfair Display Regular (slide 2)
+
+@lru_cache(maxsize=64)
+def pfont(size):
+    """Playfair Display Regular; falls back to the normal serif if the file is missing."""
+    try:
+        return ImageFont.truetype(str(PLAYFAIR), size)
+    except OSError:
+        if PLAYFAIR not in _missing:
+            _missing.add(PLAYFAIR)
+            print(f"!! FONT MISSING: {PLAYFAIR} – slide 2 uses Serif-Light instead")
+        return cfont("serif", size, 300)
+
+def fit_pfont(d, s, size, maxw=W - 120):
+    """Largest Playfair size (starting at size) that fits maxw."""
+    while size > 18 and text_width(d, s, pfont(size)) > maxw:
+        size -= 2
+    return pfont(size)
+
+def fmt_k1(v):
+    """0 -> 'FREE', 950 -> '$950', 19000 -> '$19K', 17100 -> '$17.1K'"""
+    if v < 1:
+        return "FREE"
+    if v >= 1000:
+        return f"${v / 1000:.1f}".removesuffix(".0") + "K"
+    return f"${v:,.0f}"
+
+def _num(e, *names):
+    """First of these keys in the estimate that holds a number."""
+    for n in names:
+        v = e.get(n)
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            return float(v)
+    return None
+
+def cost_breakdown(e, usd):
+    """'($19K + $17.1K reno + $3.5K fees)' = house + reno + one-off buying fees."""
+    if usd is None:
+        return "(house + reno + fees)"
+    rest = max(0.0, e["all_in"] - usd)                  # reno + buying fees together
+    reno = _num(e, "reno_usd", "reno", "renovation_usd", "renovation", "reno_cost")
+    buy = _num(e, "buy_fees_usd", "buy_fees", "buying_fees", "closing_usd", "closing",
+               "fees_once", "one_off_fees", "purchase_fees", "acq_fees")
+    if reno is not None and not 0 <= reno <= rest + 1:
+        reno = None                                     # wrong unit (yen?) -> ignore
+    if buy is not None and not 0 <= buy <= rest + 1:
+        buy = None
+    if reno is None and buy is not None:
+        reno = rest - buy
+    elif buy is None and reno is not None:
+        buy = rest - reno
+    if reno is None:
+        print(f"  slide 2: reno / buying-fee keys not found, estimate keys: {sorted(e)}")
+        return f"({fmt_k1(usd)} + {fmt_k1(rest)} reno & fees)"
+    return f"({fmt_k1(usd)} + {fmt_k1(reno)} reno + {fmt_k1(buy)} fees)"
+
+def hook_label(h):
+    """'Rusutsu' -> 'Rusutsu ski resort', 'Beppu' -> 'Beppu Onsen', others unchanged."""
+    name = h["name"]
+    if h["kind"] == "ski" and "ski" not in name.lower():
+        return f"{name} ski resort"
+    if h["kind"] == "onsen" and "onsen" not in name.lower():
+        return f"{name} Onsen"
+    return name
+
+def area_slide(pic, h, l, e, usd=None):
     """Slide 2: daytime photo + THE PAYBACK (numbers from yield_calc.estimate)."""
     img = area_bg(pic)
     d = ImageDraw.Draw(img)
     cx = W // 2
-    white, soft, grey = (255, 255, 255), (230, 230, 230), (190, 190, 190)
-    after = "after management" + (" & fees" if e.get("fees_yearly") else "")
+    white = (255, 255, 255)
+    w85, w70, w60, w30 = (217, 217, 217), (179, 179, 179), (153, 153, 153), (77, 77, 77)
+    SMALL = 21                                          # size of the 2 bottom lines
+    fees_on = bool(e.get("fees_yearly"))
+    after = "after management" + (" & fees" if fees_on else "")
     yrs = e.get("breakeven_yrs")
-    real = show_yield(e) and yrs                       # same rule as slide 1 (hide if > 60%)
+    real = show_yield(e) and yrs                        # same rule as slide 1 (hide if > 60%)
 
-    put(d, (60, 60), HANDLE, cfont("sans", 26, 500), white, "la", 1, 2)
-    put(d, (cx, 420), "THE PAYBACK", cfont("sans", 30, 500), grey, "mt", 6, 0)
+    # top: handle + title on one line
+    put(d, (60, 60), HANDLE, cfont("sans", 24, 300), w70, "la", 1, 2)
+    put(d, (cx, 62), "THE PAYBACK", cfont("sans", 22, 300), w60, "mt", 6, 0)
 
     if real:
         big, label = fmt_years(yrs), "to payback"
         sub = f"≈ ${e['monthly']:,} / month net, {after}"
-        mid = f"{e['roi'] * 100:.0f}% net yield on {fmt_usd(e['all_in'])} all-in"
     else:
-        big, label = f"${e['monthly']:,}", "month income (est.)"
-        sub = f"usd, {after}"
-        mid = f"{fmt_usd(e['all_in'])} all-in (house + reno + fees)"
+        big, label = f"${e['monthly']:,}", "per month (est.)"
+        sub = f"usd net, {after}"
 
-    put(d, (cx, 660), big, fit_font(d, big, 170, 300, -2, style="serif"), white, "ms", -2, 3)
-    put(d, (cx, 700), label, cfont("sans", 40, 300), soft, "mt", 2, 2)
-    put(d, (cx, 790), sub, fit_font(d, sub, 34, 400), soft, "mt", 0, 2)
-    d.line([(cx - 150, 890), (cx + 150, 890)], fill=(150, 150, 150), width=2)
-    put(d, (cx, 930), mid, fit_font(d, mid, 40, 500), white, "mt", 0, 2)
-    rl = f"${e['adr']:,}/nt × {e['occ'] * 100:.0f}% × {e['nights']} days"
-    put(d, (cx, 1000), rl, fit_font(d, rl, 34, 400), grey, "mt", 0, 2)
+    # 2 big Playfair lines, same size (both shrink together if one is too wide)
+    size = 210
+    while size > 80 and max(text_width(d, s, pfont(size)) for s in (big, label)) > W - 120:
+        size -= 4
+    bf = pfont(size)
+    put(d, (cx, 600), big, bf, white, "ms", 0, 3)
+    put(d, (cx, 600 + int(size * 0.9)), label, bf, white, "ms", 0, 3)
+
+    put(d, (cx, 900), sub, fit_pfont(d, sub, 36), white, "ms", 0, 2)
+    d.line([(cx - 100, 1000), (cx + 100, 1000)], fill=w30, width=1)
+
+    # 2 detail lines, same font (Inter Regular)
+    all_in = f"{fmt_k1(e['all_in'])} all-in {cost_breakdown(e, usd)}"
+    line_a = f"{e['roi'] * 100:.0f}% net yield • {all_in}" if real else all_in
+    mg = _num(e, "mgmt_pct", "management_pct", "mgmt_rate", "mgmt", "management")
+    mg = 30 if mg is None else (mg * 100 if mg <= 1 else mg)
+    line_b = (f"{hook_label(h)} • ${e['adr']:,}/nt × {e['occ'] * 100:.0f}% × "
+              f"{e['nights']} days • After {mg:.0f}% mgmt{' & fees' if fees_on else ''}: "
+              f"{fmt_k1(e['net'])}/yr")
+    for y, s in ((1085, line_a), (1140, line_b)):
+        put(d, (cx, y), s, fit_font(d, s, SMALL, 400), w85, "mm", 0, 2)
 
     return img
 
@@ -1442,7 +1523,7 @@ def build_slides(l, hooks, usd, e):
           f"{'Grok' if facts else 'fallback'}")
 
     slides = [cover_slide(cover["img"], l, hooks, usd, e),
-              area_slide(day, h0, l, e),
+              area_slide(day, h0, l, e, usd),
               facts_slide(dusk, h0, l, hooks, facts, e)]
     paths = []
     for i, s in enumerate(slides, 1):
