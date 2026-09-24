@@ -11,7 +11,8 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
          management and yearly fees, divided by house + reno + buying fees
       -> final score = attraction points + yield points (-10..+15) + build-year points
          (so location always matters most)
-      -> 3 slides: 1 cover (house photo), 2 area (day photo), 3 area facts (dusk photo).
+      -> 3 slides: 1 cover (house photo), 2 the payback (day photo),
+         3 why this rents (dusk photo).
          Area photos: Pexels + Wikimedia Commons checked by Grok -> generic Japan
          -> photo library (any photo from any earlier post) -> unchecked stock
          -> this listing's photos -> fallback_photos/ folder. 75% black overlay.
@@ -1059,7 +1060,7 @@ def find_photo(h, l, mood, used, house_pics):
     return None
 
 
-# ─── town facts (Grok + web search) ──────────────────────────────────
+# ─── town facts for slide 3 (Grok + web search) ──────────────────────
 def clean_fact(s):
     s = re.sub(r"\[\[?\d+\]?\]\([^)]*\)", "", str(s))    # citation links
     s = re.sub(r"\[\d+\]", "", s)
@@ -1067,11 +1068,11 @@ def clean_fact(s):
     return s
 
 def town_facts(h, l):
-    """{'tagline': str, 'facts': [str, ...]} for the attraction, cached per place.
+    """{'known_for', 'visitors', 'guests': [3]} for slide 3, cached per place.
     None if Grok is off or the answer wasn't usable."""
     cache = load_json(FACTS_CACHE)
     hit = cache.get(h["name"])
-    if hit:
+    if hit and isinstance(hit.get("v"), dict) and "guests" in hit["v"]:   # old-style entries get re-asked
         try:
             if (datetime.now(JST) - datetime.fromisoformat(hit["d"])).days < FACTS_DAYS:
                 return hit["v"]
@@ -1081,33 +1082,34 @@ def town_facts(h, l):
         return None
     place = f"{place_name(h)} ({KINDS[h['kind']]['label']}) in {PREF_EN.get(l['pref'], l['pref'])}, Japan"
     prompt = (
-        f"Search the web, then give 4 short, true, specific facts about {place} that "
-        "would make a foreigner want to visit or own a house nearby (what it's known for, "
-        "season, snow/onsen/nature details, access from a big city). "
-        "Rules: each fact max 12 words, plain English, no emoji, no hype words, "
-        "no prices, no hotel names, no citations. Also a tagline of max 6 words. "
-        'Answer ONLY with JSON: {"tagline": "...", "facts": ["...", "...", "...", "..."]}')
+        f"Search the web about {place}. This is for an Instagram slide about short-term "
+        "rental demand there. "
+        "known_for: what it is best known for, max 5 words, e.g. \"Japan's top beauty onsen town\". "
+        "visitors: yearly visitor number from a real source, short form like \"2.5M tourists/yr\"; "
+        "empty string if you can't find a sourced number. "
+        "guests: exactly 3 types of guests who book stays here, max 28 characters each, "
+        "no full sentences, e.g. \"Korean tourists (direct flight)\". "
+        "Plain English, no emoji, no hype words, no prices, no hotel names, no citations. "
+        'Answer ONLY with JSON: {"known_for": "...", "visitors": "...", "guests": ["...", "...", "..."]}')
     v = json_from(grok(prompt, timeout=240, tools=[{"type": "web_search"}]))
     if not isinstance(v, dict):
         print(f"  town facts: no usable answer for {h['name']}")
         return None
-    facts = [clean_fact(x) for x in (v.get("facts") or []) if isinstance(x, str)]
-    facts = [f for f in facts if 10 <= len(f) <= 110][:4]
-    if len(facts) < 2:
-        print(f"  town facts: too few facts for {h['name']}")
+    known = clean_fact(v.get("known_for") or "")
+    known = known if 3 <= len(known) <= 40 else ""
+    visits = clean_fact(v.get("visitors") or "")
+    visits = visits if re.search(r"\d", visits) and len(visits) <= 24 else ""
+    guests = [clean_fact(g) for g in (v.get("guests") or []) if isinstance(g, str)]
+    guests = [g for g in guests if 3 <= len(g) <= 34][:3]
+    if len(guests) < 3:
+        guests = []                                   # slide uses the default guests
+    if not known and not guests:
+        print(f"  town facts: nothing usable for {h['name']}")
         return None
-    out = {"tagline": clean_fact(v.get("tagline") or "")[:60], "facts": facts}
+    out = {"known_for": known, "visitors": visits, "guests": guests}
     cache[h["name"]] = {"v": out, "d": datetime.now(JST).isoformat(timespec="seconds")}
     save_json(FACTS_CACHE, cache)
     print(f"  town facts {h['name']}: {out}")
-    return out
-
-def fallback_facts(h, l, hooks):
-    pref = PREF_EN.get(l["pref"], l["pref"])
-    out = [f"{KINDS[h['kind']]['label'].capitalize()} in {pref}, Japan",
-           f"{fmt_trip(h, l).lstrip('~').capitalize()} from the house"]
-    for x in hooks[1:3]:
-        out.append(f"{x['name']}: {fmt_trip(x, l).lstrip('~')}")
     return out
 
 
@@ -1121,6 +1123,8 @@ _missing = set()
 def font_file(style, weight):
     if style == "serif":
         return FONT_DIR / "Serif-Light.ttf"
+    if weight >= 700 and (FONT_DIR / "Sans-Bold.ttf").exists():
+        return FONT_DIR / "Sans-Bold.ttf"              # slides 2 & 3 only
     if weight >= 500:
         return FONT_DIR / "Sans-Medium.ttf"
     if weight >= 400:
@@ -1129,7 +1133,7 @@ def font_file(style, weight):
 
 @lru_cache(maxsize=256)
 def cfont(style, size, weight=500):
-    """'serif' = Cormorant Light. 'sans' = Inter: 300 Light, 400 Regular, 500+ Medium."""
+    """'serif' = Cormorant Light. 'sans' = Inter: 300 Light, 400 Regular, 500+ Medium, 700 Bold."""
     p = font_file(style, weight)
     try:
         return ImageFont.truetype(str(p), size)
@@ -1281,7 +1285,7 @@ def cover_slide(photo, l, hooks, usd, e):
         put(d, (x, y), s, f, fill, anchor, track, shadow=3 if size >= 100 else 2)
     return img
 
-# ── slides 2 & 3: the area ──
+# ── slides 2 & 3 ──
 def area_bg(pic):
     """Area photo filling the slide with a black overlay (AREA_OVERLAY, 0.75 = 75%)."""
     img = ImageOps.fit(pic["img"], (W, H), Image.LANCZOS)
@@ -1294,61 +1298,107 @@ def put_credit(d, pic):
     f = fit_font(d, credit, 24, 400)
     put(d, (W - 60, H - 60), credit, f, (190, 190, 190), anchor="rs", shadow=0)
 
-def area_slide(pic, h, l, facts):
-    """Slide 2: daytime photo, place name, kind, prefecture, drive time, tagline."""
+def fmt_years(y):
+    """3.46 -> '~3.5 years', 1.0 -> '~1 year', 12.3 -> '~12 years'"""
+    n = f"{y:.1f}".removesuffix(".0") if y < 10 else f"{y:.0f}"
+    return f"~{n} year{'' if n == '1' else 's'}"
+
+def area_slide(pic, h, l, e):
+    """Slide 2: daytime photo + THE PAYBACK (numbers from yield_calc.estimate)."""
     img = area_bg(pic)
     d = ImageDraw.Draw(img)
     cx = W // 2
     white, soft, grey = (255, 255, 255), (230, 230, 230), (190, 190, 190)
-    pref = PREF_EN.get(l["pref"], l["pref"])
+    after = "after management" + (" & fees" if e.get("fees_yearly") else "")
+    yrs = e.get("breakeven_yrs")
+    real = show_yield(e) and yrs                       # same rule as slide 1 (hide if > 60%)
+
+    put(d, (60, 60), HANDLE, cfont("sans", 26, 500), white, "la", 1, 2)
+    put(d, (cx, 420), "THE PAYBACK", cfont("sans", 30, 500), grey, "mt", 6, 0)
+
+    if real:
+        big, label = fmt_years(yrs), "to payback"
+        sub = f"≈ ${e['monthly']:,} / month net, {after}"
+        mid = f"{e['roi'] * 100:.0f}% net yield on {fmt_usd(e['all_in'])} all-in"
+    else:
+        big, label = f"${e['monthly']:,}", "month income (est.)"
+        sub = f"usd, {after}"
+        mid = f"{fmt_usd(e['all_in'])} all-in (house + reno + fees)"
+
+    put(d, (cx, 660), big, fit_font(d, big, 170, 300, -2, style="serif"), white, "ms", -2, 3)
+    put(d, (cx, 700), label, cfont("sans", 40, 300), soft, "mt", 2, 2)
+    put(d, (cx, 790), sub, fit_font(d, sub, 34, 400), soft, "mt", 0, 2)
+    d.line([(cx - 150, 890), (cx + 150, 890)], fill=(150, 150, 150), width=2)
+    put(d, (cx, 930), mid, fit_font(d, mid, 40, 500), white, "mt", 0, 2)
+    rl = f"${e['adr']:,}/nt × {e['occ'] * 100:.0f}% × {e['nights']} days"
+    put(d, (cx, 1000), rl, fit_font(d, rl, 34, 400), grey, "mt", 0, 2)
+
+    return img
+
+GUESTS = {
+    "ski":    ["Overseas powder skiers", "Tokyo ski weekenders", "Families on winter break"],
+    "onsen":  ["Weekend couples", "Overseas onsen fans", "Remote workers escaping city"],
+    "sight":  ["Overseas sightseers", "Weekend couples", "Culture & photo fans"],
+    "beach":  ["Summer beach families", "Surfers & divers", "City weekend couples"],
+    "nature": ["Hikers & outdoor fans", "Overseas nature travellers", "Remote workers escaping city"],
+}
+NOTE_HOOK = {
+    "ski":    ("slopes", 'listed as "ski access"'),
+    "onsen":  ("onsen", 'listed as "onsen access"'),
+    "sight":  ("sights", "easy sightseeing base"),
+    "beach":  ("beach", 'listed as "beach access"'),
+    "nature": ("trails", 'listed as "outdoor base"'),
+}
+
+def facts_slide(pic, h, l, hooks, facts, e):
+    """Slide 3: dusk photo + WHY THIS RENTS."""
+    img = area_bg(pic)
+    d = ImageDraw.Draw(img)
+    white, soft = (255, 255, 255), (225, 225, 225)
+    X = 190                                            # left edge of the text block
+    MAXW = W - X - 130
+    f = facts or {}
     name = place_name(h)
 
     put(d, (60, 60), HANDLE, cfont("sans", 26, 500), white, "la", 1, 2)
-    put(d, (cx, 480), "THE AREA", cfont("sans", 30, 500), grey, "mt", 6, 0)
-    put(d, (cx, 700), name, fit_font(d, name, 150, 300, -2, style="serif"),
-        white, "ms", -2, 3)
-    sub = f"{KINDS[h['kind']]['label'].capitalize()} · {pref}"
-    put(d, (cx, 745), sub, fit_font(d, sub, 40, 300, 2), soft, "mt", 2, 2)
-    trip = f"{fmt_trip(h, l)} from the house"
-    put(d, (cx, 815), trip, fit_font(d, trip, 42, 500), white, "mt", 0, 2)
+    put(d, (W // 2, 62), "WHY THIS RENTS", cfont("sans", 22, 500), soft, "mt", 5, 0)
 
-    tagline = (facts or {}).get("tagline")
-    if tagline:
-        f = cfont("serif", 60, 300)
-        y = 960
-        for line in wrap_px(d, tagline, f, W - 200)[:2]:
-            put(d, (cx, y), line, f, soft, "mt", 0, 2)
-            y += 76
-    put_credit(d, pic)
-    return img
+    # town + subtitle + divider
+    put(d, (X, 470), name, fit_font(d, name, 130, 300, -1, MAXW, "serif"), white, "ls", -1, 3)
+    sub = " • ".join(x for x in (f.get("known_for"), f.get("visitors")) if x)
+    if not sub:
+        sub = f"{KINDS[h['kind']]['label'].capitalize()} · {PREF_EN.get(l['pref'], l['pref'])}"
+    put(d, (X, 510), sub, fit_font(d, sub, 34, 700, 0, MAXW), white, "la", 0, 2)
+    d.line([(X, 615), (X + 410, 615)], fill=(170, 170, 170), width=2)
 
-def facts_slide(pic, h, l, hooks, facts):
-    """Slide 3: dusk photo, 'Why <place>' and 3-4 facts."""
-    img = area_bg(pic)
-    d = ImageDraw.Draw(img)
-    white, accent = (255, 255, 255), (180, 220, 255)
-    put(d, (60, 60), HANDLE, cfont("sans", 26, 500), white, "la", 1, 2)
+    # who pays + 3 guest bullets
+    head = f"Who pays ${e['adr']:,}/nt?"
+    put(d, (X, 665), head, fit_font(d, head, 56, 700, 0, MAXW), white, "la", 0, 3)
+    guests = f.get("guests") or GUESTS.get(h["kind"], GUESTS["onsen"])
+    y = 760
+    for g in guests[:3]:
+        s = f"• {g}"
+        put(d, (X + 6, y), s, fit_font(d, s, 38, 700, 0, MAXW - 6), white, "la", 0, 2)
+        y += 54
 
-    title = f"Why {place_name(h)}"
-    put(d, (60, 280), title, fit_font(d, title, 110, 300, style="serif"), white, "ls", 0, 3)
+    # 2 "X = Y" lines (our own numbers, not Grok's)
+    y += 22
+    word, hook = NOTE_HOOK.get(h["kind"], ("area", "strong listing hook"))
+    for s in (f"{fmt_trip(h, l).lstrip('~')} to {word} = {hook}",
+              f"{e['nights']} rentable days = conservative"):
+        put(d, (X, y), s, fit_font(d, s, 34, 700, 0, MAXW), white, "la", 0, 2)
+        y += 52
 
-    lines = (facts or {}).get("facts") or fallback_facts(h, l, hooks)
-    f = cfont("sans", 44, 400)
-    y = 380
-    for fact in lines:
-        wrapped = wrap_px(d, fact, f, W - 200)
-        if y + 60 * len(wrapped) > H - 140:
-            break
-        put(d, (60, y), "—", f, accent, "la", 0, 2)
-        for line in wrapped:
-            put(d, (130, y), line, f, white, "la", 0, 2)
-            y += 60
-        y += 36
-    put_credit(d, pic)
+    # newsletter box
+    cta = "Full breakdown + agent contact → newsletter link in bio"
+    cf = fit_font(d, cta, 28, 700, 0, MAXW - 50)
+    bw = text_width(d, cta, cf) + 50
+    d.rounded_rectangle([X, 1100, X + bw, 1185], radius=6, outline=(235, 235, 235), width=2)
+    put(d, (X + bw / 2, 1142), cta, cf, white, "mm", 0, 0)
     return img
 
 def build_slides(l, hooks, usd, e):
-    """3 slides: cover, area (day), area facts (dusk).
+    """3 slides: cover, the payback (day), why this rents (dusk).
     Returns (slide paths, area photo credits), or (None, None) if no photo at all."""
     OUT.mkdir(exist_ok=True)
     for old in OUT.glob("slide_*.jpg"):
@@ -1392,8 +1442,8 @@ def build_slides(l, hooks, usd, e):
           f"{'Grok' if facts else 'fallback'}")
 
     slides = [cover_slide(cover["img"], l, hooks, usd, e),
-              area_slide(day, h0, l, facts),
-              facts_slide(dusk, h0, l, hooks, facts)]
+              area_slide(day, h0, l, e),
+              facts_slide(dusk, h0, l, hooks, facts, e)]
     paths = []
     for i, s in enumerate(slides, 1):
         p = OUT / f"slide_{i}.jpg"
