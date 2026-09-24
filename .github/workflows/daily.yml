@@ -37,6 +37,18 @@ jobs:
       HOOK_KINDS:       "ski,onsen,sight,beach,nature"
       MAX_AIRROI_CALLS: "15"
 
+      # ── which sites to scrape ──
+      # At Home + HOME'S block GitHub's servers (HTTP 403), so only Sumai for now.
+      SOURCES:          "sumai"
+      ROTATE_SOURCES:   "1"
+
+      # ── ranking: location first, yield second ──
+      HOOK_PRIORITY:    "ski=1.0,onsen=1.0,sight=0.9,beach=0.9,nature=0.8"
+      YIELD_CAP_PCT:    "15"     # yield adds at most this many points (free house = cap)
+      MIN_YIELD_PCT:    "0"      # skip houses whose Airbnb estimate is below this
+      MAX_CHECK:        "40"     # how many top-located houses to check fees/AirROI for
+      RECENT_HOOKS:     "5"      # don't repeat an attraction featured in the last N posts
+
       DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
 
     steps:
