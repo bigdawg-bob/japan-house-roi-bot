@@ -815,7 +815,7 @@ def cover_slide(photo, l, hooks, usd, e):
     has_income = bool(e) and e["net"] > 0
     if has_income and show_yield(e):
         big, label = f"{e['roi'] * 100:.0f}%", "net yield"
-        sub = f"~ usd ${e['roi'] * usd / 12:,.0f} / month net"
+        sub = f"~ usd ${e['monthly']:,} / month net"
         bottom_price = price
     elif has_income:
         big, label = f"${e['monthly']:,}", "month income (est.)"
