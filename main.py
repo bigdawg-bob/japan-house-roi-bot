@@ -924,7 +924,7 @@ def pick(ranked, fx, last_source=None):
                 est = fetch_estimate(l, ac)
             e = estimate(l["price_yen"], l.get("year_built"), est, fx,
                          floor_m2=l.get("area_m2"), renovated=is_renovated(l),
-                         yearly_fees_jpy=fees or 0)
+                         yearly_fees_jpy=fees or 0, rooms=l.get("bedrooms"))
             if e is None:
                 skip_data += 1
                 print(f"  skip, no AirROI rate/occupancy: {l['url']}")
