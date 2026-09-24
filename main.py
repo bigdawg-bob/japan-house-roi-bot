@@ -1,8 +1,10 @@
 """
 Daily "cheap Japanese house near a ski resort / onsen / sight / beach / nature" bot.
-Flow: scraper.scrape() -> keep houses under MAX_PRICE_USD within a ~45-min drive of a hook
+Flow: scrape ALL sites (Sumai, At Home, LIFULL HOME'S) -> merge + remove duplicates
+      -> keep houses under MAX_PRICE_USD within a ~45-min drive of a hook
       -> read yearly fees from the listing page, skip if > 15% of the price
       -> AirROI estimate (cached) -> post the ONE highest-scoring house
+         (prefers a different site than the last post, when one qualifies)
       -> 1080x1350 slides -> Telegram (album + copyable caption).
 Score = (Airbnb revenue - yearly fees) / price.  No AirROI data -> cheapest house.
 """
@@ -14,6 +16,8 @@ import requests
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 import scraper
+import scraper_athome
+import scraper_homes
 
 # ─── settings ────────────────────────────────────────────────────────
 MAX_PRICE_USD    = float(os.getenv("MAX_PRICE_USD", "100000"))
@@ -28,6 +32,9 @@ FX_FALLBACK      = 0.0067
 DRY_RUN          = os.getenv("DRY_RUN") == "1"
 ENABLED          = set(os.getenv("HOOK_KINDS", "ski,onsen,sight,beach,nature")
                        .replace(" ", "").split(","))
+SITES_ON         = [s for s in os.getenv("SOURCES", "sumai,athome,homes")
+                    .replace(" ", "").split(",") if s]
+ROTATE           = os.getenv("ROTATE_SOURCES", "1") == "1"
 
 # travel-time estimate (no routing API; straight line -> road distance -> minutes)
 ROAD_FACTOR = 1.3     # roads are ~30% longer than a straight line
@@ -35,18 +42,30 @@ DRIVE_KMH   = 40      # average rural driving speed
 WALK_KMH    = 4.8
 MAX_KM      = MAX_DRIVE_MIN / 60 * DRIVE_KMH / ROAD_FACTOR   # ≈ 23 km straight line
 
-ROOT         = Path(__file__).parent
-STATE        = ROOT / "state"
-POSTED_FILE  = STATE / "posted.json"
-AIRROI_CACHE = STATE / "airroi_cache.json"
-FEE_CACHE    = STATE / "fees_cache.json"
-OUT          = ROOT / "out"
-JST          = timezone(timedelta(hours=9))
+ROOT          = Path(__file__).parent
+STATE         = ROOT / "state"
+POSTED_FILE   = STATE / "posted.json"
+AIRROI_CACHE  = STATE / "airroi_cache.json"
+FEE_CACHE     = STATE / "fees_cache.json"
+ROTATION_FILE = STATE / "rotation.json"
+OUT           = ROOT / "out"
+JST           = timezone(timedelta(hours=9))
 
 BOT_TOKEN   = os.getenv("BOT_TOKEN")
 CHAT_ID     = os.getenv("CHAT_ID")
 AIRROI_KEY  = os.getenv("AIRROI_API_KEY") or os.getenv("AIRROI_KEY")
 AIRROI_URL  = os.getenv("AIRROI_URL", "https://api.airroi.com/calculator/estimate")
+
+SITE_MODULES = {"sumai": scraper, "athome": scraper_athome, "homes": scraper_homes}
+# source -> (caption text, photo credit)
+SITE_INFO = {
+    "sumai":  ("Sumai空き家 / local akiya bank", "akiya.sumai.biz"),
+    "athome": ("At Home 空き家バンク (national akiya bank)", "akiya-athome.jp"),
+    "homes":  ("LIFULL HOME'S 空き家バンク (national akiya bank)", "homes.co.jp"),
+}
+
+def site_info(l):
+    return SITE_INFO.get(l.get("source"), SITE_INFO["sumai"])
 
 KINDS = {
     "ski":    {"label": "ski resort", "emoji": "🏔", "banner": "JAPAN SKI AKIYA",
@@ -232,6 +251,55 @@ def load_json(p):
 def save_json(p, data):
     p.parent.mkdir(exist_ok=True)
     p.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+# ─── all sites: gather + remove duplicates ───────────────────────────
+def fingerprint(l):
+    """Same town/district + same price = same house (across sites)."""
+    a = re.sub(r"\s|大字|字", "", l.get("location") or "")
+    a = re.split(r"[0-9０-９\-－−]", a)[0]
+    return f"{a}|{int(l.get('price_yen') or 0)}"
+
+def dedupe(listings):
+    groups = {}
+    for l in listings:
+        if l.get("price_yen") is None:
+            continue
+        groups.setdefault(fingerprint(l), []).append(l)
+    out, dupes = [], 0
+    for key, g in groups.items():
+        g.sort(key=lambda x: (len(x.get("photos") or []), bool(x.get("year_built")),
+                              bool(x.get("area_m2"))), reverse=True)
+        best = dict(g[0])
+        best["fp"] = key
+        best["all_urls"] = list(dict.fromkeys(x["url"] for x in g))
+        dupes += len(g) - 1
+        out.append(best)
+    print(f"Merged: {len(out)} unique houses ({dupes} duplicates removed)")
+    return out
+
+def gather():
+    everything = []
+    for name in SITES_ON:
+        mod = SITE_MODULES.get(name)
+        if not mod:
+            print(f"Unknown source '{name}', skipping")
+            continue
+        t = time.time()
+        try:
+            res = mod.scrape()
+        except Exception as e:
+            print(f"!! {name} scraper failed, skipping it today: {e!r}")
+            continue
+        for l in res:
+            l.setdefault("source", name)
+        print(f"== {name}: {len(res)} usable listings ({time.time() - t:.0f}s)")
+        everything += res
+    return dedupe(everything)
+
+def already_posted(l, posted):
+    return (("fp:" + l["fp"]) in posted
+            or any(u in posted for u in l.get("all_urls", [l["url"]])))
 
 
 # ─── exchange rate ───────────────────────────────────────────────────
@@ -435,10 +503,12 @@ def cover_slide(photo, l, hooks, usd, est, fees_usd):
     draw_text(d, (60, y + 5), f"{PREF_EN.get(l['pref'], l['pref'])}, Japan", 48, (200, 200, 200))
     return img
 
-def photo_slide(photo):
+def photo_slide(photo, l):
     img = ImageOps.fit(photo, (W, H), Image.LANCZOS)
     d = ImageDraw.Draw(img)
-    draw_text(d, (W - 470, H - 70), "Photo: akiya.sumai.biz", 32, (235, 235, 235))
+    credit = f"Photo: {site_info(l)[1]}"
+    x = W - 60 - int(d.textlength(credit, font=font(32)))
+    draw_text(d, (x, H - 70), credit, 32, (235, 235, 235))
     return img
 
 def stats_slide(l, hooks, usd, est, fees_yen, fees_usd):
@@ -446,7 +516,8 @@ def stats_slide(l, hooks, usd, est, fees_yen, fees_usd):
     img = Image.new("RGB", (W, H), (18, 28, 45))
     d = ImageDraw.Draw(img)
     y = draw_text(d, (60, 70), "THE NUMBERS", 64, (180, 220, 255)) + 30
-    rows = [("Price", f"{fmt_usd(usd)}  ({fmt_yen(l['price_yen'])})"),
+    price_txt = "FREE" if l["price_yen"] == 0 else f"{fmt_usd(usd)}  ({fmt_yen(l['price_yen'])})"
+    rows = [("Price", price_txt),
             ("Location", f"{PREF_EN.get(l['pref'], l['pref'])}, Japan"),
             (f"Nearest {KINDS[kind]['label']}", f"{name}, {fmt_trip(km, l)}")]
     if len(hooks) > 1:
@@ -497,7 +568,7 @@ def build_slides(l, hooks, usd, est, fees_yen, fees_usd):
             photos.append(img)
     print(f"Photos downloaded: {len(photos)}")
     slides = [cover_slide(photos[0] if photos else None, l, hooks, usd, est, fees_usd)]
-    slides += [photo_slide(p) for p in photos[1:MAX_PHOTOS + 1]]
+    slides += [photo_slide(p, l) for p in photos[1:MAX_PHOTOS + 1]]
     slides.append(stats_slide(l, hooks, usd, est, fees_yen, fees_usd))
     paths = []
     for i, s in enumerate(slides, 1):
@@ -511,9 +582,11 @@ def build_slides(l, hooks, usd, est, fees_yen, fees_usd):
 def build_caption(l, hooks, usd, est, fees_yen, fees_usd):
     kind, name, km = hooks[0]
     pref = PREF_EN.get(l["pref"], l["pref"])
+    price_line = ("💴 Price: FREE 🎉" if l["price_yen"] == 0
+                  else f"💴 Price: {fmt_yen(l['price_yen'])} (≈ {fmt_usd(usd)})")
     lines = [f"{KINDS[kind]['emoji']} {fmt_usd(usd)} house, {fmt_trip(km, l)} to {name}",
              "",
-             f"💴 Price: {fmt_yen(l['price_yen'])} (≈ {fmt_usd(usd)})",
+             price_line,
              f"📍 {l['location']} ({pref})"]
     if len(hooks) > 1:
         also = ", ".join(f"{KINDS[k]['emoji']} {n} ({fmt_trip(d, l)})" for k, n, d in hooks[1:4])
@@ -535,7 +608,7 @@ def build_caption(l, hooks, usd, est, fees_yen, fees_usd):
     kind_tags = " ".join(dict.fromkeys(KINDS[k]["tags"] for k, _, _ in hooks))
     lines += ["",
               f"Travel times are estimates ({place} centre).",
-              "Source & photos: Sumai空き家 / local akiya bank",
+              f"Source & photos: {site_info(l)[0]}",
               f"🔗 {l['url']}",
               "",
               f"#akiya #japanhouse #cheaphouse {kind_tags} #moveto{pref.lower()}"
@@ -578,17 +651,21 @@ def tg_album(paths, caption):
 
 
 # ─── picking ─────────────────────────────────────────────────────────
-def pick(cands, fx):
+def pick(cands, fx, last_source=None):
     """Highest (revenue - fees) / price. Cached estimates are free; new ones limited
-    to MAX_AIRROI_CALLS (cheapest first). Fallback: cheapest house passing the fee rule."""
+    to MAX_AIRROI_CALLS (cheapest first). Fallback: cheapest house passing the fee rule.
+    With ROTATE_SOURCES on, prefers a site different from the last post (if one qualifies)."""
     ac, fc = load_json(AIRROI_CACHE), load_json(FEE_CACHE)
     budget = MAX_AIRROI_CALLS
-    scored, fallback, skipped = [], None, 0
+    rotate = ROTATE and last_source is not None
+    scored, fallback, fallback_other, skipped = [], None, None, 0
     try:
         for l, hooks in cands:
             found, est = cached_estimate(l, ac) if AIRROI_KEY else (False, None)
             can_score = bool(AIRROI_KEY) and (found or budget > 0)
-            if fallback is not None and not can_score:
+            other = l.get("source") != last_source
+            need_fb = fallback is None or (rotate and other and fallback_other is None)
+            if not can_score and not need_fb:
                 continue
             fees = yearly_fees(l, fc)
             if fees is not None and fees > FEE_LIMIT * l["price_yen"]:
@@ -598,8 +675,8 @@ def pick(cands, fx):
                 continue
             if fallback is None:
                 fallback = (l, hooks, None, fees)
-            if not AIRROI_KEY:
-                break
+            if other and fallback_other is None:
+                fallback_other = (l, hooks, None, fees)
             if not can_score:
                 continue
             if not found:
@@ -610,22 +687,25 @@ def pick(cands, fx):
             usd = l["price_yen"] * fx
             net = est["revenue"] - (fees or 0) * fx
             score = net / max(usd, 1)                     # free houses rank first
-            print(f"  {l['location']} {fmt_yen(l['price_yen'])} -> "
+            print(f"  [{l.get('source')}] {l['location']} {fmt_yen(l['price_yen'])} -> "
                   f"${est['revenue']:,.0f}/yr, fees {fmt_yen(fees or 0)} = {score*100:.0f}%")
             scored.append((score, -l["price_yen"], l, hooks, est, fees))
     finally:
         save_json(AIRROI_CACHE, ac)                       # never pay twice
         save_json(FEE_CACHE, fc)
     print(f"Fee rule skipped: {skipped}  |  scored: {len(scored)}  |  "
-          f"AirROI calls used: {MAX_AIRROI_CALLS - budget}")
+          f"AirROI calls used: {MAX_AIRROI_CALLS - budget}  |  last source: {last_source}")
 
     if scored:
         scored.sort(key=lambda s: (s[0], s[1]), reverse=True)
-        _, _, l, hooks, est, fees = scored[0]
+        best = scored[0]
+        if rotate:
+            best = next((s for s in scored if s[2].get("source") != last_source), best)
+        _, _, l, hooks, est, fees = best
         return l, hooks, est, fees
     if fallback:
         print("No AirROI data – posting the cheapest house that passes the fee rule")
-        return fallback
+        return fallback_other if (rotate and fallback_other) else fallback
     return None, None, None, None
 
 
@@ -634,12 +714,13 @@ def main():
     today = datetime.now(JST).strftime("%Y-%m-%d")
     fx = get_fx()
     max_yen = MAX_PRICE_USD / fx
-    listings = scraper.scrape()
+    listings = gather()
     posted = load_json(POSTED_FILE)
+    last_source = load_json(ROTATION_FILE).get("last_source")
 
-    cands, per_kind = [], {}
+    cands, per_kind, per_src = [], {}, {}
     for l in listings:
-        if l["url"] in posted:
+        if already_posted(l, posted):
             continue
         if l.get("price_yen") is None or l["price_yen"] > max_yen:
             continue
@@ -648,7 +729,9 @@ def main():
             continue
         cands.append((l, hooks))
         per_kind[hooks[0][0]] = per_kind.get(hooks[0][0], 0) + 1
-    print(f"Candidates: {len(cands)} {per_kind}  (≤ ${MAX_PRICE_USD:,.0f} = ¥{max_yen:,.0f}, "
+        per_src[l.get("source")] = per_src.get(l.get("source"), 0) + 1
+    print(f"Candidates: {len(cands)} {per_kind} by site {per_src}  "
+          f"(≤ ${MAX_PRICE_USD:,.0f} = ¥{max_yen:,.0f}, "
           f"≤ {MAX_DRIVE_MIN:.0f} min drive ≈ {MAX_KM:.0f} km, enabled: {', '.join(sorted(ENABLED))})")
 
     if not cands:
@@ -656,7 +739,7 @@ def main():
         return
 
     cands.sort(key=lambda c: (c[0]["price_yen"], c[1][0][2]))   # cheapest, then closest
-    l, hooks, est, fees = pick(cands, fx)
+    l, hooks, est, fees = pick(cands, fx, last_source)
     if l is None:
         tg_text(f"No deal today ({today}) – every candidate had yearly fees over {FEE_LIMIT:.0%} of the price.")
         return
@@ -665,7 +748,8 @@ def main():
     fees_yen = fees or 0
     fees_usd = fees_yen * fx
     kind, name, km = hooks[0]
-    print(f"PICK: {l['location']} {fmt_yen(l['price_yen'])} {fmt_trip(km, l)} to {name} ({kind})\n  {l['url']}")
+    print(f"PICK [{l.get('source')}]: {l['location']} {fmt_yen(l['price_yen'])} "
+          f"{fmt_trip(km, l)} to {name} ({kind})\n  {l['url']}")
 
     paths = build_slides(l, hooks, usd, est, fees_yen, fees_usd)
     caption = build_caption(l, hooks, usd, est, fees_yen, fees_usd)
@@ -673,8 +757,11 @@ def main():
 
     ok = tg_album(paths, caption) and tg_text(caption)
     if ok and not DRY_RUN:
-        posted[l["url"]] = today
+        for u in l.get("all_urls", [l["url"]]):
+            posted[u] = today
+        posted["fp:" + l["fp"]] = today
         save_json(POSTED_FILE, posted)
+        save_json(ROTATION_FILE, {"last_source": l.get("source"), "date": today})
         print("Saved to state/posted.json")
     elif not ok:
         print("Telegram failed – not marking as posted, will retry next run")
