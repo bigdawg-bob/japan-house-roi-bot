@@ -13,13 +13,18 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
          (so location always matters most)
       -> 3 slides: 1 cover (house photo), 2 the payback (day photo),
          3 why this rents (dusk photo).
+         Slide 3 wording: 5 rotating headlines (never the same twice in a row) +
+         3 town-specific facts (never the same combo as a recent post) +
+         2 SEO lines ("[Town] Onsen Airbnb = onsen access..." / "[Town] investment: ...").
+         Town facts: towns.json (your checked facts) > Grok web search (sourced only)
+         > our own numbers (AirROI occupancy, nearby attractions, build year).
          Area photos: Pexels + Wikimedia Commons checked by Grok -> generic Japan
          -> photo library (any photo from any earlier post) -> unchecked stock
          -> this listing's photos -> fallback_photos/ folder. 75% black overlay.
          No photo at all -> no post today (retry next run).
       -> 1080x1350 slides -> Telegram (album + copyable caption).
 """
-import base64, hashlib, io, json, math, os, re, time
+import base64, hashlib, io, itertools, json, math, os, re, time
 from datetime import datetime, timezone, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -83,6 +88,7 @@ LOOSE_W, LOOSE_H = 800, 1000                              # size for the uncheck
 AREA_OVERLAY   = min(1.0, max(0.0, float(_env("AREA_OVERLAY", "0.75"))))  # black overlay on slides 2 & 3
 FACTS_DAYS     = 180                                      # re-ask Grok for town facts after this
 LIBRARY_MAX    = int(_env("LIBRARY_MAX", "60"))           # photos kept for reuse
+SLIDE3_HISTORY = 30                                       # slide 3 fact combos remembered
 BOT_UA         = {"User-Agent": "yama-yield-akiya-bot/1.0 (Instagram @yama.yield; GitHub Actions)"}
 
 def _weights(s):
@@ -124,6 +130,7 @@ PHOTO_CACHE   = STATE / "photo_cache.json"
 FACTS_CACHE   = STATE / "town_facts.json"
 LIBRARY_FILE  = STATE / "photo_library.json"
 LIBRARY_DIR   = STATE / "photo_library"
+TOWNS_FILE    = ROOT / "towns.json"                      # optional: your own checked town facts
 FALLBACK_DIR  = ROOT / "fallback_photos"                 # optional: your own backup photos
 OUT           = ROOT / "out"
 JST           = timezone(timedelta(hours=9))
@@ -1060,19 +1067,24 @@ def find_photo(h, l, mood, used, house_pics):
     return None
 
 
-# ─── town facts for slide 3 (Grok + web search) ──────────────────────
+# ─── town facts for slide 3 (towns.json + Grok web search) ───────────
+# Town-specific data points. Each one is a short bullet (max ~30 characters).
+POINT_KINDS  = ["ryokan", "competition", "foreign", "stay", "access",
+                "occupancy", "trend", "plan_b", "tattoo", "pets"]
+NEEDS_NUMBER = {"ryokan", "competition", "foreign", "stay", "access", "occupancy"}
+
 def clean_fact(s):
     s = re.sub(r"\[\[?\d+\]?\]\([^)]*\)", "", str(s))    # citation links
     s = re.sub(r"\[\d+\]", "", s)
     s = re.sub(r"\s+", " ", s).strip().strip('"').strip()
     return s
 
-def town_facts(h, l):
-    """{'known_for', 'visitors', 'guests': [3]} for slide 3, cached per place.
-    None if Grok is off or the answer wasn't usable."""
+def grok_town_facts(h, l):
+    """Sourced town facts from Grok web search, cached per place.
+    {'known_for', 'visitors', 'minpaku_cap', 'points': {kind: text}} or None."""
     cache = load_json(FACTS_CACHE)
     hit = cache.get(h["name"])
-    if hit and isinstance(hit.get("v"), dict) and "guests" in hit["v"]:   # old-style entries get re-asked
+    if hit and isinstance(hit.get("v"), dict) and "points" in hit["v"]:   # old-style entries get re-asked
         try:
             if (datetime.now(JST) - datetime.fromisoformat(hit["d"])).days < FACTS_DAYS:
                 return hit["v"]
@@ -1083,14 +1095,27 @@ def town_facts(h, l):
     place = f"{place_name(h)} ({KINDS[h['kind']]['label']}) in {PREF_EN.get(l['pref'], l['pref'])}, Japan"
     prompt = (
         f"Search the web about {place}. This is for an Instagram slide about short-term "
-        "rental demand there. "
-        "known_for: what it is best known for, max 5 words, e.g. \"Japan's top beauty onsen town\". "
-        "visitors: yearly visitor number from a real source, short form like \"2.5M tourists/yr\"; "
-        "empty string if you can't find a sourced number. "
-        "guests: exactly 3 types of guests who book stays here, max 28 characters each, "
-        "no full sentences, e.g. \"Korean tourists (direct flight)\". "
-        "Plain English, no emoji, no hype words, no prices, no hotel names, no citations. "
-        'Answer ONLY with JSON: {"known_for": "...", "visitors": "...", "guests": ["...", "...", "..."]}')
+        "rental investment there. Use ONLY facts you found in a real source (Jalan, Rakuten "
+        "Travel, city or prefecture statistics, JNTO, the official tourism site, AirDNA, news). "
+        "If you can't find a sourced fact, use an empty string. Never guess or estimate.\n"
+        "known_for: what it is best known for, max 5 words, e.g. \"Historic seven-bath onsen town\".\n"
+        "visitors: yearly visitor number from a real source, short form like \"750k visitors/yr\".\n"
+        "minpaku_cap_days: the yearly day limit for private lodging (minpaku, 住宅宿泊事業) in "
+        "this municipality ONLY if it is stricter than the national 180 days; otherwise null.\n"
+        "points: facts about THIS town only. Each text: max 30 characters, plain English, "
+        "no emoji, no hype words, no hotel names, no citations. Each needs a source (site name).\n"
+        "- ryokan: typical ryokan price here, e.g. \"Ryokan: ¥14k–28k per person\"\n"
+        "- competition: number of Airbnb / vacation rentals here, e.g. \"Only 12 Airbnbs in town\"\n"
+        "- foreign: share of foreign guests, e.g. \"Foreign guests: 18% of stays\"\n"
+        "- stay: average nights per stay, e.g. \"Avg stay: 1.2 nights\"\n"
+        "- access: travel time from a big city or airport, e.g. \"2.5 hrs from Kyoto by train\"\n"
+        "- occupancy: weekend vs weekday occupancy, e.g. \"Weekends 90% full, weekdays 50%\"\n"
+        "- trend: population, school closure or tourism trend, e.g. \"Visitors up 20% since 2019\"\n"
+        "- plan_b: long-term rent or staff housing demand, e.g. \"Ryokan staff housing shortage\"\n"
+        "- tattoo: ONLY if tattoo-friendly baths exist, e.g. \"All 7 baths tattoo-friendly\"\n"
+        "- pets: pet-friendly lodging supply, e.g. \"Only 3 pet-friendly ryokan\"\n"
+        'Answer ONLY with JSON: {"known_for": "...", "visitors": "...", "minpaku_cap_days": null, '
+        '"points": {"ryokan": {"text": "...", "source": "..."}, "competition": {...}, ...}}')
     v = json_from(grok(prompt, timeout=240, tools=[{"type": "web_search"}]))
     if not isinstance(v, dict):
         print(f"  town facts: no usable answer for {h['name']}")
@@ -1099,18 +1124,183 @@ def town_facts(h, l):
     known = known if 3 <= len(known) <= 40 else ""
     visits = clean_fact(v.get("visitors") or "")
     visits = visits if re.search(r"\d", visits) and len(visits) <= 24 else ""
-    guests = [clean_fact(g) for g in (v.get("guests") or []) if isinstance(g, str)]
-    guests = [g for g in guests if 3 <= len(g) <= 34][:3]
-    if len(guests) < 3:
-        guests = []                                   # slide uses the default guests
-    if not known and not guests:
+    cap = v.get("minpaku_cap_days")
+    cap = int(cap) if isinstance(cap, (int, float)) and 0 <= cap < 180 else None
+    points, raw = {}, v.get("points") or {}
+    for k in POINT_KINDS:
+        item = raw.get(k) if isinstance(raw, dict) else None
+        if not isinstance(item, dict):
+            continue
+        text = clean_fact(item.get("text") or "")
+        src = clean_fact(item.get("source") or "")
+        if not src or not 3 <= len(text) <= 34:
+            continue                                  # no source or too long -> not used
+        if k in NEEDS_NUMBER and not re.search(r"\d", text):
+            continue
+        points[k] = text
+        print(f"  town fact {k}: {text} ({src})")
+    if not known and not points:
         print(f"  town facts: nothing usable for {h['name']}")
         return None
-    out = {"known_for": known, "visitors": visits, "guests": guests}
+    out = {"known_for": known, "visitors": visits, "minpaku_cap": cap, "points": points}
     cache[h["name"]] = {"v": out, "d": datetime.now(JST).isoformat(timespec="seconds")}
     save_json(FACTS_CACHE, cache)
     print(f"  town facts {h['name']}: {out}")
     return out
+
+def town_facts(h, l):
+    """Your own checked facts (towns.json) on top of Grok's. None if neither has anything."""
+    manual = load_json(TOWNS_FILE).get(h["name"]) or {}
+    auto = grok_town_facts(h, l) or {}
+    if not manual and not auto:
+        return None
+    points = dict(auto.get("points") or {})
+    points.update({k: str(t).strip() for k, t in (manual.get("points") or {}).items()
+                   if k in POINT_KINDS and t})
+    return {"known_for": manual.get("known_for") or auto.get("known_for") or "",
+            "visitors": manual.get("visitors") or auto.get("visitors") or "",
+            "minpaku_cap": manual.get("minpaku_cap", auto.get("minpaku_cap")),
+            "points": points}
+
+
+# ─── slide 3 wording (headline + 3 facts + 2 SEO lines) ──────────────
+# 5 headline templates. prefer = facts that fit this headline, need = must have.
+TEMPLATES = {
+    "A": {"prefer": ["ryokan", "competition", "occupancy"], "need": []},      # THE COMP
+    "B": {"prefer": ["access", "near1", "near2"], "need": []},                # THE MAP
+    "C": {"prefer": ["stay", "occupancy", "ryokan", "occ"], "need": []},      # THE MATH LEAK
+    "D": {"prefer": ["tattoo", "foreign", "pets", "stay"], "need": []},       # THE TOWN SECRET
+    "E": {"prefer": ["plan_b", "trend", "stay"], "need": ["plan_b"]},         # THE EXIT
+}
+ACCESS_TAG = {"ski": "ski access", "onsen": "onsen access", "sight": "sight access",
+              "beach": "beach access", "nature": "trail access"}
+
+def short_name(name):
+    """'Kinosaki Onsen' -> 'Kinosaki', 'Lake Kawaguchiko (Fuji)' -> 'Lake Kawaguchiko'"""
+    n = re.split(r"\s*[(/]", name)[0].strip()
+    return re.sub(r"\s+Onsen$", "", n) or n
+
+def seo_label(h):
+    """'Kinosaki Onsen', 'Beppu' -> 'Beppu Onsen', 'Rusutsu' -> 'Rusutsu Ski'"""
+    name = place_name(h)
+    if h["kind"] == "onsen":
+        return name if "onsen" in name.lower() else f"{name} Onsen"
+    if h["kind"] == "ski":
+        return f"{name} Ski"
+    return name
+
+def trip_parts(h, l):
+    """(minutes, 'walk' or 'drive') – same numbers as fmt_trip."""
+    m = re.search(r"(\d+) min (walk|drive)", fmt_trip(h, l))
+    return (int(m.group(1)), m.group(2)) if m else (max(1, round(h["min"])), "drive")
+
+def rival_town(h):
+    """Nearest other famous place of the same kind, 15+ km away and not the same town."""
+    first = short_name(h["name"]).split()[0].lower()
+    opts = []
+    for kind, name, a, b in HOOKS:
+        if kind != h["kind"] or name == h["name"] or name not in FAMOUS:
+            continue
+        if short_name(name).split()[0].lower() == first:
+            continue                                  # Hakuba vs Hakuba = same town
+        km = haversine(h["lat"], h["lng"], a, b)
+        if km >= 15:
+            opts.append((km, name))
+    return short_name(min(opts)[1]) if opts else None
+
+def own_points(l, hooks, e):
+    """Backup bullets from our own numbers (never generic 'tourists')."""
+    pts = {}
+    occ = e.get("occ")
+    if isinstance(occ, (int, float)) and occ > 0:
+        pts["occ"] = f"AirROI occupancy: {occ * 100:.0f}%"
+    for key, hk in zip(("near1", "near2"), hooks[1:3]):
+        pts[key] = f"{short_name(hk['name'])}: {fmt_trip(hk, l).lstrip('~')}"
+    try:
+        year = int(l.get("year_built") or 0)
+    except (TypeError, ValueError):
+        year = 0
+    if year >= 1981:
+        pts["built"] = f"Built {year}: post-1981 quake code"
+    return pts
+
+def pick_template(pool, rival, rot):
+    """Least recently used template, never the same as the last post."""
+    hist = [t for t in (rot.get("s3_templates") or []) if t in TEMPLATES]
+    last = hist[0] if hist else None
+
+    def ok(t):
+        if t == "D" and not rival:
+            return False
+        return all(k in pool for k in TEMPLATES[t]["need"])
+
+    def key(t):
+        fit = sum(k in pool for k in TEMPLATES[t]["prefer"])
+        return (t in hist, -hist.index(t) if t in hist else 0, -fit)
+
+    options = sorted((t for t in TEMPLATES if ok(t)), key=key)
+    fresh = [t for t in options if t != last]
+    return (fresh or options or ["C"])[0]
+
+def pick_points(t, pool, rot):
+    """3 facts: town data first, fitting the headline, not recently used,
+    and never the exact same combo as the last SLIDE3_HISTORY posts."""
+    prefer, need = TEMPLATES[t]["prefer"], TEMPLATES[t]["need"]
+    history = [tuple(sorted(c)) for c in (rot.get("s3_points") or []) if isinstance(c, list)]
+    used = set(history)
+
+    def age(k):                                        # posts since this fact kind was used
+        return next((i for i, c in enumerate(history) if k in c), 3)
+
+    keys = list(pool)
+    n = min(3, len(keys))
+    combos = list(itertools.combinations(keys, n))
+    with_need = [c for c in combos if all(k in c for k in need)]
+    combos = with_need or combos
+    new = [c for c in combos if tuple(sorted(c)) not in used]
+
+    def score(c):
+        return sum(3 * (k in POINT_KINDS) + 2 * (k in prefer) + min(age(k), 3) for k in c)
+
+    best = max(new or combos, key=score) if combos else ()
+    return sorted(best, key=lambda k: (k not in need, k not in prefer, keys.index(k)))
+
+def slide3_text(h, l, hooks, facts, e, rot):
+    """All slide 3 wording: {'template', 'headline', 'points', 'kinds', 'lines'}."""
+    f = facts or {}
+    pool = {k: v for k, v in (f.get("points") or {}).items() if k in POINT_KINDS and v}
+    for k, v in own_points(l, hooks, e).items():
+        pool.setdefault(k, v)
+    rival = rival_town(h)
+    t = pick_template(pool, rival, rot)
+    mins, mode = trip_parts(h, l)
+
+    headline = {
+        "A": f"Why ${e['adr']:,}/nt wins here",
+        "B": f"What does {mins} min actually get you?",
+        "C": "Rental math they don't show",
+        "D": f"Why this town isn't {rival}",
+        "E": "If Airbnb fails, Plan B is...",
+    }[t]
+    kinds = pick_points(t, pool, rot)
+
+    # SEO line 1: "[Town] Onsen Airbnb = onsen access in 20 min"
+    tag = ACCESS_TAG.get(h["kind"], "easy access")
+    trip = f"in {mins} min" if mode == "drive" else f"{mins} min walk"
+    line1 = f"{seo_label(h)} Airbnb = {tag} {trip}" if mode == "drive" \
+        else f"{seo_label(h)} Airbnb = {tag}, {trip}"
+    # SEO line 2: "[Town] investment: 180 days = minpaku cap"
+    nights = e.get("nights") or 180
+    town = short_name(h["name"])
+    line2 = (f"{town} investment: {nights} days = minpaku cap" if nights >= 180
+             else f"{town} investment: {nights} days, cap is 180")
+    cap = f.get("minpaku_cap")
+    if isinstance(cap, int) and cap < nights:
+        print(f"!! {h['name']}: local minpaku cap may be {cap} days (< {nights} used) – "
+              f"check with the city before posting")
+
+    return {"template": t, "headline": headline, "kinds": list(kinds),
+            "points": [pool[k] for k in kinds], "lines": [line1, line2]}
 
 
 # ─── slides ──────────────────────────────────────────────────────────
@@ -1416,23 +1606,8 @@ def area_slide(pic, h, l, e, usd=None):
 
     return img
 
-GUESTS = {
-    "ski":    ["Overseas powder skiers", "Tokyo ski weekenders", "Families on winter break"],
-    "onsen":  ["Weekend couples", "Overseas onsen fans", "Remote workers escaping city"],
-    "sight":  ["Overseas sightseers", "Weekend couples", "Culture & photo fans"],
-    "beach":  ["Summer beach families", "Surfers & divers", "City weekend couples"],
-    "nature": ["Hikers & outdoor fans", "Overseas nature travellers", "Remote workers escaping city"],
-}
-NOTE_HOOK = {
-    "ski":    ("slopes", 'listed as "ski access"'),
-    "onsen":  ("onsen", 'listed as "onsen access"'),
-    "sight":  ("sights", "easy sightseeing base"),
-    "beach":  ("beach", 'listed as "beach access"'),
-    "nature": ("trails", 'listed as "outdoor base"'),
-}
-
-def facts_slide(pic, h, l, hooks, facts, e):
-    """Slide 3: dusk photo + WHY THIS RENTS."""
+def facts_slide(pic, h, l, hooks, facts, e, s3):
+    """Slide 3: dusk photo + WHY THIS RENTS. Same layout as before; wording from s3."""
     img = area_bg(pic)
     d = ImageDraw.Draw(img)
     white, soft = (255, 255, 255), (225, 225, 225)
@@ -1452,21 +1627,18 @@ def facts_slide(pic, h, l, hooks, facts, e):
     put(d, (X, 510), sub, fit_font(d, sub, 34, 700, 0, MAXW), white, "la", 0, 2)
     d.line([(X, 615), (X + 410, 615)], fill=(170, 170, 170), width=2)
 
-    # who pays + 3 guest bullets
-    head = f"Who pays ${e['adr']:,}/nt?"
+    # rotating headline + 3 town-specific bullets
+    head = s3["headline"]
     put(d, (X, 665), head, fit_font(d, head, 56, 700, 0, MAXW), white, "la", 0, 3)
-    guests = f.get("guests") or GUESTS.get(h["kind"], GUESTS["onsen"])
     y = 760
-    for g in guests[:3]:
+    for g in s3["points"][:3]:
         s = f"• {g}"
         put(d, (X + 6, y), s, fit_font(d, s, 38, 700, 0, MAXW - 6), white, "la", 0, 2)
         y += 54
 
-    # 2 "X = Y" lines (our own numbers, not Grok's)
-    y += 22
-    word, hook = NOTE_HOOK.get(h["kind"], ("area", "strong listing hook"))
-    for s in (f"{fmt_trip(h, l).lstrip('~')} to {word} = {hook}",
-              f"{e['nights']} rentable days = conservative"):
+    # 2 SEO lines (always at the same height, even with fewer than 3 bullets)
+    y = 760 + 54 * 3 + 22
+    for s in s3["lines"]:
         put(d, (X, y), s, fit_font(d, s, 34, 700, 0, MAXW), white, "la", 0, 2)
         y += 52
 
@@ -1478,9 +1650,10 @@ def facts_slide(pic, h, l, hooks, facts, e):
     put(d, (X + bw / 2, 1142), cta, cf, white, "mm", 0, 0)
     return img
 
-def build_slides(l, hooks, usd, e):
+def build_slides(l, hooks, usd, e, rot=None):
     """3 slides: cover, the payback (day), why this rents (dusk).
-    Returns (slide paths, area photo credits), or (None, None) if no photo at all."""
+    Returns (slide paths, area photo credits, slide 3 wording),
+    or (None, None, None) if no photo at all."""
     OUT.mkdir(exist_ok=True)
     for old in OUT.glob("slide_*.jpg"):
         old.unlink()
@@ -1509,7 +1682,7 @@ def build_slides(l, hooks, usd, e):
             print("  no listing photo – the cover uses the area photo")
     if not (cover and day and dusk):
         print("!! no photo found anywhere – not posting today")
-        return None, None
+        return None, None, None
 
     facts = None
     try:
@@ -1517,14 +1690,18 @@ def build_slides(l, hooks, usd, e):
     except Exception as ex:
         print(f"!! town facts error: {ex!r}")
 
+    s3 = slide3_text(h0, l, hooks, facts, e, rot or {})
+    print(f"Slide 3: template {s3['template']} | {s3['headline']} | "
+          f"{' / '.join(s3['points'])} | {' / '.join(s3['lines'])}")
+
     def tag(p):
         return f"{p['id']}{' (generic)' if p.get('generic') else ''}"
     print(f"Slide photos: cover={tag(cover)} day={tag(day)} dusk={tag(dusk)} | facts: "
-          f"{'Grok' if facts else 'fallback'}")
+          f"{'found' if facts else 'fallback'}")
 
     slides = [cover_slide(cover["img"], l, hooks, usd, e),
               area_slide(day, h0, l, e, usd),
-              facts_slide(dusk, h0, l, hooks, facts, e)]
+              facts_slide(dusk, h0, l, hooks, facts, e, s3)]
     paths = []
     for i, s in enumerate(slides, 1):
         p = OUT / f"slide_{i}.jpg"
@@ -1540,7 +1717,7 @@ def build_slides(l, hooks, usd, e):
         print(f"!! photo library error: {ex!r}")
 
     credits = list(dict.fromkeys(p["credit"] for p in (day, dusk) if p.get("credit")))
-    return paths, credits
+    return paths, credits, s3
 
 
 # ─── caption ─────────────────────────────────────────────────────────
@@ -1703,7 +1880,8 @@ def main():
     print(f"Area slides: Grok {'on' if GROK_KEY else 'OFF'} ({GROK_MODEL}) | "
           f"Pexels {'on' if PEXELS_KEY else 'OFF'} | overlay {AREA_OVERLAY:.0%} | "
           f"photo library {lib_size} | fallback_photos/ "
-          f"{'found' if FALLBACK_DIR.exists() else 'none'}")
+          f"{'found' if FALLBACK_DIR.exists() else 'none'} | towns.json "
+          f"{'found' if TOWNS_FILE.exists() else 'none'}")
     fx = get_fx()
     max_yen = MAX_PRICE_USD / fx
     listings = gather()
@@ -1711,6 +1889,8 @@ def main():
     rot = load_json(ROTATION_FILE)
     last_source = rot.get("last_source")
     recent = rot.get("recent_hooks", [])
+    print(f"Posted so far: {sum(1 for k in posted if not k.startswith('fp:'))} urls | "
+          f"last slide 3 templates: {rot.get('s3_templates', [])[:5]}")
 
     # 1) rough pre-filter + ranking with straight-line estimates
     rough = []
@@ -1761,7 +1941,7 @@ def main():
           f"{age_points(l.get('year_built'))[1]}, {e['roi'] * 100:.0f}% net yield, "
           f"~${e['monthly']:,}/mo\n  {l['url']}")
 
-    paths, area_credits = build_slides(l, hooks, usd, e)
+    paths, area_credits, s3 = build_slides(l, hooks, usd, e, rot)
     if paths is None:
         tg_text(f"No post today ({today}) – couldn't find any photo for the slides. "
                 f"Will retry next run.")
@@ -1776,9 +1956,12 @@ def main():
         posted["fp:" + l["fp"]] = today
         save_json(POSTED_FILE, posted)
         recent = ([h0["name"]] + [h for h in recent if h != h0["name"]])[:RECENT_HOOKS]
-        save_json(ROTATION_FILE, {"last_source": l.get("source"), "date": today,
-                                  "recent_hooks": recent})
-        print("Saved to state/posted.json")
+        rot.update({"last_source": l.get("source"), "date": today,
+                    "recent_hooks": recent,
+                    "s3_templates": ([s3["template"]] + (rot.get("s3_templates") or []))[:SLIDE3_HISTORY],
+                    "s3_points": ([s3["kinds"]] + (rot.get("s3_points") or []))[:SLIDE3_HISTORY]})
+        save_json(ROTATION_FILE, rot)
+        print("Saved to state/posted.json + state/rotation.json")
     elif not ok:
         print("Telegram failed – not marking as posted, will retry next run")
 
