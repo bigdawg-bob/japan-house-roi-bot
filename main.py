@@ -5,8 +5,8 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
       -> rank by LOCATION first (how close, how famous, how many attractions)
       -> for the best-located houses: read yearly fees (skip if > 15% of price)
          and get an AirROI estimate (cached)
-      -> final score = attraction points + yield points (yield capped, so a free
-         house in a so-so spot never beats a good house near a famous resort)
+      -> final score = attraction points + yield points + build-year points
+         (yield capped at +15, age -10..+5, so location always matters most)
       -> 1080x1350 slides -> Telegram (album + copyable caption).
 """
 import io, json, math, os, re, textwrap, time
@@ -40,7 +40,7 @@ SITES_ON         = [s for s in _env("SOURCES", "sumai,athome,homes")
                     .replace(" ", "").split(",") if s]
 ROTATE           = _env("ROTATE_SOURCES", "1") == "1"
 
-# ranking: location first, yield only as a bonus
+# ranking: location first, yield and build year as adjustments
 YIELD_CAP        = float(_env("YIELD_CAP_PCT", "15"))  # max points from yield (free house = cap)
 MIN_YIELD        = float(_env("MIN_YIELD_PCT", "0"))   # skip houses with an estimate below this
 MAX_CHECK        = int(_env("MAX_CHECK", "40"))        # top-located houses to fully check
@@ -50,6 +50,11 @@ CLOSE_PTS        = 60                                  # points for a house righ
 FAMOUS_BONUS     = 20
 EXTRA_HOOK_PTS   = 5                                   # per extra attraction nearby
 MAX_EXTRA_HOOKS  = 4
+
+# build year: 1981 = new earthquake standard (新耐震), 2000 = stricter standard
+AGE_BANDS        = [(2000, 5), (1981, 0), (1960, -5), (1940, -8)]   # (built from, points)
+AGE_OLDEST_PTS   = -10                                 # built before 1940
+AGE_UNKNOWN_PTS  = float(_env("AGE_UNKNOWN_PTS", "-5"))  # no build year in the listing
 
 def _weights(s):
     out = {}
@@ -310,6 +315,21 @@ def rank_hooks(hooks, recent=()):
     return round(value(ordered[0]) + extra, 1), ordered
 
 
+# ─── build-year score (adjustment, -10 .. +5) ────────────────────────
+def age_points(year):
+    """Returns (points, label for the log). 1981 = new earthquake standard (新耐震)."""
+    try:
+        year = int(year)
+    except (TypeError, ValueError):
+        year = None
+    if not year:
+        return AGE_UNKNOWN_PTS, "built ?"
+    for start, pts in AGE_BANDS:
+        if year >= start:
+            return pts, f"built {year}"
+    return AGE_OLDEST_PTS, f"built {year}"
+
+
 # ─── all sites: gather + remove duplicates ───────────────────────────
 def fingerprint(l):
     """Same town/district + same price + similar floor area = same house."""
@@ -329,6 +349,8 @@ def dedupe(listings):
         g.sort(key=lambda x: (len(x.get("photos") or []), bool(x.get("year_built")),
                               bool(x.get("area_m2"))), reverse=True)
         best = dict(g[0])
+        if not best.get("year_built"):                # borrow the year from a duplicate
+            best["year_built"] = next((x["year_built"] for x in g if x.get("year_built")), None)
         best["fp"] = key
         best["all_urls"] = list(dict.fromkeys(x["url"] for x in g))
         dupes += len(g) - 1
@@ -724,12 +746,13 @@ def tg_album(paths, caption):
 def pick(ranked, fx, last_source=None):
     """ranked = [(location_points, listing, hooks)], best location first.
     Checks the top MAX_CHECK houses (fees + AirROI, spending paid calls on the
-    best locations first), then picks the highest  location points + yield points.
-    Yield adds at most YIELD_CAP points, so location always matters most."""
+    best locations first), then picks the highest
+    location points + yield points + build-year points.
+    Yield adds at most YIELD_CAP, age -10..+5, so location always matters most."""
     ac, fc = load_json(AIRROI_CACHE), load_json(FEE_CACHE)
     budget = MAX_AIRROI_CALLS
     rotate = ROTATE and last_source is not None
-    scored, skip_fee, skip_yield = [], 0, 0
+    scored, skip_fee, skip_yield, no_year = [], 0, 0, 0
     try:
         for hp, l, hooks in ranked:
             if len(scored) >= MAX_CHECK:
@@ -753,19 +776,22 @@ def pick(ranked, fx, last_source=None):
                 print(f"  skip, yield {y:.0f}% < {MIN_YIELD:.0f}%: {l['url']}")
                 continue
             yp = 0.0 if y is None else max(-YIELD_CAP, min(y, YIELD_CAP))
-            total = hp + yp
+            ap, age_label = age_points(l.get("year_built"))
+            if age_label == "built ?":
+                no_year += 1
+            total = hp + yp + ap
             kind, name, km = hooks[0]
             ytxt = "no Airbnb data" if y is None else f"yield {y:.0f}%"
             print(f"  [{l.get('source')}] {l['location']} {fmt_yen(l['price_yen'])} | "
-                  f"{name} {fmt_trip(km, l)} | location {hp:.0f} + {ytxt} "
-                  f"({yp:+.0f}) = {total:.0f}")
+                  f"{name} {fmt_trip(km, l)} | location {hp:.0f} + {ytxt} ({yp:+.0f}) "
+                  f"+ {age_label} ({ap:+.0f}) = {total:.0f}")
             scored.append((total, hp, l, hooks, est, fees))
     finally:
         save_json(AIRROI_CACHE, ac)                       # never pay twice
         save_json(FEE_CACHE, fc)
     print(f"Checked: {len(scored)}  |  fee rule skipped: {skip_fee}  |  yield rule skipped: "
-          f"{skip_yield}  |  AirROI calls used: {MAX_AIRROI_CALLS - budget}  |  "
-          f"last source: {last_source}")
+          f"{skip_yield}  |  build year unknown: {no_year}  |  AirROI calls used: "
+          f"{MAX_AIRROI_CALLS - budget}  |  last source: {last_source}")
 
     if not scored:
         return None, None, None, None
@@ -823,7 +849,8 @@ def main():
     fees_usd = fees_yen * fx
     kind, name, km = hooks[0]
     print(f"PICK [{l.get('source')}]: {l['location']} {fmt_yen(l['price_yen'])} "
-          f"{fmt_trip(km, l)} to {name} ({kind})\n  {l['url']}")
+          f"{fmt_trip(km, l)} to {name} ({kind}), {age_points(l.get('year_built'))[1]}"
+          f"\n  {l['url']}")
 
     paths = build_slides(l, hooks, usd, est, fees_yen, fees_usd)
     caption = build_caption(l, hooks, usd, est, fees_yen, fees_usd)
