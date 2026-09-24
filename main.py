@@ -1398,7 +1398,7 @@ def area_slide(pic, h, l, e, usd=None):
         size -= 4
     bf = pfont(size)
     put(d, (cx, 600), big, bf, white, "ms", 0, 3)
-    put(d, (cx, 600 + int(size * 0.9)), label, bf, white, "ms", 0, 3)
+    put(d, (cx, 600 + int(size * 0.95)), label, bf, white, "ms", 0, 3)
 
     put(d, (cx, 900), sub, fit_pfont(d, sub, 36), white, "ms", 0, 2)
     d.line([(cx - 100, 1000), (cx + 100, 1000)], fill=w30, width=1)
