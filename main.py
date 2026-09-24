@@ -11,9 +11,14 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
          management and yearly fees, divided by house + reno + buying fees
       -> final score = attraction points + yield points (-10..+15) + build-year points
          (so location always matters most)
+      -> 3 slides: 1 cover (house photo), 2 area (day photo), 3 area facts (dusk photo).
+         Area photos: Pexels + Wikimedia Commons checked by Grok -> generic Japan
+         -> photo library (any photo from any earlier post) -> unchecked stock
+         -> this listing's photos -> fallback_photos/ folder. 75% black overlay.
+         No photo at all -> no post today (retry next run).
       -> 1080x1350 slides -> Telegram (album + copyable caption).
 """
-import io, json, math, os, re, textwrap, time
+import base64, hashlib, io, json, math, os, re, time
 from datetime import datetime, timezone, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -32,14 +37,14 @@ from yield_calc import (estimate, yield_points, caption_text, is_renovated,
 def _env(name, default):
     return os.getenv(name) or default                 # empty string -> default
 
-HANDLE           = "@yama.yield"                      # top-left text on the cover
+HANDLE           = "@yama.yield"                      # top-left text on the slides
 MAX_PRICE_USD    = float(_env("MAX_PRICE_USD", "100000"))
 MAX_DRIVE_MIN    = float(_env("MAX_DRIVE_MIN", "45"))
 MAX_WALK_MIN     = float(_env("MAX_WALK_MIN", "15"))
 FEE_LIMIT        = float(_env("FEE_LIMIT_PCT", "15")) / 100   # yearly fees vs price
 MAX_AIRROI_CALLS = int(_env("MAX_AIRROI_CALLS", "15"))        # paid calls per run
 CACHE_DAYS       = 90                                          # re-ask AirROI after this
-MAX_PHOTOS       = 5
+HOUSE_PHOTOS     = 3                                           # listing photos to download
 W, H             = 1080, 1350
 FX_FALLBACK      = 0.0067
 DRY_RUN          = os.getenv("DRY_RUN") == "1"
@@ -63,6 +68,21 @@ MAX_EXTRA_HOOKS  = 4
 AGE_BANDS        = [(2000, 5), (1981, 0), (1960, -5), (1940, -8)]   # (built from, points)
 AGE_OLDEST_PTS   = -10                                 # built before 1940
 AGE_UNKNOWN_PTS  = float(_env("AGE_UNKNOWN_PTS", "-5"))  # no build year in the listing
+
+# ── area slides (2 & 3): photos + facts ──
+GROK_KEY       = os.getenv("GROK_API_KEY") or os.getenv("XAI_API_KEY")
+GROK_MODEL     = _env("GROK_MODEL", "grok-4.6")
+GROK_URL       = _env("GROK_URL", "https://api.x.ai/v1/responses")
+PEXELS_KEY     = os.getenv("PEXELS_KEY") or os.getenv("PEXELS_API_KEY")
+PHOTO_CHECKS   = int(_env("PHOTO_CHECKS", "6"))           # Grok checks per slide (place photos)
+GENERIC_CHECKS = int(_env("GENERIC_CHECKS", "4"))         # extra Grok checks for the generic fallback
+MIN_PHOTO_W    = 1080                                     # original photo size needed (checked photos)
+MIN_PHOTO_H    = 1350
+LOOSE_W, LOOSE_H = 800, 1000                              # size for the unchecked last-resort photos
+AREA_OVERLAY   = min(1.0, max(0.0, float(_env("AREA_OVERLAY", "0.75"))))  # black overlay on slides 2 & 3
+FACTS_DAYS     = 180                                      # re-ask Grok for town facts after this
+LIBRARY_MAX    = int(_env("LIBRARY_MAX", "60"))           # photos kept for reuse
+BOT_UA         = {"User-Agent": "yama-yield-akiya-bot/1.0 (Instagram @yama.yield; GitHub Actions)"}
 
 def _weights(s):
     out = {}
@@ -99,6 +119,11 @@ AIRROI_CACHE  = STATE / "airroi_cache.json"
 FEE_CACHE     = STATE / "fees_cache.json"
 ROUTE_CACHE   = STATE / "routes_cache.json"
 ROTATION_FILE = STATE / "rotation.json"
+PHOTO_CACHE   = STATE / "photo_cache.json"
+FACTS_CACHE   = STATE / "town_facts.json"
+LIBRARY_FILE  = STATE / "photo_library.json"
+LIBRARY_DIR   = STATE / "photo_library"
+FALLBACK_DIR  = ROOT / "fallback_photos"                 # optional: your own backup photos
 OUT           = ROOT / "out"
 JST           = timezone(timedelta(hours=9))
 
@@ -296,8 +321,58 @@ def load_json(p):
         return {}
 
 def save_json(p, data):
-    p.parent.mkdir(exist_ok=True)
+    p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+# ─── Grok (xAI) ──────────────────────────────────────────────────────
+def grok(content, timeout=120, tools=None):
+    """One Grok call (Responses API). content = text or a list of input parts.
+    Returns the answer text, or '' if anything failed."""
+    if not GROK_KEY:
+        return ""
+    body = {"model": GROK_MODEL, "input": [{"role": "user", "content": content}]}
+    if tools:
+        body["tools"] = tools
+    try:
+        r = requests.post(GROK_URL, json=body, timeout=timeout,
+                          headers={"Authorization": f"Bearer {GROK_KEY}",
+                                   "Content-Type": "application/json"})
+    except requests.RequestException as ex:
+        print(f"  Grok error: {ex}")
+        return ""
+    if not r.ok:
+        print(f"  Grok {r.status_code}: {r.text[:300]}")
+        return ""
+    try:
+        data = r.json()
+    except ValueError:
+        return ""
+    if isinstance(data.get("output_text"), str) and data["output_text"]:
+        return data["output_text"]
+    parts = []
+    for item in data.get("output") or []:
+        if isinstance(item, dict) and item.get("type") == "message":
+            for c in item.get("content") or []:
+                if isinstance(c, dict) and c.get("type") == "output_text":
+                    parts.append(c.get("text") or "")
+    return "\n".join(parts)
+
+def json_from(text):
+    """First {...} block in the text as a dict, or None."""
+    if not text:
+        return None
+    text = re.sub(r"```(?:json)?", "", text)
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        return json.loads(text[start:end + 1])
+    except ValueError:
+        return None
+
+def yes(v):
+    return v is True or (isinstance(v, str) and v.strip().lower() in ("true", "yes"))
 
 
 # ─── nearby attractions ──────────────────────────────────────────────
@@ -669,6 +744,373 @@ def fetch_estimate(l, cache):
     return est
 
 
+# ─── town photos: search + Grok check ────────────────────────────────
+PEOPLE_WORDS = re.compile(r"\b(wom[ae]n|m[ae]n|people|person|girl|boy|couple|crowd|tourists?|"
+                          r"kids?|child|portrait|selfie)\b", re.I)
+FREE_LICENCE = re.compile(r"^(CC BY|CC-BY|CC0|Public domain|PD)", re.I)
+LIGHT = {
+    "day":  "daylight with soft, even light: overcast or no harsh shadows (not night)",
+    "dusk": "dusk, blue hour or night with lights on: dark sky, glowing lights, high contrast",
+}
+# fallback searches: clearly Japan, but not a place anyone could name
+GENERIC = {
+    "day": {
+        "ski":    ["snowy japanese village", "japan snow countryside houses"],
+        "onsen":  ["japanese ryokan exterior", "japanese hot spring town street"],
+        "sight":  ["old japanese street wooden houses", "japanese countryside village"],
+        "beach":  ["japanese fishing village harbor", "japan coast village"],
+        "nature": ["japanese rice fields mountains", "japanese forest path"],
+        "_all":   ["rural japan", "japanese countryside"],
+    },
+    "dusk": {
+        "ski":    ["snowy japanese village night", "japan snow night lanterns"],
+        "onsen":  ["onsen town night lanterns", "ryokan night japan"],
+        "sight":  ["japanese alley lanterns night", "old japanese street night"],
+        "beach":  ["japanese harbor dusk", "japan coast sunset village"],
+        "nature": ["japanese village dusk mountains", "japanese countryside night"],
+        "_all":   ["japanese street lanterns night", "japanese village night"],
+    },
+}
+
+def place_name(h):
+    """'Lake Kawaguchiko (Fuji)' -> 'Lake Kawaguchiko', 'Hayama / Zushi' -> 'Hayama'"""
+    return re.split(r"\s*[(/]", h["name"])[0].strip()
+
+def photo_queries(h, l, mood):
+    name, pref = place_name(h), PREF_EN.get(l["pref"], l["pref"])
+    kind = KINDS[h["kind"]]["label"]
+    if mood == "dusk":
+        return [f"{name} night", f"{name} Japan dusk", f"{pref} Japan {kind} night"]
+    return [name, f"{name} Japan", f"{pref} Japan {kind}"]
+
+def generic_queries(h, mood):
+    g = GENERIC[mood]
+    return g.get(h["kind"], []) + g["_all"]
+
+def pexels_search(q):
+    if not PEXELS_KEY:
+        return []
+    try:
+        r = requests.get("https://api.pexels.com/v1/search", timeout=30,
+                         headers={"Authorization": PEXELS_KEY},
+                         params={"query": q, "per_page": 30})
+        if not r.ok:
+            print(f"  Pexels error {r.status_code}: {r.text[:200]}")
+            return []
+        photos = r.json().get("photos", [])
+    except (requests.RequestException, ValueError) as ex:
+        print(f"  Pexels error: {ex}")
+        return []
+    return [{"id": f"pexels:{p['id']}", "w": p.get("width", 0), "h": p.get("height", 0),
+             "url": f"{p['src']['original']}?auto=compress&cs=tinysrgb&h={min(2000, p.get('height', 0))}",
+             "text": p.get("alt") or "",
+             "credit": f"Photo: {p.get('photographer') or 'Pexels'} / Pexels"} for p in photos]
+
+def commons_search(q):
+    try:
+        r = requests.get("https://commons.wikimedia.org/w/api.php", headers=BOT_UA, timeout=30,
+                         params={"action": "query", "format": "json", "generator": "search",
+                                 "gsrsearch": f"{q} filetype:bitmap", "gsrnamespace": 6,
+                                 "gsrlimit": 30, "prop": "imageinfo",
+                                 "iiprop": "url|size|extmetadata",
+                                 "iiurlwidth": 2400, "iiurlheight": 2000,
+                                 "iiextmetadatafilter": "LicenseShortName|Artist"})
+        pages = (r.json().get("query") or {}).get("pages", {}) if r.ok else {}
+    except (requests.RequestException, ValueError) as ex:
+        print(f"  Commons error: {ex}")
+        return []
+    out = []
+    for p in sorted(pages.values(), key=lambda p: p.get("index", 0)):
+        info = (p.get("imageinfo") or [{}])[0]
+        meta = info.get("extmetadata") or {}
+        lic = (meta.get("LicenseShortName") or {}).get("value", "")
+        if not FREE_LICENCE.match(lic) or re.search(r"\bNC\b|\bND\b", lic):
+            continue
+        artist = re.sub(r"<[^>]+>", "", (meta.get("Artist") or {}).get("value", ""))
+        artist = re.sub(r"\s+", " ", artist).strip()[:40] or "Unknown"
+        out.append({"id": f"commons:{p.get('pageid')}", "w": info.get("width", 0),
+                    "h": info.get("height", 0), "url": info.get("thumburl") or info.get("url"),
+                    "text": p.get("title", ""),
+                    "credit": f"Photo: {artist}, {lic} / Wikimedia Commons"})
+    return out
+
+def photo_candidates(queries, skip, min_w=MIN_PHOTO_W, min_h=MIN_PHOTO_H):
+    """Photos that pass the size + keyword rules, portrait ones first."""
+    seen = set(skip)
+    for q in queries:
+        batch = pexels_search(q) + commons_search(q)
+        batch.sort(key=lambda c: c["h"] < c["w"])          # portrait first
+        for c in batch:
+            if c["id"] in seen or not c["url"]:
+                continue
+            seen.add(c["id"])
+            if c["w"] < min_w or c["h"] < min_h or PEOPLE_WORDS.search(c["text"]):
+                continue
+            yield c
+
+def fetch_photo(url, min_w=MIN_PHOTO_W, min_h=MIN_PHOTO_H):
+    try:
+        r = requests.get(url, headers=BOT_UA, timeout=60)
+        if not r.ok:
+            return None
+        img = Image.open(io.BytesIO(r.content)).convert("RGB")
+        return img if img.width >= min_w and img.height >= min_h else None
+    except Exception as ex:
+        print(f"  photo error {url}: {ex}")
+        return None
+
+def check_photo(img, h, l, mood, target):
+    """Grok looks at the photo. target = 'place' (must show this area) or
+    'generic' (must look like Japan but not a nameable landmark)."""
+    small = img.copy()
+    small.thumbnail((1024, 1024))
+    buf = io.BytesIO()
+    small.save(buf, "JPEG", quality=85)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    place = f"{place_name(h)}, {PREF_EN.get(l['pref'], l['pref'])}, Japan"
+    if target == "place":
+        about = f"about {place} ({KINDS[h['kind']]['label']})"
+        where = f"japan: looks like Japan and plausibly {place} or its area. "
+    else:
+        about = "about rural Japan in general"
+        where = ("japan: clearly looks like Japan (typical houses, roofs, streets, signs, "
+                 "lanterns or landscape). ")
+    prompt = (
+        f"You check a stock photo for an Instagram slide {about}. "
+        "Look carefully. Answer ONLY with JSON:\n"
+        '{"people": true/false, "watermark_or_text": true/false, "interior": true/false, '
+        '"japan": true/false, "landmark": true/false, "light_ok": true/false, '
+        '"score": 0-10, "why": "max 10 words"}\n'
+        "people: any person visible, even small. "
+        "watermark_or_text: a watermark, logo, or big text/graphics added on the photo "
+        "(normal shop signs don't count). interior: indoors, food, or a close-up of an object. "
+        + where +
+        "landmark: shows a famous place a viewer could name (e.g. Mt Fuji, a well-known "
+        "temple, shrine gate, castle, tower or city skyline). "
+        f"light_ok: {LIGHT[mood]}. score: how good it is as a calm background for white text.")
+    v = json_from(grok([{"type": "input_image", "image_url": f"data:image/jpeg;base64,{b64}",
+                         "detail": "high"},
+                        {"type": "input_text", "text": prompt}], timeout=120))
+    return v if isinstance(v, dict) else None
+
+def hard_ok(v, target):
+    if not yes(v.get("japan")):
+        return False
+    if any(yes(v.get(k)) for k in ("people", "watermark_or_text", "interior")):
+        return False
+    if target == "generic" and yes(v.get("landmark")):
+        return False                                   # generic must not show a nameable place
+    return True
+
+def scan_photos(queries, h, l, mood, target, used, checks, limit):
+    """Best photo from these searches: right light first, else best-scoring backup."""
+    backup, n = None, 0
+    for c in photo_candidates(queries, used):
+        key = f"{c['id']}|{mood}|{target}"
+        v = checks.get(key)
+        if v is not None and not hard_ok(v, target):
+            continue                                   # known bad, skip for free
+        if v is None and n >= limit:
+            break
+        img = fetch_photo(c["url"])
+        if img is None:
+            continue
+        if v is None:
+            n += 1
+            v = check_photo(img, h, l, mood, target)
+            if v is None:
+                continue
+            checks[key] = v
+            print(f"  photo {target}/{mood} {c['id']}: ok={hard_ok(v, target)} "
+                  f"light={v.get('light_ok')} score={v.get('score')} ({v.get('why')})")
+        if not hard_ok(v, target):
+            continue
+        pic = {**c, "img": img, "generic": target == "generic"}
+        if yes(v.get("light_ok")):
+            return pic
+        try:
+            s = float(v.get("score") or 0)
+        except (TypeError, ValueError):
+            s = 0
+        if backup is None or s > backup[0]:
+            backup = (s, pic)                          # right content, wrong light
+    return backup[1] if backup else None
+
+def checked_photo(h, l, mood, target, used):
+    """Grok-checked photo of the place ('place') or of generic Japan ('generic').
+    Grok verdicts are cached per photo, so the same photo is never paid for twice."""
+    cache = load_json(PHOTO_CACHE)
+    checks = cache.setdefault("checks", {})
+    try:
+        if target == "place":
+            return scan_photos(photo_queries(h, l, mood), h, l, mood, "place",
+                               used, checks, PHOTO_CHECKS)
+        return scan_photos(generic_queries(h, mood), h, l, mood, "generic",
+                           used, checks, GENERIC_CHECKS)
+    finally:
+        save_json(PHOTO_CACHE, cache)
+
+def unchecked_stock(h, l, mood, used, tries=8):
+    """First stock photo that passes the size + description rules (no Grok needed)."""
+    queries = photo_queries(h, l, mood) + generic_queries(h, mood)
+    for n, c in enumerate(photo_candidates(queries, used, LOOSE_W, LOOSE_H)):
+        if n >= tries:
+            break
+        img = fetch_photo(c["url"], LOOSE_W, LOOSE_H)
+        if img:
+            return {**c, "img": img, "generic": True}
+    return None
+
+
+# ─── photo library (reuse photos from any earlier post / slide) ──────
+def lib_key(pid):
+    return hashlib.sha1(pid.encode("utf-8")).hexdigest()[:16]
+
+def library_add(pic, role, mood=None, kind=None):
+    """Saves a 1080x1350 copy of a used photo (so it still works if the original link
+    dies). role = 'area' or 'house'. Keeps the LIBRARY_MAX most recently used."""
+    if not pic or pic["id"].startswith("file:"):
+        return                                        # fallback_photos/ are on disk already
+    lib = load_json(LIBRARY_FILE)
+    k = lib_key(pic["id"])
+    now = datetime.now(JST).isoformat(timespec="seconds")
+    if k not in lib or not (LIBRARY_DIR / f"{k}.jpg").exists():
+        LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
+        ImageOps.fit(pic["img"], (W, H), Image.LANCZOS).save(
+            LIBRARY_DIR / f"{k}.jpg", "JPEG", quality=85)
+        lib[k] = {"id": pic["id"], "credit": pic.get("credit", ""), "role": role,
+                  "mood": mood, "kind": kind, "generic": bool(pic.get("generic")),
+                  "added": now, "uses": 0}
+    lib[k]["uses"] = lib[k].get("uses", 0) + 1
+    lib[k]["last"] = now
+    if len(lib) > LIBRARY_MAX:
+        for old in sorted(lib, key=lambda x: lib[x].get("last", ""))[:len(lib) - LIBRARY_MAX]:
+            (LIBRARY_DIR / f"{old}.jpg").unlink(missing_ok=True)
+            del lib[old]
+    save_json(LIBRARY_FILE, lib)
+
+def library_pick(h, mood, used):
+    """A photo from earlier posts. Prefers area photos with the same mood and kind,
+    then any area photo, then house photos; least recently used first."""
+    lib = load_json(LIBRARY_FILE)
+    def rank(item):
+        v = item[1]
+        return (v.get("role") != "area", v.get("mood") != mood,
+                v.get("kind") != h["kind"], v.get("last", ""))
+    for k, v in sorted(lib.items(), key=rank):
+        if v.get("id") in used:
+            continue
+        try:
+            img = Image.open(LIBRARY_DIR / f"{k}.jpg").convert("RGB")
+        except OSError:
+            continue
+        return {"id": v["id"], "img": img, "credit": v.get("credit", ""),
+                "generic": v.get("generic", True)}
+    return None
+
+def folder_photo(used):
+    """Your own backup photos in fallback_photos/ (optional)."""
+    if not FALLBACK_DIR.exists():
+        return None
+    files = sorted(p for p in FALLBACK_DIR.iterdir()
+                   if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"))
+    for p in files:
+        pid = f"file:{p.name}"
+        if pid in used:
+            continue
+        try:
+            img = Image.open(p).convert("RGB")
+        except OSError:
+            continue
+        return {"id": pid, "img": img, "credit": "", "generic": True}
+    return None
+
+def find_photo(h, l, mood, used, house_pics):
+    """ALWAYS tries to return a photo for slide 2 ('day') or 3 ('dusk'):
+    1 checked photo of the place, 2 checked generic Japan, 3 photo library,
+    4 unchecked stock, 5 this listing's photos, 6 fallback_photos/ folder.
+    If nothing is left, repeats 3-6 allowing photos already used in this post."""
+    steps = []
+    if GROK_KEY:
+        steps += [("checked photo of the place", True,
+                   lambda u: checked_photo(h, l, mood, "place", u)),
+                  ("checked generic Japan photo", True,
+                   lambda u: checked_photo(h, l, mood, "generic", u))]
+    steps += [("photo library", False, lambda u: library_pick(h, mood, u)),
+              ("unchecked stock photo", False, lambda u: unchecked_stock(h, l, mood, u)),
+              ("house photo", False,
+               lambda u: next((p for p in house_pics if p["id"] not in u), None)),
+              ("fallback_photos folder", False, lambda u: folder_photo(u))]
+    passes = [set(used), set()] if used else [set()]
+    for n, u in enumerate(passes):
+        for label, paid, fn in steps:
+            if n and paid:
+                continue                               # don't pay Grok twice
+            try:
+                pic = fn(u)
+            except Exception as ex:                    # one step failing must not stop the rest
+                print(f"  {mood} photo, {label} failed: {ex!r}")
+                pic = None
+            if pic:
+                extra = " (reused from this post)" if n else ""
+                print(f"  {mood} photo from {label}{extra}: {pic['id']}")
+                return pic
+            print(f"  {mood} photo: nothing from {label}")
+    return None
+
+
+# ─── town facts (Grok + web search) ──────────────────────────────────
+def clean_fact(s):
+    s = re.sub(r"\[\[?\d+\]?\]\([^)]*\)", "", str(s))    # citation links
+    s = re.sub(r"\[\d+\]", "", s)
+    s = re.sub(r"\s+", " ", s).strip().strip('"').strip()
+    return s
+
+def town_facts(h, l):
+    """{'tagline': str, 'facts': [str, ...]} for the attraction, cached per place.
+    None if Grok is off or the answer wasn't usable."""
+    cache = load_json(FACTS_CACHE)
+    hit = cache.get(h["name"])
+    if hit:
+        try:
+            if (datetime.now(JST) - datetime.fromisoformat(hit["d"])).days < FACTS_DAYS:
+                return hit["v"]
+        except (KeyError, ValueError):
+            pass
+    if not GROK_KEY:
+        return None
+    place = f"{place_name(h)} ({KINDS[h['kind']]['label']}) in {PREF_EN.get(l['pref'], l['pref'])}, Japan"
+    prompt = (
+        f"Search the web, then give 4 short, true, specific facts about {place} that "
+        "would make a foreigner want to visit or own a house nearby (what it's known for, "
+        "season, snow/onsen/nature details, access from a big city). "
+        "Rules: each fact max 12 words, plain English, no emoji, no hype words, "
+        "no prices, no hotel names, no citations. Also a tagline of max 6 words. "
+        'Answer ONLY with JSON: {"tagline": "...", "facts": ["...", "...", "...", "..."]}')
+    v = json_from(grok(prompt, timeout=240, tools=[{"type": "web_search"}]))
+    if not isinstance(v, dict):
+        print(f"  town facts: no usable answer for {h['name']}")
+        return None
+    facts = [clean_fact(x) for x in (v.get("facts") or []) if isinstance(x, str)]
+    facts = [f for f in facts if 10 <= len(f) <= 110][:4]
+    if len(facts) < 2:
+        print(f"  town facts: too few facts for {h['name']}")
+        return None
+    out = {"tagline": clean_fact(v.get("tagline") or "")[:60], "facts": facts}
+    cache[h["name"]] = {"v": out, "d": datetime.now(JST).isoformat(timespec="seconds")}
+    save_json(FACTS_CACHE, cache)
+    print(f"  town facts {h['name']}: {out}")
+    return out
+
+def fallback_facts(h, l, hooks):
+    pref = PREF_EN.get(l["pref"], l["pref"])
+    out = [f"{KINDS[h['kind']]['label'].capitalize()} in {pref}, Japan",
+           f"{fmt_trip(h, l).lstrip('~').capitalize()} from the house"]
+    for x in hooks[1:3]:
+        out.append(f"{x['name']}: {fmt_trip(x, l).lstrip('~')}")
+    return out
+
+
 # ─── slides ──────────────────────────────────────────────────────────
 FONT_DIR = ROOT / "fonts"
 FALLBACK_FONTS = ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -702,25 +1144,11 @@ def cfont(style, size, weight=500):
             pass
     return ImageFont.load_default()
 
-def font(size):
-    return cfont("sans", size, 500)
-
 def feat(f):
     """Lining numbers (no dropping 3/5/7/9) for the serif, if Pillow supports it."""
     if RAQM and "Serif" in str(getattr(f, "path", "")):
         return {"features": ["lnum"]}
     return {}
-
-def draw_text(d, xy, s, size, fill=(255, 255, 255), maxw=W - 120):
-    """Draws text with a shadow; shrinks the font if the line is too wide."""
-    x, y = xy
-    f = font(size)
-    while size > 20 and d.textlength(s, font=f) > maxw:
-        size -= 2
-        f = font(size)
-    d.text((x + 3, y + 3), s, font=f, fill=(0, 0, 0))
-    d.text((x, y), s, font=f, fill=fill)
-    return y + int(size * 1.25)
 
 def text_width(d, s, f, track=0):
     return d.textlength(s, font=f, **feat(f)) + track * max(0, len(s) - 1)
@@ -732,6 +1160,20 @@ def fit_font(d, s, size, weight, track=0, maxw=W - 120, style="sans"):
         if text_width(d, s, f, track) <= maxw or size <= 18:
             return f
         size -= 2
+
+def wrap_px(d, s, f, maxw):
+    """Splits text into lines that fit maxw pixels."""
+    lines, cur = [], ""
+    for word in s.split():
+        t = f"{cur} {word}".strip()
+        if cur and text_width(d, t, f) > maxw:
+            lines.append(cur)
+            cur = word
+        else:
+            cur = t
+    if cur:
+        lines.append(cur)
+    return lines
 
 def put(d, xy, s, f, fill, anchor="la", track=0, shadow=3):
     """Text with a shadow. track = extra letter spacing in px (can be negative).
@@ -771,13 +1213,6 @@ def shade(img, base=60, top=0.16, bottom=0.55):
         mask.putpixel((0, y), a)
     return Image.composite(Image.new("RGB", (W, H)), img, mask.resize((W, H)))
 
-def darken_bottom(img, start=0.40):
-    mask = Image.new("L", (1, H))
-    for y in range(H):
-        t = max(0.0, (y / H - start) / (1 - start))
-        mask.putpixel((0, y), int(235 * t))
-    return Image.composite(Image.new("RGB", (W, H)), img, mask.resize((W, H)))
-
 def download(url):
     try:
         r = requests.get(url, headers=scraper.UA, timeout=30)
@@ -804,11 +1239,11 @@ def cover_facts(l):
     return " · ".join(parts)
 
 def cover_slide(photo, l, hooks, usd, e):
+    """Slide 1. photo = PIL image (always given)."""
     h0 = hooks[0]
     cx, white = W // 2, (255, 255, 255)
     soft, grey = (230, 230, 230), (200, 200, 200)
-    img = ImageOps.fit(photo, (W, H), Image.LANCZOS) if photo else Image.new("RGB", (W, H), (24, 44, 70))
-    img = shade(img)
+    img = shade(ImageOps.fit(photo, (W, H), Image.LANCZOS))
     d = ImageDraw.Draw(img)
 
     price = "FREE" if l["price_yen"] == 0 else f"{fmt_usd(usd)} ({fmt_yen(l['price_yen'])})"
@@ -846,88 +1281,139 @@ def cover_slide(photo, l, hooks, usd, e):
         put(d, (x, y), s, f, fill, anchor, track, shadow=3 if size >= 100 else 2)
     return img
 
-def photo_slide(photo, l):
-    img = ImageOps.fit(photo, (W, H), Image.LANCZOS)
+# ── slides 2 & 3: the area ──
+def area_bg(pic):
+    """Area photo filling the slide with a black overlay (AREA_OVERLAY, 0.75 = 75%)."""
+    img = ImageOps.fit(pic["img"], (W, H), Image.LANCZOS)
+    return Image.blend(img, Image.new("RGB", (W, H), (0, 0, 0)), AREA_OVERLAY)
+
+def put_credit(d, pic):
+    credit = pic.get("credit") or ""
+    if not credit:
+        return
+    f = fit_font(d, credit, 24, 400)
+    put(d, (W - 60, H - 60), credit, f, (190, 190, 190), anchor="rs", shadow=0)
+
+def area_slide(pic, h, l, facts):
+    """Slide 2: daytime photo, place name, kind, prefecture, drive time, tagline."""
+    img = area_bg(pic)
     d = ImageDraw.Draw(img)
-    credit = f"Photo: {site_info(l)[1]}"
-    x = W - 60 - int(d.textlength(credit, font=font(32)))
-    draw_text(d, (x, H - 70), credit, 32, (235, 235, 235))
+    cx = W // 2
+    white, soft, grey = (255, 255, 255), (230, 230, 230), (190, 190, 190)
+    pref = PREF_EN.get(l["pref"], l["pref"])
+    name = place_name(h)
+
+    put(d, (60, 60), HANDLE, cfont("sans", 26, 500), white, "la", 1, 2)
+    put(d, (cx, 480), "THE AREA", cfont("sans", 30, 500), grey, "mt", 6, 0)
+    put(d, (cx, 700), name, fit_font(d, name, 150, 300, -2, style="serif"),
+        white, "ms", -2, 3)
+    sub = f"{KINDS[h['kind']]['label'].capitalize()} · {pref}"
+    put(d, (cx, 745), sub, fit_font(d, sub, 40, 300, 2), soft, "mt", 2, 2)
+    trip = f"{fmt_trip(h, l)} from the house"
+    put(d, (cx, 815), trip, fit_font(d, trip, 42, 500), white, "mt", 0, 2)
+
+    tagline = (facts or {}).get("tagline")
+    if tagline:
+        f = cfont("serif", 60, 300)
+        y = 960
+        for line in wrap_px(d, tagline, f, W - 200)[:2]:
+            put(d, (cx, y), line, f, soft, "mt", 0, 2)
+            y += 76
+    put_credit(d, pic)
     return img
 
-def stats_slide(l, hooks, usd, e, fees_yen, fees_usd):
-    h0 = hooks[0]
-    img = Image.new("RGB", (W, H), (18, 28, 45))
+def facts_slide(pic, h, l, hooks, facts):
+    """Slide 3: dusk photo, 'Why <place>' and 3-4 facts."""
+    img = area_bg(pic)
     d = ImageDraw.Draw(img)
-    y = draw_text(d, (60, 70), "THE NUMBERS", 64, (180, 220, 255)) + 30
-    price_txt = "FREE" if l["price_yen"] == 0 else f"{fmt_usd(usd)}  ({fmt_yen(l['price_yen'])})"
-    rows = [("Price", price_txt),
-            (KINDS[h0["kind"]]["label"].capitalize(), f"{h0['name']}, {fmt_trip(h0, l)}")]
-    if e:
-        rows += [
-            ("All-in cost (est.)", f"{fmt_k(e['all_in'])} = house {fmt_k(e['house'])} + "
-                                   f"reno {fmt_k(e['reno'])} + fees {fmt_k(e['fees'])}"),
-            ("Airbnb (AirROI)", f"${e['adr']}/night x {e['occ'] * 100:.0f}% x {e['nights']} days"),
-            (f"Net after {e['mgmt_pct'] * 100:.0f}% management",
-             f"{fmt_k(e['net'])}/yr · ~${e['monthly']:,}/mo"),
-        ]
-        if e["breakeven_yrs"]:
-            rows.append(("Break even", f"{e['breakeven_yrs']:.1f} years"))
-    house = []
-    if l.get("bedrooms"):
-        house.append(f"{l['bedrooms']} rooms")
-    if l.get("year_built"):
-        house.append(f"built {l['year_built']}")
-    if l.get("area_m2"):
-        house.append(f"{l['area_m2']:.0f} m²")
-    if house:
-        rows.append(("House", " · ".join(house)))
-    if fees_yen:
-        rows.append(("Yearly fees", f"{fmt_yen(fees_yen)} (≈ {fmt_usd(fees_usd)})"))
-    rows.append(("Location", f"{PREF_EN.get(l['pref'], l['pref'])}, Japan"))
-    if len(hooks) > 1:
-        h1 = hooks[1]
-        rows.append(("Also nearby", f"{h1['name']}, {fmt_trip(h1, l)}"))
-    for label, value in rows:
-        lines = textwrap.wrap(value, 30)
-        if y + 45 + 65 * len(lines) > H - 190:        # no room left above the note
+    white, accent = (255, 255, 255), (180, 220, 255)
+    put(d, (60, 60), HANDLE, cfont("sans", 26, 500), white, "la", 1, 2)
+
+    title = f"Why {place_name(h)}"
+    put(d, (60, 280), title, fit_font(d, title, 110, 300, style="serif"), white, "ls", 0, 3)
+
+    lines = (facts or {}).get("facts") or fallback_facts(h, l, hooks)
+    f = cfont("sans", 44, 400)
+    y = 380
+    for fact in lines:
+        wrapped = wrap_px(d, fact, f, W - 200)
+        if y + 60 * len(wrapped) > H - 140:
             break
-        y = draw_text(d, (60, y), label.upper(), 34, (140, 160, 190))
-        for line in lines:
-            y = draw_text(d, (60, y), line, 52)
-        y += 16
-    place = "town" if l.get("geo_level") == "town" else "district"
-    note = (f"Drive times: {time_source(hooks)}, from the {place} centre. "
-            f"Estimates, before tax & running costs.")
-    yy = H - 170
-    for line in textwrap.wrap(note, 48) + ["Link to the listing in the caption."]:
-        yy = draw_text(d, (60, yy), line, 30, (150, 150, 150))
+        put(d, (60, y), "—", f, accent, "la", 0, 2)
+        for line in wrapped:
+            put(d, (130, y), line, f, white, "la", 0, 2)
+            y += 60
+        y += 36
+    put_credit(d, pic)
     return img
 
-def build_slides(l, hooks, usd, e, fees_yen, fees_usd):
+def build_slides(l, hooks, usd, e):
+    """3 slides: cover, area (day), area facts (dusk).
+    Returns (slide paths, area photo credits), or (None, None) if no photo at all."""
     OUT.mkdir(exist_ok=True)
     for old in OUT.glob("slide_*.jpg"):
         old.unlink()
-    photos = []
+    h0 = hooks[0]
+
+    # listing photos: the cover, and a last-resort backup for slides 2 & 3
+    house_pics = []
     for url in l.get("photos", []):
-        if len(photos) >= MAX_PHOTOS + 1:
+        if len(house_pics) >= HOUSE_PHOTOS:
             break
         img = download(url)
         if img:
-            photos.append(img)
-    print(f"Photos downloaded: {len(photos)}")
-    slides = [cover_slide(photos[0] if photos else None, l, hooks, usd, e)]
-    slides += [photo_slide(p, l) for p in photos[1:MAX_PHOTOS + 1]]
-    slides.append(stats_slide(l, hooks, usd, e, fees_yen, fees_usd))
+            house_pics.append({"id": f"house:{url}", "img": img, "generic": False,
+                               "credit": f"Photo: {site_info(l)[1]}"})
+    print(f"House photos downloaded: {len(house_pics)}")
+
+    cover = house_pics[0] if house_pics else None
+    used = {cover["id"]} if cover else set()
+    day = find_photo(h0, l, "day", used, house_pics)
+    if day:
+        used.add(day["id"])
+    dusk = find_photo(h0, l, "dusk", used, house_pics)
+    if cover is None:
+        cover = day or dusk
+        if cover:
+            print("  no listing photo – the cover uses the area photo")
+    if not (cover and day and dusk):
+        print("!! no photo found anywhere – not posting today")
+        return None, None
+
+    facts = None
+    try:
+        facts = town_facts(h0, l)
+    except Exception as ex:
+        print(f"!! town facts error: {ex!r}")
+
+    def tag(p):
+        return f"{p['id']}{' (generic)' if p.get('generic') else ''}"
+    print(f"Slide photos: cover={tag(cover)} day={tag(day)} dusk={tag(dusk)} | facts: "
+          f"{'Grok' if facts else 'fallback'}")
+
+    slides = [cover_slide(cover["img"], l, hooks, usd, e),
+              area_slide(day, h0, l, facts),
+              facts_slide(dusk, h0, l, hooks, facts)]
     paths = []
     for i, s in enumerate(slides, 1):
         p = OUT / f"slide_{i}.jpg"
         s.save(p, "JPEG", quality=90)
         paths.append(p)
-    return paths
+
+    # remember every photo used, so later posts can reuse it
+    try:
+        for pic, mood in ((cover, None), (day, "day"), (dusk, "dusk")):
+            role = "house" if pic["id"].startswith("house:") else "area"
+            library_add(pic, role, mood if role == "area" else None, h0["kind"])
+    except Exception as ex:
+        print(f"!! photo library error: {ex!r}")
+
+    credits = list(dict.fromkeys(p["credit"] for p in (day, dusk) if p.get("credit")))
+    return paths, credits
 
 
 # ─── caption ─────────────────────────────────────────────────────────
-def build_caption(l, hooks, usd, e, fees_yen, fees_usd):
+def build_caption(l, hooks, usd, e, fees_yen, fees_usd, area_credits=()):
     h0 = hooks[0]
     pref = PREF_EN.get(l["pref"], l["pref"])
     price_line = ("💴 Price: FREE 🎉" if l["price_yen"] == 0
@@ -959,8 +1445,11 @@ def build_caption(l, hooks, usd, e, fees_yen, fees_usd):
               "⚠️ Rough estimates: rental data from AirROI (180 nights max), reno & "
               "buying fees estimated. Before tax & running costs.",
               f"Drive times: {src}{credit}, from the {place} centre.",
-              f"Source & photos: {site_info(l)[0]}",
-              f"🔗 {l['url']}",
+              f"Source & house photos: {site_info(l)[0]}"]
+    if area_credits:
+        lines.append("Area photos: " + "; ".join(c.replace("Photo: ", "", 1)
+                                                 for c in area_credits))
+    lines += [f"🔗 {l['url']}",
               "",
               f"#akiya #japanhouse #cheaphouse {kind_tags} #moveto{pref.lower()}"
               " #japanrealestate #空き家 #古民家"]
@@ -1079,6 +1568,11 @@ def main():
     print(f"Fonts folder: {FONT_DIR} | files: "
           f"{sorted(p.name for p in FONT_DIR.glob('*.ttf')) if FONT_DIR.exists() else 'FOLDER NOT FOUND'}"
           f" | raqm (lining numbers): {RAQM}")
+    lib_size = len(load_json(LIBRARY_FILE))
+    print(f"Area slides: Grok {'on' if GROK_KEY else 'OFF'} ({GROK_MODEL}) | "
+          f"Pexels {'on' if PEXELS_KEY else 'OFF'} | overlay {AREA_OVERLAY:.0%} | "
+          f"photo library {lib_size} | fallback_photos/ "
+          f"{'found' if FALLBACK_DIR.exists() else 'none'}")
     fx = get_fx()
     max_yen = MAX_PRICE_USD / fx
     listings = gather()
@@ -1136,8 +1630,12 @@ def main():
           f"{age_points(l.get('year_built'))[1]}, {e['roi'] * 100:.0f}% net yield, "
           f"~${e['monthly']:,}/mo\n  {l['url']}")
 
-    paths = build_slides(l, hooks, usd, e, fees_yen, fees_usd)
-    caption = build_caption(l, hooks, usd, e, fees_yen, fees_usd)
+    paths, area_credits = build_slides(l, hooks, usd, e)
+    if paths is None:
+        tg_text(f"No post today ({today}) – couldn't find any photo for the slides. "
+                f"Will retry next run.")
+        return
+    caption = build_caption(l, hooks, usd, e, fees_yen, fees_usd, area_credits)
     (OUT / "caption.txt").write_text(caption, encoding="utf-8")
 
     ok = tg_album(paths, caption) and tg_text(caption)
