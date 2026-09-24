@@ -53,7 +53,7 @@ ROTATE           = _env("ROTATE_SOURCES", "1") == "1"
 MIN_YIELD        = float(_env("MIN_YIELD_PCT", "0"))   # skip houses with net yield below this
 MAX_CHECK        = int(_env("MAX_CHECK", "40"))        # top-located houses to fully check
 RECENT_HOOKS     = int(_env("RECENT_HOOKS", "5"))      # avoid repeating these attractions
-REPEAT_PENALTY   = 25                                  # points off for a recently used attraction
+REPEAT_PENALTY   = float(_env("REPEAT_PENALTY", "0"))  # points off for a recently used attraction (0 = off)
 CLOSE_PTS        = 60                                  # points for a house right next to the hook
 FAMOUS_BONUS     = 20
 EXTRA_HOOK_PTS   = 5                                   # per extra attraction nearby
@@ -1114,8 +1114,8 @@ def main():
     print(f"Candidates: {len(cands)} of {len(rough)} pre-filtered {per_kind} by site {per_src}  "
           f"(≤ ${MAX_PRICE_USD:,.0f} = ¥{max_yen:,.0f}, ≤ {MAX_DRIVE_MIN:.0f} min drive, "
           f"enabled: {', '.join(sorted(ENABLED))})")
-    if recent:
-        print(f"Recently featured (penalised): {', '.join(recent)}")
+    if recent and REPEAT_PENALTY:
+        print(f"Recently featured (penalised -{REPEAT_PENALTY:.0f}): {', '.join(recent)}")
 
     if not cands:
         tg_text(f"No deal today ({today}) – no new houses near any attraction.")
