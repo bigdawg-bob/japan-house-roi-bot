@@ -1,7 +1,10 @@
 """
 Yield math for the akiya bot.
 Rental data comes ONLY from AirROI (nightly rate + occupancy).
-Reno cost and buying fees are rule-of-thumb estimates, not data.
+Reno cost is based on a real, completed full-renovation invoice
+(Matsudo 7LDK, 2 floors: ¥4.05M works, kitchen & bath included, ~130 m²),
+plus coordinator fee, consumption tax, setup and 民泊 licensing.
+Buying fees are rule-of-thumb estimates, not data.
 """
 import os
 
@@ -10,29 +13,43 @@ def _env(name, default):
 
 NIGHTS        = 180                                     # 民泊 legal cap - fixed
 MGMT_PCT      = float(_env("MGMT_PCT", "0.30"))         # management company cut
-SETUP_JPY     = int(_env("SETUP_JPY", "500000"))        # furniture, fire safety, registration
+SETUP_JPY     = int(_env("SETUP_JPY", "500000"))        # furniture, appliances, linens
 MAX_SHOWN_ROI = float(_env("MAX_SHOWN_ROI", "0.60"))    # hide yield % above this (looks fake)
 RENO_WORDS    = ("リフォーム済", "リノベ済", "リノベーション済", "改装済")
 
+# ---------- renovation (from the Matsudo invoice) ----------
+M2_PER_ROOM     = 20                                    # guess floor area from room count
+DEFAULT_M2      = 100                                   # no area and no rooms
+WORKS_PER_M2    = int(_env("WORKS_PER_M2", "31000"))    # ¥4.05M / ~130 m², full reno incl. wet areas
+SEISMIC_JPY     = int(_env("SEISMIC_JPY", "1500000"))   # earthquake retrofit, pre-1981 houses
+COORD_FEE       = float(_env("COORD_FEE", "0.20"))      # coordinator fee on top of works
+CONSUMPTION_TAX = 0.10
+LICENSE_JPY     = int(_env("LICENSE_JPY", "800000"))    # 民泊 registration + fire safety
+
 
 # ---------- costs (yen) ----------
-def reno_jpy(year_built, floor_m2=None, renovated=False):
+def _to_int(v):
     try:
-        year_built = int(year_built)
+        return int(v)
     except (TypeError, ValueError):
-        year_built = None
-    if not year_built:
-        per_m2, flat = None, 3_000_000                  # unknown -> assume the worst
-    elif year_built < 1981:
-        per_m2, flat = 50_000, 3_500_000                # old earthquake code, pipes, wiring
-    elif year_built < 2000:
-        per_m2, flat = 30_000, 2_200_000                # kitchen, bath, interior
-    else:
-        per_m2, flat = 15_000, 1_200_000                # mostly cosmetic
-    cost = per_m2 * floor_m2 if (per_m2 and floor_m2) else flat
+        return None
+
+
+def reno_jpy(year_built, floor_m2=None, renovated=False, rooms=None):
+    """Works + 20% coordinator fee + 10% tax, then setup + licensing."""
+    year_built = _to_int(year_built)
+    rooms = _to_int(rooms)
+    if not floor_m2:
+        floor_m2 = rooms * M2_PER_ROOM if rooms else DEFAULT_M2
+    works = WORKS_PER_M2 * floor_m2
+    if not year_built or year_built < 1981:
+        works += SEISMIC_JPY                            # unknown -> assume the worst
+    elif year_built >= 2000:
+        works *= 0.6                                    # newer: lighter work
     if renovated:
-        cost *= 0.5
-    return cost + SETUP_JPY
+        works *= 0.5
+    total = works * (1 + COORD_FEE) * (1 + CONSUMPTION_TAX)
+    return total + SETUP_JPY + LICENSE_JPY
 
 
 def fees_jpy(price_jpy):
@@ -73,7 +90,7 @@ def _r100(usd):
 
 
 def estimate(price_jpy, year_built, airroi_est, fx, floor_m2=None,
-             renovated=False, yearly_fees_jpy=0):
+             renovated=False, yearly_fees_jpy=0, rooms=None):
     """fx = USD per 1 JPY (same as main.py, e.g. 0.0067). None = no AirROI data."""
     rental = airroi_inputs(airroi_est)
     if rental is None:
@@ -85,7 +102,7 @@ def estimate(price_jpy, year_built, airroi_est, fx, floor_m2=None,
     net = _r100(gross * (1 - MGMT_PCT) - fees_yearly)
 
     house = round(price_jpy * fx)
-    reno = _r100(reno_jpy(year_built, floor_m2, renovated) * fx)
+    reno = _r100(reno_jpy(year_built, floor_m2, renovated, rooms) * fx)
     fees = _r100(fees_jpy(price_jpy) * fx)
     all_in = house + reno + fees
 
@@ -138,7 +155,7 @@ def caption_text(e, headline=None):
         after += f" & ${e['fees_yearly']:,} yearly fees"
 
     body = [
-        f"Costs: House {fmt_k(e['house'])} + Reno {fmt_k(e['reno'])} + "
+        f"Costs: House {fmt_k(e['house'])} + Reno & license {fmt_k(e['reno'])} + "
         f"Fees {fmt_k(e['fees'])} = {fmt_k(e['all_in'])} in",
         f"Rental: ${e['adr']}/night x {e['occ'] * 100:.0f}% x {e['nights']} days",
         f"{after}: {fmt_k(e['net'])}/yr net",
