@@ -23,10 +23,12 @@ SLUGS = ("hokkaido aomori iwate miyagi akita yamagata fukushima ibaraki tochigi 
 RECHECK_DAYS = 10     # re-read a listing page after this (catches sold / price changes)
 KEEP_DAYS    = 21     # forget listings not seen on the list pages for this long
 BOT_NAME     = "akiya-bot"
+MAX_FAILS    = 3      # stop asking a site after this many refusals in a row
 
 
 # ─── polite fetching ─────────────────────────────────────────────────
 _robots = {}
+_fails = {}
 
 def allowed(url):
     """True unless the site's robots.txt forbids this page."""
@@ -49,10 +51,19 @@ def allowed(url):
     return ok
 
 def get(url):
+    host = urlparse(url).netloc
+    if _fails.get(host, 0) >= MAX_FAILS:
+        return None                                  # site is blocking us, stop asking
     if not allowed(url):
         return None
     r = base.fetch(url)
     time.sleep(base.DELAY)
+    if r is None:
+        _fails[host] = _fails.get(host, 0) + 1
+        if _fails[host] == MAX_FAILS:
+            print(f"  {host} keeps refusing us – skipping it for the rest of this run")
+    else:
+        _fails[host] = 0
     return r
 
 def show_links(r, name):
