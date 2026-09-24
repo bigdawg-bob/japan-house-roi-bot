@@ -1441,7 +1441,7 @@ def facts_slide(pic, h, l, hooks, facts, e):
     f = facts or {}
     name = place_name(h)
 
-    put(d, (60, 60), HANDLE, cfont("sans", 26, 500), white, "la", 1, 2)
+    put(d, (60, 62), HANDLE, cfont("sans", 26, 500), white, "la", 1, 2)
     put(d, (W // 2, 62), "WHY THIS RENTS", cfont("sans", 22, 500), soft, "mt", 5, 0)
 
     # town + subtitle + divider
