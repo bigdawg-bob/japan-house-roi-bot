@@ -1,27 +1,29 @@
-name: daily
+name: Daily house post
 
 on:
   schedule:
-    - cron: "0 23 * * *"   # every day at 08:00 Japan time
-  workflow_dispatch:        # adds a "Run workflow" button
+    - cron: "0 9 * * *"   # every day at 09:00 UTC
+  workflow_dispatch:       # adds the "Run workflow" button
 
 permissions:
-  contents: write           # lets the bot save its notes to the repo
+  contents: write
 
 jobs:
-  run:
+  post:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Get code
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install
+      - name: Install packages
         run: |
-          pip install -r requirements.txt
-          sudo apt-get install -y fonts-dejavu-core
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run bot
         env:
@@ -30,12 +32,12 @@ jobs:
           AIRROI_API_KEY: ${{ secrets.AIRROI_API_KEY }}
         run: python main.py
 
-      - name: Save bot memory
+      - name: Save state
         if: always()
         run: |
-          mkdir -p state
-          git config user.name "github-actions[bot]"
-          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
-          git add state
-          git diff --cached --quiet || git commit -m "Update bot memory"
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add state/ || true
+          git commit -m "Update state [skip ci]" || echo "No changes"
+          git pull --rebase || true
           git push
