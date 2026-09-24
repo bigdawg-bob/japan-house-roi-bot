@@ -1,12 +1,13 @@
 """
 Daily "cheap Japanese house near a ski resort / onsen / sight / beach / nature" bot.
-Flow: scrape ALL sites (Sumai, At Home, LIFULL HOME'S) -> merge + remove duplicates
+Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
       -> keep houses under MAX_PRICE_USD within a ~45-min drive of a hook
-      -> read yearly fees from the listing page, skip if > 15% of the price
-      -> AirROI estimate (cached) -> post the ONE highest-scoring house
-         (prefers a different site than the last post, when one qualifies)
+      -> rank by LOCATION first (how close, how famous, how many attractions)
+      -> for the best-located houses: read yearly fees (skip if > 15% of price)
+         and get an AirROI estimate (cached)
+      -> final score = attraction points + yield points (yield capped, so a free
+         house in a so-so spot never beats a good house near a famous resort)
       -> 1080x1350 slides -> Telegram (album + copyable caption).
-Score = (Airbnb revenue - yearly fees) / price.  No AirROI data -> cheapest house.
 """
 import io, json, math, os, re, textwrap, time
 from datetime import datetime, timezone, timedelta
@@ -20,21 +21,47 @@ import scraper_athome
 import scraper_homes
 
 # ─── settings ────────────────────────────────────────────────────────
-MAX_PRICE_USD    = float(os.getenv("MAX_PRICE_USD", "100000"))
-MAX_DRIVE_MIN    = float(os.getenv("MAX_DRIVE_MIN", "45"))
-MAX_WALK_MIN     = float(os.getenv("MAX_WALK_MIN", "15"))
-FEE_LIMIT        = float(os.getenv("FEE_LIMIT_PCT", "15")) / 100   # yearly fees vs price
-MAX_AIRROI_CALLS = int(os.getenv("MAX_AIRROI_CALLS", "15"))        # paid calls per run
-CACHE_DAYS       = 90                                               # re-ask AirROI after this
+def _env(name, default):
+    return os.getenv(name) or default                 # empty string -> default
+
+MAX_PRICE_USD    = float(_env("MAX_PRICE_USD", "100000"))
+MAX_DRIVE_MIN    = float(_env("MAX_DRIVE_MIN", "45"))
+MAX_WALK_MIN     = float(_env("MAX_WALK_MIN", "15"))
+FEE_LIMIT        = float(_env("FEE_LIMIT_PCT", "15")) / 100   # yearly fees vs price
+MAX_AIRROI_CALLS = int(_env("MAX_AIRROI_CALLS", "15"))        # paid calls per run
+CACHE_DAYS       = 90                                          # re-ask AirROI after this
 MAX_PHOTOS       = 5
 W, H             = 1080, 1350
 FX_FALLBACK      = 0.0067
 DRY_RUN          = os.getenv("DRY_RUN") == "1"
-ENABLED          = set(os.getenv("HOOK_KINDS", "ski,onsen,sight,beach,nature")
+ENABLED          = set(_env("HOOK_KINDS", "ski,onsen,sight,beach,nature")
                        .replace(" ", "").split(","))
-SITES_ON         = [s for s in os.getenv("SOURCES", "sumai,athome,homes")
+SITES_ON         = [s for s in _env("SOURCES", "sumai,athome,homes")
                     .replace(" ", "").split(",") if s]
-ROTATE           = os.getenv("ROTATE_SOURCES", "1") == "1"
+ROTATE           = _env("ROTATE_SOURCES", "1") == "1"
+
+# ranking: location first, yield only as a bonus
+YIELD_CAP        = float(_env("YIELD_CAP_PCT", "15"))  # max points from yield (free house = cap)
+MIN_YIELD        = float(_env("MIN_YIELD_PCT", "0"))   # skip houses with an estimate below this
+MAX_CHECK        = int(_env("MAX_CHECK", "40"))        # top-located houses to fully check
+RECENT_HOOKS     = int(_env("RECENT_HOOKS", "5"))      # avoid repeating these attractions
+REPEAT_PENALTY   = 25                                  # points off for a recently used attraction
+CLOSE_PTS        = 60                                  # points for a house right next to the hook
+FAMOUS_BONUS     = 20
+EXTRA_HOOK_PTS   = 5                                   # per extra attraction nearby
+MAX_EXTRA_HOOKS  = 4
+
+def _weights(s):
+    out = {}
+    for part in s.replace(" ", "").split(","):
+        k, _, v = part.partition("=")
+        try:
+            out[k] = float(v)
+        except ValueError:
+            pass
+    return out
+
+KIND_WEIGHT = _weights(_env("HOOK_PRIORITY", "ski=1.0,onsen=1.0,sight=0.9,beach=0.9,nature=0.8"))
 
 # travel-time estimate (no routing API; straight line -> road distance -> minutes)
 ROAD_FACTOR = 1.3     # roads are ~30% longer than a straight line
@@ -54,7 +81,7 @@ JST           = timezone(timedelta(hours=9))
 BOT_TOKEN   = os.getenv("BOT_TOKEN")
 CHAT_ID     = os.getenv("CHAT_ID")
 AIRROI_KEY  = os.getenv("AIRROI_API_KEY") or os.getenv("AIRROI_KEY")
-AIRROI_URL  = os.getenv("AIRROI_URL", "https://api.airroi.com/calculator/estimate")
+AIRROI_URL  = _env("AIRROI_URL", "https://api.airroi.com/calculator/estimate")
 
 SITE_MODULES = {"sumai": scraper, "athome": scraper_athome, "homes": scraper_homes}
 # source -> (caption text, photo credit)
@@ -196,6 +223,18 @@ HOOKS = [
     ("nature", "Yakushima",                30.350, 130.530),
 ]
 
+# names people outside Japan already know -> bonus points (must match HOOKS names)
+FAMOUS = {
+    "Niseko Grand Hirafu", "Furano", "Hakuba Happo-one", "Hakuba Goryu", "Hakuba Cortina",
+    "Nozawa Onsen", "Shiga Kogen", "Myoko Akakura", "Zao Onsen", "Naeba", "Rusutsu",
+    "Noboribetsu Onsen", "Ginzan Onsen", "Kusatsu Onsen", "Hakone Yumoto", "Kinosaki Onsen",
+    "Beppu", "Yufuin", "Kurokawa Onsen", "Arima Onsen", "Dogo Onsen",
+    "Nikko", "Karuizawa", "Lake Kawaguchiko (Fuji)", "Matsumoto Castle", "Shirakawa-go",
+    "Takayama old town", "Kanazawa", "Himeji Castle", "Koyasan", "Miyajima", "Naoshima",
+    "Miyakojima", "Kabira Bay (Ishigaki)", "Onna coast (Okinawa)",
+    "Biei", "Kamikochi", "Yakushima", "Shiretoko",
+}
+
 PREF_EN = {
     "北海道": "Hokkaido", "青森県": "Aomori", "岩手県": "Iwate", "宮城県": "Miyagi",
     "秋田県": "Akita", "山形県": "Yamagata", "福島県": "Fukushima", "茨城県": "Ibaraki",
@@ -253,12 +292,31 @@ def save_json(p, data):
     p.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+# ─── location score (the main ranking) ───────────────────────────────
+def rank_hooks(hooks, recent=()):
+    """Scores the location. Returns (points, hooks with the BEST attraction first).
+    Best = close + famous + preferred kind; a house near several attractions gets extra."""
+    def value(h):
+        kind, name, km = h
+        v = CLOSE_PTS * max(0.0, 1 - drive_min(km) / MAX_DRIVE_MIN)
+        if name in FAMOUS:
+            v += FAMOUS_BONUS
+        v *= KIND_WEIGHT.get(kind, 1.0)
+        if name in recent:
+            v -= REPEAT_PENALTY                      # variety: not Hakuba every day
+        return v
+    ordered = sorted(hooks, key=value, reverse=True)
+    extra = EXTRA_HOOK_PTS * min(len(hooks) - 1, MAX_EXTRA_HOOKS)
+    return round(value(ordered[0]) + extra, 1), ordered
+
+
 # ─── all sites: gather + remove duplicates ───────────────────────────
 def fingerprint(l):
-    """Same town/district + same price = same house (across sites)."""
+    """Same town/district + same price + similar floor area = same house."""
     a = re.sub(r"\s|大字|字", "", l.get("location") or "")
     a = re.split(r"[0-9０-９\-－−]", a)[0]
-    return f"{a}|{int(l.get('price_yen') or 0)}"
+    area = int(round((l.get("area_m2") or 0) / 10))   # within ~10 m²
+    return f"{a}|{int(l.get('price_yen') or 0)}|{area}"
 
 def dedupe(listings):
     groups = {}
@@ -428,6 +486,21 @@ def fetch_estimate(l, cache):
     return est
 
 
+# ─── yield (secondary score) ─────────────────────────────────────────
+def net_revenue(est, fees_usd):
+    return est["revenue"] - fees_usd if est and est.get("revenue") else None
+
+def yield_pct(est, fees_usd, usd):
+    """Yearly yield in %, or None without AirROI data. A free house counts as
+    YIELD_CAP (not infinity), so it can't jump ahead of a better location."""
+    net = net_revenue(est, fees_usd)
+    if net is None:
+        return None
+    if usd <= 0:
+        return YIELD_CAP if net > 0 else -YIELD_CAP
+    return net / usd * 100
+
+
 # ─── slides ──────────────────────────────────────────────────────────
 FONT_PATHS = ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
               "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -473,9 +546,6 @@ def download(url):
         print(f"  photo error {url}: {e}")
         return None
 
-def net_revenue(est, fees_usd):
-    return est["revenue"] - fees_usd if est and est.get("revenue") else None
-
 def yield_text(usd, est, fees_usd):
     net = net_revenue(est, fees_usd)
     if net is None:
@@ -519,7 +589,7 @@ def stats_slide(l, hooks, usd, est, fees_yen, fees_usd):
     price_txt = "FREE" if l["price_yen"] == 0 else f"{fmt_usd(usd)}  ({fmt_yen(l['price_yen'])})"
     rows = [("Price", price_txt),
             ("Location", f"{PREF_EN.get(l['pref'], l['pref'])}, Japan"),
-            (f"Nearest {KINDS[kind]['label']}", f"{name}, {fmt_trip(km, l)}")]
+            (KINDS[kind]["label"].capitalize(), f"{name}, {fmt_trip(km, l)}")]
     if len(hooks) > 1:
         _, n2, km2 = hooks[1]
         rows.append(("Also nearby", f"{n2}, {fmt_trip(km2, l)}"))
@@ -651,62 +721,60 @@ def tg_album(paths, caption):
 
 
 # ─── picking ─────────────────────────────────────────────────────────
-def pick(cands, fx, last_source=None):
-    """Highest (revenue - fees) / price. Cached estimates are free; new ones limited
-    to MAX_AIRROI_CALLS (cheapest first). Fallback: cheapest house passing the fee rule.
-    With ROTATE_SOURCES on, prefers a site different from the last post (if one qualifies)."""
+def pick(ranked, fx, last_source=None):
+    """ranked = [(location_points, listing, hooks)], best location first.
+    Checks the top MAX_CHECK houses (fees + AirROI, spending paid calls on the
+    best locations first), then picks the highest  location points + yield points.
+    Yield adds at most YIELD_CAP points, so location always matters most."""
     ac, fc = load_json(AIRROI_CACHE), load_json(FEE_CACHE)
     budget = MAX_AIRROI_CALLS
     rotate = ROTATE and last_source is not None
-    scored, fallback, fallback_other, skipped = [], None, None, 0
+    scored, skip_fee, skip_yield = [], 0, 0
     try:
-        for l, hooks in cands:
-            found, est = cached_estimate(l, ac) if AIRROI_KEY else (False, None)
-            can_score = bool(AIRROI_KEY) and (found or budget > 0)
-            other = l.get("source") != last_source
-            need_fb = fallback is None or (rotate and other and fallback_other is None)
-            if not can_score and not need_fb:
-                continue
+        for hp, l, hooks in ranked:
+            if len(scored) >= MAX_CHECK:
+                break
             fees = yearly_fees(l, fc)
             if fees is not None and fees > FEE_LIMIT * l["price_yen"]:
-                skipped += 1
+                skip_fee += 1
                 print(f"  skip, fees {fmt_yen(fees)}/yr > {FEE_LIMIT:.0%} of "
                       f"{fmt_yen(l['price_yen'])}: {l['url']}")
                 continue
-            if fallback is None:
-                fallback = (l, hooks, None, fees)
-            if other and fallback_other is None:
-                fallback_other = (l, hooks, None, fees)
-            if not can_score:
-                continue
-            if not found:
-                budget -= 1
-                est = fetch_estimate(l, ac)
-            if not est or not est.get("revenue"):
-                continue
+            est = None
+            if AIRROI_KEY:
+                found, est = cached_estimate(l, ac)
+                if not found and budget > 0:
+                    budget -= 1
+                    est = fetch_estimate(l, ac)
             usd = l["price_yen"] * fx
-            net = est["revenue"] - (fees or 0) * fx
-            score = net / max(usd, 1)                     # free houses rank first
-            print(f"  [{l.get('source')}] {l['location']} {fmt_yen(l['price_yen'])} -> "
-                  f"${est['revenue']:,.0f}/yr, fees {fmt_yen(fees or 0)} = {score*100:.0f}%")
-            scored.append((score, -l["price_yen"], l, hooks, est, fees))
+            y = yield_pct(est, (fees or 0) * fx, usd)
+            if y is not None and y < MIN_YIELD:
+                skip_yield += 1
+                print(f"  skip, yield {y:.0f}% < {MIN_YIELD:.0f}%: {l['url']}")
+                continue
+            yp = 0.0 if y is None else max(-YIELD_CAP, min(y, YIELD_CAP))
+            total = hp + yp
+            kind, name, km = hooks[0]
+            ytxt = "no Airbnb data" if y is None else f"yield {y:.0f}%"
+            print(f"  [{l.get('source')}] {l['location']} {fmt_yen(l['price_yen'])} | "
+                  f"{name} {fmt_trip(km, l)} | location {hp:.0f} + {ytxt} "
+                  f"({yp:+.0f}) = {total:.0f}")
+            scored.append((total, hp, l, hooks, est, fees))
     finally:
         save_json(AIRROI_CACHE, ac)                       # never pay twice
         save_json(FEE_CACHE, fc)
-    print(f"Fee rule skipped: {skipped}  |  scored: {len(scored)}  |  "
-          f"AirROI calls used: {MAX_AIRROI_CALLS - budget}  |  last source: {last_source}")
+    print(f"Checked: {len(scored)}  |  fee rule skipped: {skip_fee}  |  yield rule skipped: "
+          f"{skip_yield}  |  AirROI calls used: {MAX_AIRROI_CALLS - budget}  |  "
+          f"last source: {last_source}")
 
-    if scored:
-        scored.sort(key=lambda s: (s[0], s[1]), reverse=True)
-        best = scored[0]
-        if rotate:
-            best = next((s for s in scored if s[2].get("source") != last_source), best)
-        _, _, l, hooks, est, fees = best
-        return l, hooks, est, fees
-    if fallback:
-        print("No AirROI data – posting the cheapest house that passes the fee rule")
-        return fallback_other if (rotate and fallback_other) else fallback
-    return None, None, None, None
+    if not scored:
+        return None, None, None, None
+    scored.sort(key=lambda s: (s[0], s[1], -s[2]["price_yen"]), reverse=True)
+    best = scored[0]
+    if rotate:
+        best = next((s for s in scored if s[2].get("source") != last_source), best)
+    _, _, l, hooks, est, fees = best
+    return l, hooks, est, fees
 
 
 # ─── main ────────────────────────────────────────────────────────────
@@ -716,7 +784,9 @@ def main():
     max_yen = MAX_PRICE_USD / fx
     listings = gather()
     posted = load_json(POSTED_FILE)
-    last_source = load_json(ROTATION_FILE).get("last_source")
+    rot = load_json(ROTATION_FILE)
+    last_source = rot.get("last_source")
+    recent = rot.get("recent_hooks", [])
 
     cands, per_kind, per_src = [], {}, {}
     for l in listings:
@@ -727,21 +797,25 @@ def main():
         hooks = nearby_hooks(l["lat"], l["lng"])
         if not hooks:
             continue
-        cands.append((l, hooks))
+        hp, hooks = rank_hooks(hooks, recent)
+        cands.append((hp, l, hooks))
         per_kind[hooks[0][0]] = per_kind.get(hooks[0][0], 0) + 1
         per_src[l.get("source")] = per_src.get(l.get("source"), 0) + 1
     print(f"Candidates: {len(cands)} {per_kind} by site {per_src}  "
           f"(≤ ${MAX_PRICE_USD:,.0f} = ¥{max_yen:,.0f}, "
           f"≤ {MAX_DRIVE_MIN:.0f} min drive ≈ {MAX_KM:.0f} km, enabled: {', '.join(sorted(ENABLED))})")
+    if recent:
+        print(f"Recently featured (penalised): {', '.join(recent)}")
 
     if not cands:
         tg_text(f"No deal today ({today}) – no new houses near any attraction.")
         return
 
-    cands.sort(key=lambda c: (c[0]["price_yen"], c[1][0][2]))   # cheapest, then closest
+    cands.sort(key=lambda c: (c[0], -c[1]["price_yen"]), reverse=True)   # best location first
     l, hooks, est, fees = pick(cands, fx, last_source)
     if l is None:
-        tg_text(f"No deal today ({today}) – every candidate had yearly fees over {FEE_LIMIT:.0%} of the price.")
+        tg_text(f"No deal today ({today}) – every candidate failed the fee "
+                f"({FEE_LIMIT:.0%}) or yield ({MIN_YIELD:.0f}%) rule.")
         return
 
     usd = l["price_yen"] * fx
@@ -761,7 +835,9 @@ def main():
             posted[u] = today
         posted["fp:" + l["fp"]] = today
         save_json(POSTED_FILE, posted)
-        save_json(ROTATION_FILE, {"last_source": l.get("source"), "date": today})
+        recent = ([name] + [h for h in recent if h != name])[:RECENT_HOOKS]
+        save_json(ROTATION_FILE, {"last_source": l.get("source"), "date": today,
+                                  "recent_hooks": recent})
         print("Saved to state/posted.json")
     elif not ok:
         print("Telegram failed – not marking as posted, will retry next run")
