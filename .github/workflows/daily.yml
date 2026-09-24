@@ -28,6 +28,8 @@ jobs:
       CHAT_ID:        ${{ secrets.CHAT_ID }}
       AIRROI_API_KEY: ${{ secrets.AIRROI_API_KEY }}
       AIRROI_KEY:     ${{ secrets.AIRROI_KEY }}
+      GROK_API_KEY:   ${{ secrets.GROK_API_KEY }}
+      PEXELS_KEY:     ${{ secrets.PEXELS_KEY }}
 
       # ── your settings ──
       MAX_PRICE_USD:    "100000"
@@ -48,6 +50,13 @@ jobs:
       MIN_YIELD_PCT:    "0"      # skip houses whose Airbnb estimate is below this
       MAX_CHECK:        "40"     # how many top-located houses to check fees/AirROI for
       RECENT_HOOKS:     "5"      # don't repeat an attraction featured in the last N posts
+
+      # ── area slides (slides 2 & 3) ──
+      GROK_MODEL:       "grok-4.6"
+      PHOTO_CHECKS:     "6"      # Grok photo checks per slide (photos of the place)
+      GENERIC_CHECKS:   "4"      # extra checks per slide for the generic Japan fallback
+      AREA_OVERLAY:     "0.75"   # black overlay on slides 2 & 3 (0.75 = 75%)
+      LIBRARY_MAX:      "60"     # photos kept in state/photo_library for reuse
 
       DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
 
@@ -81,13 +90,13 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Save state (posted list + caches)
+      - name: Save state (posted list + caches + photo library)
         if: always()
         run: |
           git config user.name  "akiya-bot"
           git config user.email "akiya-bot@users.noreply.github.com"
           mkdir -p state
-          git add state
+          git add -A state
           if git diff --cached --quiet; then
             echo "Nothing new to save"
           else
