@@ -2,7 +2,8 @@ name: Daily akiya post
 
 on:
   schedule:
-    - cron: "0 0 * * *"        # every day at 00:00 UTC = 09:00 Japan time
+    - cron: "40 21 * * *"      # 05:40 GMT+8 start, post arrives around 06:00
+    - cron: "40 23 * * *"      # 07:40 GMT+8 backup, skipped if already posted today
   workflow_dispatch:           # adds the "Run workflow" button
     inputs:
       dry_run:
@@ -51,6 +52,10 @@ jobs:
       MAX_CHECK:        "40"     # how many top-located houses to check fees/AirROI for
       RECENT_HOOKS:     "5"      # don't repeat an attraction featured in the last N posts
 
+      # ── listing check (updated recently, not sold / under negotiation) ──
+      MAX_LISTING_AGE_DAYS: "90"
+      NO_DATE_OK:       "0"      # 1 = allow listings whose page shows no update date
+
       # ── area slides (slides 2 & 3) ──
       GROK_MODEL:       "grok-4.6"
       PHOTO_CHECKS:     "6"      # Grok photo checks per slide (photos of the place)
@@ -64,25 +69,46 @@ jobs:
       - name: Get the code
         uses: actions/checkout@v4
 
+      - name: Already posted today?
+        id: guard
+        run: |
+          python3 - <<'EOF'
+          import json, os, datetime as dt
+          today = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=9)).strftime("%Y-%m-%d")
+          try:
+              with open("state/rotation.json", encoding="utf-8") as f:
+                  last = json.load(f).get("date")
+          except Exception:
+              last = None
+          skip = last == today and os.environ["GITHUB_EVENT_NAME"] == "schedule"
+          print(f"Last post: {last} | today: {today} | skip this run: {skip}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"skip={'true' if skip else 'false'}\n")
+          EOF
+
       - name: Set up Python
+        if: steps.guard.outputs.skip != 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
 
       - name: Install fonts
+        if: steps.guard.outputs.skip != 'true'
         run: sudo apt-get install -y fonts-dejavu-core
 
       - name: Install Python packages
+        if: steps.guard.outputs.skip != 'true'
         run: |
           pip install requests pillow beautifulsoup4 lxml
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run the bot
+        if: steps.guard.outputs.skip != 'true'
         run: python main.py
 
       - name: Upload slides (for checking)
-        if: always()
+        if: always() && steps.guard.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: slides
@@ -91,7 +117,7 @@ jobs:
           retention-days: 7
 
       - name: Save state (posted list + caches + photo library)
-        if: always()
+        if: always() && steps.guard.outputs.skip != 'true'
         run: |
           git config user.name  "akiya-bot"
           git config user.email "akiya-bot@users.noreply.github.com"
