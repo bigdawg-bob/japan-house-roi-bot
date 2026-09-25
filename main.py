@@ -22,9 +22,12 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
          -> photo library (any photo from any earlier post) -> unchecked stock
          -> this listing's photos -> fallback_photos/ folder. 75% black overlay.
          No photo at all -> no post today (retry next run).
-      -> 1080x1350 slides -> Telegram (album + copyable caption).
+      -> Reel: 1080x1920, exactly 7.0 s, one shot, 70% black overlay, ONE centred line
+         (max 6 words, Liberation Sans Bold, +60 tracking), text on 0.5 s -> 6.5 s.
+         Line: "19 AIRBNBS IN NOZAWA ONSEN" > "19 AIRBNBS" > "WHY $203/NT WORKS".
+      -> 1080x1350 slides -> Telegram (album + copyable caption + reel video).
 """
-import base64, hashlib, io, itertools, json, math, os, re, time
+import base64, hashlib, io, itertools, json, math, os, re, shutil, subprocess, time
 from datetime import datetime, timezone, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -90,6 +93,20 @@ FACTS_DAYS     = 180                                      # re-ask Grok for town
 LIBRARY_MAX    = int(_env("LIBRARY_MAX", "60"))           # photos kept for reuse
 SLIDE3_HISTORY = 30                                       # slide 3 fact combos remembered
 BOT_UA         = {"User-Agent": "yama-yield-akiya-bot/1.0 (Instagram @yama.yield; GitHub Actions)"}
+
+# ── reel (7 s vertical video, one line of text) ──
+REEL_ON      = _env("REEL", "1") == "1"                 # REEL=0 turns the reel off
+REEL_W, REEL_H = 1080, 1920
+REEL_FPS     = 30
+REEL_SECS    = 7.0                                      # exactly 7.0 s = 210 frames
+REEL_TEXT_ON, REEL_TEXT_OFF = 0.5, 6.5                  # text visible from 0.5 s to 6.5 s
+REEL_OVERLAY = min(1.0, max(0.0, float(_env("REEL_OVERLAY", "0.70"))))   # 70% black
+REEL_MAX_PX  = int(_env("REEL_MAX_PX", "130"))          # biggest text size
+REEL_MIN_PX  = int(_env("REEL_MIN_PX", "44"))           # smallest text allowed (6-word lines need ~46 px)
+REEL_WORDS   = 6                                        # max words per line
+REEL_TRACK   = 60                                       # letter spacing, 1/1000 em (+60 tracking)
+REEL_MAXW    = 960                                      # max text width in px
+REEL_PHOTO   = _env("REEL_PHOTO", "dusk").lower()       # dusk | day | cover
 
 def _weights(s):
     out = {}
@@ -1650,12 +1667,125 @@ def facts_slide(pic, h, l, hooks, facts, e, s3):
     put(d, (X + bw / 2, 1142), cta, cf, white, "mm", 0, 0)
     return img
 
+
+# ─── reel (7 s vertical video, one centred line) ─────────────────────
+REEL_FONT_FILES = [FONT_DIR / "Reel-Bold.ttf",                     # optional: your own copy
+                   "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+                   "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+                   "LiberationSans-Bold.ttf",
+                   FONT_DIR / "Sans-Bold.ttf"]
+
+@lru_cache(maxsize=1)
+def reel_font_file():
+    for p in REEL_FONT_FILES:
+        try:
+            ImageFont.truetype(str(p), 20)
+            return str(p)
+        except OSError:
+            continue
+    return None
+
+@lru_cache(maxsize=128)
+def rfont(size):
+    p = reel_font_file()
+    return ImageFont.truetype(p, size) if p else cfont("sans", size, 700)
+
+def reel_candidates(h, facts, e):
+    """Best line first: '19 AIRBNBS IN NOZAWA ONSEN' > '19 AIRBNBS' > 'WHY $203/NT WORKS'."""
+    out = []
+    comp = ((facts or {}).get("points") or {}).get("competition") or ""
+    m = re.search(r"(\d[\d,]*)\s*\+?\s*(?:airbnbs?|vacation rentals?|rentals?|listings?)",
+                  comp, re.I)
+    if m:
+        n = m.group(1)
+        word = "AIRBNB" if n == "1" else "AIRBNBS"
+        out.append(f"{n} {word} IN {place_name(h).upper()}")
+        out.append(f"{n} {word}")
+    adr = e.get("adr")
+    if isinstance(adr, (int, float)) and adr > 0:
+        out.append(f"WHY ${int(round(adr)):,}/NT WORKS")
+    return out
+
+def reel_line(d, h, facts, e):
+    """(text, font, size, tracking px) for the first line that fits, or None.
+    Skips lines over REEL_WORDS words or needing less than REEL_MIN_PX to fit."""
+    for s in reel_candidates(h, facts, e):
+        words = len(s.split())
+        if words > REEL_WORDS:
+            print(f"  reel: skip '{s}' ({words} words > {REEL_WORDS})")
+            continue
+        size = REEL_MAX_PX
+        while size >= REEL_MIN_PX:
+            f = rfont(size)
+            track = size * REEL_TRACK / 1000
+            if text_width(d, s, f, track) <= REEL_MAXW:
+                return s, f, size, track
+            size -= 2
+        print(f"  reel: skip '{s}' (would need < {REEL_MIN_PX}px to fit)")
+    return None
+
+def ffmpeg_exe():
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return shutil.which("ffmpeg")
+
+def build_reel(pic, h, facts, e):
+    """out/reel.mp4: 1080x1920, 7.0 s, one shot, 70% black, one centred line
+    visible 0.5 s -> 6.5 s. Returns (path, line) or (None, None)."""
+    exe = ffmpeg_exe()
+    if not exe:
+        print("!! reel: ffmpeg not found (pip install imageio-ffmpeg) – no reel today")
+        return None, None
+    bg = ImageOps.fit(pic["img"], (REEL_W, REEL_H), Image.LANCZOS)
+    bg = Image.blend(bg, Image.new("RGB", bg.size, (0, 0, 0)), REEL_OVERLAY)
+    line = reel_line(ImageDraw.Draw(bg), h, facts, e)
+    if not line:
+        print("!! reel: no line fits – no reel today")
+        return None, None
+    s, f, size, track = line
+    txt = bg.copy()
+    put(ImageDraw.Draw(txt), (REEL_W / 2, REEL_H / 2), s, f, (255, 255, 255), "mm", track, 0)
+    txt.save(OUT / "reel_frame.jpg", "JPEG", quality=90)          # preview still
+
+    frames = int(round(REEL_SECS * REEL_FPS))
+    on, off = round(REEL_TEXT_ON * REEL_FPS), round(REEL_TEXT_OFF * REEL_FPS)
+    out = OUT / "reel.mp4"
+    cmd = [exe, "-y", "-loglevel", "error",
+           "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{REEL_W}x{REEL_H}",
+           "-r", str(REEL_FPS), "-i", "-",
+           "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+           "-t", f"{REEL_SECS}", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+           "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", "-movflags", "+faststart",
+           str(out)]
+    raw_bg, raw_txt = bg.tobytes(), txt.tobytes()
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        for i in range(frames):
+            proc.stdin.write(raw_txt if on <= i < off else raw_bg)
+    except BrokenPipeError:
+        pass
+    finally:
+        try:
+            proc.stdin.close()
+        except OSError:
+            pass
+    err = proc.stderr.read().decode(errors="replace")
+    proc.wait()
+    if proc.returncode != 0 or not out.exists():
+        print(f"!! reel: ffmpeg failed ({proc.returncode}): {err[:500]}")
+        return None, None
+    print(f"Reel: {out} | {s} | {size}px | {frames} frames | font {Path(reel_font_file() or 'fallback').name}")
+    return out, s
+
+
 def build_slides(l, hooks, usd, e, rot=None):
-    """3 slides: cover, the payback (day), why this rents (dusk).
-    Returns (slide paths, area photo credits, slide 3 wording),
-    or (None, None, None) if no photo at all."""
+    """3 slides: cover, the payback (day), why this rents (dusk) + the reel.
+    Returns (slide paths, area photo credits, slide 3 wording, (reel path, reel line)),
+    or (None, None, None, None) if no photo at all."""
     OUT.mkdir(exist_ok=True)
-    for old in OUT.glob("slide_*.jpg"):
+    for old in list(OUT.glob("slide_*.jpg")) + list(OUT.glob("reel*")):
         old.unlink()
     h0 = hooks[0]
 
@@ -1682,7 +1812,7 @@ def build_slides(l, hooks, usd, e, rot=None):
             print("  no listing photo – the cover uses the area photo")
     if not (cover and day and dusk):
         print("!! no photo found anywhere – not posting today")
-        return None, None, None
+        return None, None, None, None
 
     facts = None
     try:
@@ -1708,6 +1838,15 @@ def build_slides(l, hooks, usd, e, rot=None):
         s.save(p, "JPEG", quality=90)
         paths.append(p)
 
+    # reel (never stops the post if it fails)
+    reel = (None, None)
+    if REEL_ON:
+        try:
+            pic = {"dusk": dusk, "day": day, "cover": cover}.get(REEL_PHOTO, dusk)
+            reel = build_reel(pic, h0, facts, e)
+        except Exception as ex:
+            print(f"!! reel error: {ex!r}")
+
     # remember every photo used, so later posts can reuse it
     try:
         for pic, mood in ((cover, None), (day, "day"), (dusk, "dusk")):
@@ -1717,7 +1856,7 @@ def build_slides(l, hooks, usd, e, rot=None):
         print(f"!! photo library error: {ex!r}")
 
     credits = list(dict.fromkeys(p["credit"] for p in (day, dusk) if p.get("credit")))
-    return paths, credits, s3
+    return paths, credits, s3, reel
 
 
 # ─── caption ─────────────────────────────────────────────────────────
@@ -1795,6 +1934,24 @@ def tg_album(paths, caption):
         for f in files.values():
             f.close()
     print(f"Telegram album: {r.status_code} {r.text[:200] if not r.ok else ''}")
+    return r.ok
+
+def tg_video(path, caption=""):
+    """Sends the reel as a normal (streamable) video."""
+    if DRY_RUN or not (BOT_TOKEN and CHAT_ID):
+        print(f"[telegram skipped] reel {path}")
+        return True
+    try:
+        with open(path, "rb") as fh:
+            r = requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendVideo",
+                              data={"chat_id": CHAT_ID, "caption": caption[:1024],
+                                    "supports_streaming": "true", "width": REEL_W,
+                                    "height": REEL_H, "duration": int(REEL_SECS)},
+                              files={"video": fh}, timeout=120)
+    except (requests.RequestException, OSError) as ex:
+        print(f"Telegram reel error: {ex}")
+        return False
+    print(f"Telegram reel: {r.status_code} {r.text[:200] if not r.ok else ''}")
     return r.ok
 
 
@@ -1882,6 +2039,9 @@ def main():
           f"photo library {lib_size} | fallback_photos/ "
           f"{'found' if FALLBACK_DIR.exists() else 'none'} | towns.json "
           f"{'found' if TOWNS_FILE.exists() else 'none'}")
+    print(f"Reel: {'on' if REEL_ON else 'OFF'} | font {reel_font_file() or 'MISSING (fallback)'} | "
+          f"{REEL_MIN_PX}-{REEL_MAX_PX}px, max {REEL_WORDS} words | photo {REEL_PHOTO} | "
+          f"ffmpeg {'found' if ffmpeg_exe() else 'MISSING'}")
     fx = get_fx()
     max_yen = MAX_PRICE_USD / fx
     listings = gather()
@@ -1941,7 +2101,7 @@ def main():
           f"{age_points(l.get('year_built'))[1]}, {e['roi'] * 100:.0f}% net yield, "
           f"~${e['monthly']:,}/mo\n  {l['url']}")
 
-    paths, area_credits, s3 = build_slides(l, hooks, usd, e, rot)
+    paths, area_credits, s3, reel = build_slides(l, hooks, usd, e, rot)
     if paths is None:
         tg_text(f"No post today ({today}) – couldn't find any photo for the slides. "
                 f"Will retry next run.")
@@ -1950,6 +2110,9 @@ def main():
     (OUT / "caption.txt").write_text(caption, encoding="utf-8")
 
     ok = tg_album(paths, caption) and tg_text(caption)
+    reel_path, reel_text = reel or (None, None)
+    if ok and reel_path:
+        tg_video(reel_path, f"🎬 Reel (7s): {reel_text}")     # a failed reel doesn't block the post
     if ok and not DRY_RUN:
         for u in l.get("all_urls", [l["url"]]):
             posted[u] = today
