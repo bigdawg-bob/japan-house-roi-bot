@@ -97,5 +97,27 @@
   "added": "2026-09-25T10:46:09+09:00",
   "uses": 1,
   "last": "2026-09-25T10:46:09+09:00"
+ },
+ "ab2fa403c0379144": {
+  "id": "pexels:9254451",
+  "credit": "Photo: Marina Leonova / Pexels",
+  "role": "area",
+  "mood": null,
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-25T14:05:21+09:00",
+  "uses": 2,
+  "last": "2026-09-25T14:05:21+09:00"
+ },
+ "5561443adfd609f3": {
+  "id": "pexels:16189924",
+  "credit": "Photo: Mak_ jp / Pexels",
+  "role": "area",
+  "mood": "dusk",
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-25T14:05:21+09:00",
+  "uses": 1,
+  "last": "2026-09-25T14:05:21+09:00"
  }
 }

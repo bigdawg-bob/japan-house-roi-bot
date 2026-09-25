@@ -289,6 +289,26 @@
    "light_ok": true,
    "score": 8,
    "why": "Calm dusk lake, dark space for text"
+  },
+  "pexels:9254451|day|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 5,
+   "why": "Busy grass steam not calm overlay"
+  },
+  "pexels:16189924|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Busy night city with window reflections"
   }
  }
 }

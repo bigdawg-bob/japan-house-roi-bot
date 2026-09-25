@@ -2,16 +2,22 @@
  "last_source": "sumai",
  "date": "2026-09-25",
  "recent_hooks": [
+  "Beppu",
   "Tazawako",
   "Kinosaki Onsen",
   "Nozawa Onsen",
-  "Ureshino Onsen",
-  "Myoko Akakura"
+  "Ureshino Onsen"
  ],
  "s3_templates": [
+  "C",
   "A"
  ],
  "s3_points": [
+  [
+   "foreign",
+   "access",
+   "trend"
+  ],
   [
    "ryokan",
    "competition",
