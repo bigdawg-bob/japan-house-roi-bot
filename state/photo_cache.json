@@ -249,6 +249,46 @@
    "light_ok": true,
    "score": 6,
    "why": "Snowy night lights, busy road streaks"
+  },
+  "pexels:29817799|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": true,
+   "japan": false,
+   "landmark": false,
+   "light_ok": false,
+   "score": 2,
+   "why": "Indoor dogs, unrelated to ski resort"
+  },
+  "pexels:9661344|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": true,
+   "japan": false,
+   "landmark": false,
+   "light_ok": false,
+   "score": 2,
+   "why": "Dark car dash unrelated to ski Japan"
+  },
+  "pexels:20053787|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": true,
+   "japan": false,
+   "landmark": false,
+   "light_ok": false,
+   "score": 2,
+   "why": "Candy closeup, light bg poor contrast"
+  },
+  "pexels:20957295|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Calm dusk lake, dark space for text"
   }
  }
 }

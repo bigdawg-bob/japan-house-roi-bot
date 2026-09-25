@@ -73,7 +73,29 @@
   "kind": "ski",
   "generic": false,
   "added": "2026-09-24T23:16:13+09:00",
-  "uses": 2,
-  "last": "2026-09-24T23:16:13+09:00"
+  "uses": 3,
+  "last": "2026-09-25T10:46:09+09:00"
+ },
+ "bdb6cf49a2ccfd01": {
+  "id": "house:https://akiya.sumai.biz/wp-content/uploads/2024/04/6semboku-1.jpg",
+  "credit": "Photo: akiya.sumai.biz",
+  "role": "house",
+  "mood": null,
+  "kind": "ski",
+  "generic": false,
+  "added": "2026-09-25T10:46:09+09:00",
+  "uses": 1,
+  "last": "2026-09-25T10:46:09+09:00"
+ },
+ "5b960bc59e313c3e": {
+  "id": "pexels:20957295",
+  "credit": "Photo: Rafael  Alexandrino de Mattos / Pexels",
+  "role": "area",
+  "mood": "dusk",
+  "kind": "ski",
+  "generic": false,
+  "added": "2026-09-25T10:46:09+09:00",
+  "uses": 1,
+  "last": "2026-09-25T10:46:09+09:00"
  }
 }
