@@ -105,7 +105,10 @@ jobs:
 
       - name: Run the bot
         if: steps.guard.outputs.skip != 'true'
-        run: python main.py
+        timeout-minutes: 20
+        run: python -u main.py
+        env:
+          PYTHONUNBUFFERED: "1"
 
       - name: Upload slides (for checking)
         if: always() && steps.guard.outputs.skip != 'true'
