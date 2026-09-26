@@ -51,8 +51,8 @@
   "kind": "onsen",
   "generic": false,
   "added": "2026-09-24T22:32:10+09:00",
-  "uses": 1,
-  "last": "2026-09-24T22:32:10+09:00"
+  "uses": 2,
+  "last": "2026-09-26T13:46:48+09:00"
  },
  "b359c5e760605040": {
   "id": "pexels:28969414",
@@ -62,8 +62,8 @@
   "kind": "onsen",
   "generic": false,
   "added": "2026-09-24T22:32:10+09:00",
-  "uses": 1,
-  "last": "2026-09-24T22:32:10+09:00"
+  "uses": 2,
+  "last": "2026-09-26T13:46:48+09:00"
  },
  "4c8fb638974dfafb": {
   "id": "pexels:33314894",
@@ -130,5 +130,16 @@
   "added": "2026-09-26T13:17:22+09:00",
   "uses": 1,
   "last": "2026-09-26T13:17:22+09:00"
+ },
+ "8399bce8cc5f94d8": {
+  "id": "house:https://akiya.sumai.biz/wp-content/uploads/2026/05/867kt-1.jpg",
+  "credit": "Photo: akiya.sumai.biz",
+  "role": "house",
+  "mood": null,
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-26T13:46:48+09:00",
+  "uses": 1,
+  "last": "2026-09-26T13:46:48+09:00"
  }
 }

@@ -19,14 +19,17 @@
  "Kinosaki Onsen": {
   "v": {
    "known_for": "Historic seven-bath onsen town",
-   "visitors": "750k visitors/yr",
-   "guests": [
-    "Japanese couples",
-    "American tourists",
-    "Taiwanese tourists"
-   ]
+   "visitors": "776k visitors/yr",
+   "minpaku_cap": null,
+   "points": {
+    "ryokan": "Ryokan: ¥14k-28k per person",
+    "access": "2.5 hrs from Kyoto by train",
+    "trend": "Foreign stays +23% vs 2019",
+    "plan_b": "Ryokan staff housing shortage",
+    "tattoo": "All 7 baths tattoo-friendly"
+   }
   },
-  "d": "2026-09-24T22:32:10+09:00"
+  "d": "2026-09-26T13:46:32+09:00"
  },
  "Tazawako": {
   "v": {

@@ -2,18 +2,24 @@
  "last_source": "sumai",
  "date": "2026-09-26",
  "recent_hooks": [
+  "Kinosaki Onsen",
   "Nozawa Onsen",
   "Beppu",
   "Tazawako",
-  "Kinosaki Onsen",
   "Ureshino Onsen"
  ],
  "s3_templates": [
+  "E",
   "B",
   "C",
   "A"
  ],
  "s3_points": [
+  [
+   "plan_b",
+   "trend",
+   "tattoo"
+  ],
   [
    "access",
    "near1",
