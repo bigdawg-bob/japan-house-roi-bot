@@ -2,13 +2,14 @@
  "last_source": "sumai",
  "date": "2026-09-26",
  "recent_hooks": [
+  "Myoko Akakura",
   "Takayama old town",
   "Kinosaki Onsen",
   "Nozawa Onsen",
-  "Beppu",
-  "Tazawako"
+  "Beppu"
  ],
  "s3_templates": [
+  "A",
   "D",
   "E",
   "B",
@@ -16,6 +17,11 @@
   "A"
  ],
  "s3_points": [
+  [
+   "occupancy",
+   "stay",
+   "pets"
+  ],
   [
    "foreign",
    "ryokan",

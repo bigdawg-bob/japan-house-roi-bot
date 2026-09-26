@@ -339,6 +339,16 @@
    "light_ok": true,
    "score": 4,
    "why": "white signs clash with overlay text"
+  },
+  "pexels:11177294|day|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Busy slopes, snow hurts white text"
   }
  }
 }
