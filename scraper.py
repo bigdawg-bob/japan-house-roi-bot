@@ -1,6 +1,8 @@
 """
 Sumai空き家 (akiya.sumai.biz) scraper.
 main.py calls scrape() -> list of listing dicts. Nothing runs on import.
+Progress is saved every few pages, and scraping stops after a time limit,
+so a slow run still moves forward and the next run continues where it stopped.
 """
 import json, os, re, time, unicodedata
 import xml.etree.ElementTree as ET
@@ -18,11 +20,20 @@ GEO_FILE   = STATE / "geocode.json"
 GSI_URL    = "https://msearch.gsi.go.jp/address-search/AddressSearch"
 NS         = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 
-MAX_FETCH  = int(os.getenv("SUMAI_MAX_FETCH", "150"))   # detail pages per run
-DELAY      = 1.0                                         # seconds between pages
+MAX_FETCH     = int(os.getenv("SUMAI_MAX_FETCH") or "150")              # detail pages per run
+TIME_BUDGET   = float(os.getenv("SUMAI_TIME_BUDGET_MIN") or "8") * 60   # stop scraping after this
+SAVE_EVERY    = 10                                   # save progress every N pages
+DELAY         = 1.0                                  # seconds between pages
+PAGE_TIMEOUT  = (10, 25)                             # (connect, read) seconds
+GEO_TIMEOUT   = (5, 10)
+GEO_FAIL_STOP = 3                                    # map service fails 3x in a row -> stop asking this run
+GEO_RETRY_MAX = 300                                  # old listings without a location, retried per run
 UA         = {"User-Agent": "Mozilla/5.0 (compatible; akiya-bot; 1 req/s)"}
 SKIP_WORDS = ("受付停止", "交渉中", "商談中", "成約", "契約済", "売約")
 PARSE_VERSION = 2      # bump when parsing improves -> old records missing a year get re-checked once
+
+SESSION = requests.Session()                         # reuses connections = much faster
+SESSION.headers.update(UA)
 
 PREFS = ("北海道 青森県 岩手県 宮城県 秋田県 山形県 福島県 茨城県 栃木県 群馬県 埼玉県 "
          "千葉県 東京都 神奈川県 新潟県 富山県 石川県 福井県 山梨県 長野県 岐阜県 静岡県 "
@@ -46,11 +57,17 @@ AGE_RE  = r"(?<![改増移])築(?:年数)?\s*:?\s*(?:約|およそ)?\s*(\d{1,3})
 
 # ─── helpers ─────────────────────────────────────────────────────────
 def load(p):
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    except ValueError:
+        print(f"  !! {p.name} was unreadable – starting it fresh")
+        return {}
 
 def save(p, data):
     STATE.mkdir(exist_ok=True)
-    p.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(p)                                    # never leaves a half-written file
 
 def clean(s):
     """Full-width -> half-width (４ＬＤＫ -> 4LDK, ㎡ -> m2), drop 1,000 commas."""
@@ -59,43 +76,54 @@ def clean(s):
 
 def fetch(url):
     try:
-        r = requests.get(url, headers=UA, timeout=30)
+        r = SESSION.get(url, timeout=PAGE_TIMEOUT)
         if r.status_code == 200:
             return r
         print(f"  HTTP {r.status_code}: {url}")
     except requests.RequestException as e:
-        print(f"  fetch error {url}: {e}")
+        print(f"  fetch error {url}: {e.__class__.__name__}")
     key = os.getenv("SCRAPER_API_KEY")
     if key:
         try:
             r = requests.get("https://api.scraperapi.com/",
-                             params={"api_key": key, "url": url}, timeout=70)
+                             params={"api_key": key, "url": url}, timeout=(10, 60))
             if r.status_code == 200:
                 return r
             print(f"  ScraperAPI {r.status_code}: {url}")
         except requests.RequestException as e:
-            print(f"  ScraperAPI error {url}: {e}")
+            print(f"  ScraperAPI error {url}: {e.__class__.__name__}")
     return None
 
 
 # ─── sitemap ─────────────────────────────────────────────────────────
 def post_urls():
-    """{listing_url: lastmod} from every post-sitemap*.xml"""
-    urls = {}
+    """({listing_url: lastmod}, complete) from every post-sitemap*.xml.
+    complete=False if any part failed (then no listings are dropped from the cache)."""
+    urls, complete = {}, True
     idx = fetch(f"{BASE}/sitemap.xml")
     if not idx:
-        return urls
-    subs = [e.text.strip() for e in ET.fromstring(idx.content).iter(NS + "loc")
-            if e.text and "post-sitemap" in e.text]
+        return urls, False
+    try:
+        subs = [e.text.strip() for e in ET.fromstring(idx.content).iter(NS + "loc")
+                if e.text and "post-sitemap" in e.text]
+    except ET.ParseError as e:
+        print(f"  sitemap unreadable: {e}")
+        return urls, False
     for sm in subs:
         r = fetch(sm)
-        if r:
+        if not r:
+            complete = False
+            continue
+        try:
             for u in ET.fromstring(r.content).iter(NS + "url"):
                 loc = u.findtext(NS + "loc")
                 if loc:
                     urls[loc.strip()] = (u.findtext(NS + "lastmod") or "").strip()
+        except ET.ParseError as e:
+            print(f"  sitemap part unreadable {sm}: {e}")
+            complete = False
         time.sleep(DELAY)
-    return urls
+    return urls, complete
 
 
 # ─── parsing ─────────────────────────────────────────────────────────
@@ -150,7 +178,10 @@ def parse_area(body):
     m = re.search(r"(?:延べ?床面積|建物面積|床面積)[^0-9]{0,15}([\d.]+)\s*(m2|平米|坪)", body)
     if not m:
         return None
-    v = float(m.group(1))
+    try:
+        v = float(m.group(1))
+    except ValueError:
+        return None
     return round(v * 3.3058, 1) if m.group(2) == "坪" else v
 
 def parse_photos(soup, content):
@@ -198,38 +229,72 @@ def municipality(addr):
     m = re.match(r"(.+?郡.+?[町村]|.+?[市町村])", addr)
     return m.group(1) if m else None
 
+def _gsi(q):
+    """GSI hits for q ([] = answered, nothing found), or None if GSI didn't answer."""
+    try:
+        r = SESSION.get(GSI_URL, params={"q": q}, timeout=GEO_TIMEOUT)
+        if not r.ok:
+            print(f"  map lookup HTTP {r.status_code}: {q}")
+            return None
+        hits = r.json()
+        return hits if isinstance(hits, list) else []
+    except (requests.RequestException, ValueError) as e:
+        print(f"  map lookup error ({q}): {e.__class__.__name__}")
+        return None
+    finally:
+        time.sleep(0.3)
+
 def geocode(pref, addr, geo):
-    if addr in geo:
-        return geo[addr]
-    result = None
+    """Returns (result, failed).
+    result: [lat, lng, level] = found, False = GSI answered but found nothing.
+    failed=True: GSI didn't answer -> nothing is remembered, retried next run."""
+    hit = geo.get(addr)
+    if isinstance(hit, list) or hit is False:
+        return hit, False                            # old None entries are asked again
+    result = False
     for q, level in ((addr, "district"), (municipality(addr), "town")):
         if not q:
             continue
-        try:
-            r = requests.get(GSI_URL, params={"q": q}, timeout=20)
-            hits = r.json() if r.ok else []
-        except (requests.RequestException, ValueError):
-            hits = []
-        time.sleep(0.3)
+        key = "town:" + q if level == "town" else None
+        if key:                                      # many houses share a town -> ask once
+            cached = geo.get(key)
+            if isinstance(cached, list):
+                result = cached
+                break
+            if cached is False:
+                continue
+        hits = _gsi(q)
+        if hits is None:
+            return None, True
+        found = False
         short = q.replace(pref, "")[:3]
         for h in hits:
-            t = h.get("properties", {}).get("title", "")
-            if pref in t or short in t:              # reject matches in other prefectures
-                lng, lat = h["geometry"]["coordinates"]
-                result = [lat, lng, level]
-                break
-        if result:
+            try:
+                t = h.get("properties", {}).get("title", "")
+                if pref in t or short in t:          # reject matches in other prefectures
+                    lng, lat = h["geometry"]["coordinates"][:2]
+                    found = [lat, lng, level]
+                    break
+            except (AttributeError, KeyError, TypeError, ValueError):
+                continue
+        if key:
+            geo[key] = found
+        if found:
+            result = found
             break
     geo[addr] = result
-    return result
+    return result, False
 
 
 # ─── entry point used by main.py ─────────────────────────────────────
 def scrape():
+    t0 = time.time()
+    deadline = t0 + TIME_BUDGET
     cache, geo = load(CACHE_FILE), load(GEO_FILE)
-    urls = post_urls()
-    print(f"Sitemap: {len(urls)} listing URLs | cache: {len(cache)}")
-    if urls:
+    urls, complete = post_urls()
+    print(f"Sitemap: {len(urls)} listing URLs{'' if complete else ' (INCOMPLETE)'} | "
+          f"cache: {len(cache)}")
+    if urls and complete:
         cache = {u: v for u, v in cache.items() if u in urls}     # drop removed listings
 
     by_date = sorted(urls.items(), key=lambda x: x[1], reverse=True)
@@ -241,31 +306,79 @@ def scrape():
                if u not in new_set and cache[u].get("ok")
                and cache[u].get("year_built") is None
                and cache[u].get("pv", 1) < PARSE_VERSION]
-    todo = new + reparse
+    todo = (new + reparse)[:MAX_FETCH]
     print(f"{len(new)} new/updated + {len(reparse)} re-check (missing year), "
-          f"fetching up to {MAX_FETCH}")
+          f"fetching up to {MAX_FETCH} (time limit {TIME_BUDGET / 60:.0f} min)")
 
-    try:
-        for u in todo[:MAX_FETCH]:
-            rec = parse_page(u)
-            time.sleep(DELAY)
-            if rec is None:
-                continue
-            rec["lastmod"] = urls[u]
-            if rec["ok"]:
-                g = geocode(rec["pref"], rec["location"], geo)
-                if g:
-                    rec["lat"], rec["lng"], rec["geo_level"] = g
-            cache[u] = rec
-    finally:
+    geo_state = {"fails": 0, "down": False}
+
+    def locate(rec):
+        """Adds lat/lng. If the map service is down, leaves it for the next run."""
+        if geo_state["down"]:
+            return
+        g, failed = geocode(rec["pref"], rec["location"], geo)
+        if failed:
+            geo_state["fails"] += 1
+            if geo_state["fails"] >= GEO_FAIL_STOP:
+                geo_state["down"] = True
+                print("  !! map service (GSI) not answering – no more location lookups "
+                      "this run, they will be retried next run")
+            return
+        geo_state["fails"] = 0
+        rec.pop("geo_miss", None)
+        if g:
+            rec["lat"], rec["lng"], rec["geo_level"] = g
+        else:
+            rec["geo_miss"] = True                   # GSI really doesn't know this address
+
+    def checkpoint():
         save(CACHE_FILE, cache)
         save(GEO_FILE, geo)
 
+    fetched = usable = 0
+    stop_note = ""
+    try:
+        for i, u in enumerate(todo, 1):
+            if time.time() > deadline:
+                stop_note = f" – stopped at the {TIME_BUDGET / 60:.0f}-min limit, rest next run"
+                break
+            rec = parse_page(u)
+            time.sleep(DELAY)
+            if rec is not None:
+                rec["lastmod"] = urls[u]
+                if rec["ok"]:
+                    locate(rec)
+                    usable += 1
+                cache[u] = rec
+                fetched += 1
+            if i % SAVE_EVERY == 0:
+                checkpoint()
+                print(f"  {i}/{len(todo)} pages | {usable} usable | "
+                      f"{time.time() - t0:.0f}s | saved")
+        print(f"Pages done: {fetched}/{len(todo)} ({time.time() - t0:.0f}s){stop_note}")
+
+        # listings saved earlier without a location (map service was down) -> try again
+        retry = [v for v in cache.values()
+                 if v.get("ok") and v.get("lat") is None and not v.get("geo_miss")]
+        if retry and not geo_state["down"] and time.time() < deadline:
+            print(f"Location retry: {len(retry)} listings without a location "
+                  f"(up to {GEO_RETRY_MAX} this run)")
+            for n, rec in enumerate(retry[:GEO_RETRY_MAX], 1):
+                if time.time() > deadline or geo_state["down"]:
+                    break
+                locate(rec)
+                if n % 25 == 0:
+                    checkpoint()
+    finally:
+        checkpoint()
+
     out = [v for v in cache.values() if v.get("ok") and v.get("lat") is not None]
     skipped = sum(1 for v in cache.values() if not v.get("ok"))
+    no_loc = sum(1 for v in cache.values() if v.get("ok") and v.get("lat") is None)
     no_year = sum(1 for v in out if v.get("year_built") is None)
-    print(f"Usable listings: {len(out)} (skipped {skipped} rentals/unavailable/unparsed) "
-          f"| build year unknown: {no_year}")
+    print(f"Usable listings: {len(out)} (skipped {skipped} rentals/unavailable/unparsed, "
+          f"{no_loc} without a location yet) | build year unknown: {no_year} | "
+          f"scraping took {time.time() - t0:.0f}s")
     return out
 
 
