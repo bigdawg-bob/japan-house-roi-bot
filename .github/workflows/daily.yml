@@ -4,57 +4,62 @@ on:
   schedule:
     - cron: "40 21 * * *"      # 05:40 GMT+8 start, post arrives around 06:00
     - cron: "40 23 * * *"      # 07:40 GMT+8 backup, skipped if already posted today
-  workflow_dispatch:           # adds the "Run workflow" button
+  workflow_dispatch:
     inputs:
       dry_run:
         description: "Test only (make slides, don't post to Telegram)"
         type: boolean
         default: false
+      refresh_road_times:
+        description: "Delete saved drive times so all houses are re-timed with Google (use once)"
+        type: boolean
+        default: false
 
 permissions:
-  contents: write              # lets the bot save state/ back to the repo
+  contents: write
 
 concurrency:
-  group: akiya-bot             # never run two at once
+  group: akiya-bot
   cancel-in-progress: false
 
 jobs:
   post:
-    runs-on: ubuntu-latest
+    # Blocked by a site? Add repo Variable RUNNER = self-hosted to run on your own computer.
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 45
 
     env:
       # ── secrets (Settings → Secrets and variables → Actions) ──
-      BOT_TOKEN:      ${{ secrets.BOT_TOKEN }}
-      CHAT_ID:        ${{ secrets.CHAT_ID }}
-      AIRROI_API_KEY: ${{ secrets.AIRROI_API_KEY }}
-      AIRROI_KEY:     ${{ secrets.AIRROI_KEY }}
-      GROK_API_KEY:   ${{ secrets.GROK_API_KEY }}
-      PEXELS_KEY:     ${{ secrets.PEXELS_KEY }}
+      BOT_TOKEN:       ${{ secrets.BOT_TOKEN }}
+      CHAT_ID:         ${{ secrets.CHAT_ID }}
+      AIRROI_API_KEY:  ${{ secrets.AIRROI_API_KEY }}
+      AIRROI_KEY:      ${{ secrets.AIRROI_KEY }}
+      GROK_API_KEY:    ${{ secrets.GROK_API_KEY }}
+      PEXELS_KEY:      ${{ secrets.PEXELS_KEY }}
+      GOOGLE_MAPS_KEY: ${{ secrets.GOOGLE_MAPS_KEY || vars.GOOGLE_MAPS_KEY }}   # ← was missing
 
       # ── your settings ──
       MAX_PRICE_USD:    "100000"
       MAX_DRIVE_MIN:    "45"
       MAX_WALK_MIN:     "15"
       FEE_LIMIT_PCT:    "15"
-      HOOK_KINDS:       "ski,onsen,sight,beach,nature,attraction"
+      HOOK_KINDS:       "ski,onsen,sight,beach,nature"
       MAX_AIRROI_CALLS: "1"
 
-      # ── which sites to scrape ──
-      # At Home + HOME'S block GitHub's servers (HTTP 403), so only Sumai for now.
-      SOURCES:          "sumai"
+      # ── which sites to scrape (change with repo Variable SOURCES, e.g. "sumai,ieichiba") ──
+      SOURCES:          ${{ vars.SOURCES || 'sumai' }}
       ROTATE_SOURCES:   "1"
 
       # ── Sumai scraping speed ──
-      SUMAI_MAX_FETCH:       "150"   # listing pages per run (max)
-      SUMAI_TIME_BUDGET_MIN: "8"     # stop scraping after this many minutes, continue next run
+      SUMAI_MAX_FETCH:       "150"
+      SUMAI_TIME_BUDGET_MIN: "8"
 
       # ── ranking: location first, yield second ──
       HOOK_PRIORITY:    "ski=1.0,onsen=1.0,sight=0.9,beach=0.9,nature=0.8"
-      YIELD_CAP_PCT:    "15"     # yield adds at most this many points (free house = cap)
-      MIN_YIELD_PCT:    "0"      # skip houses whose Airbnb estimate is below this
-      MAX_CHECK:        "40"     # how many top-located houses to check fees/AirROI for
-      RECENT_HOOKS:     "5"      # don't repeat an attraction featured in the last N posts
+      YIELD_CAP_PCT:    "15"
+      MIN_YIELD_PCT:    "0"
+      MAX_CHECK:        "40"
+      RECENT_HOOKS:     "5"
 
       # ── listing check (NOTE: not read by the current main.py/scraper.py) ──
       MAX_LISTING_AGE_DAYS: "90"
@@ -62,10 +67,10 @@ jobs:
 
       # ── area slides (slides 2 & 3) ──
       GROK_MODEL:       "grok-4.6"
-      PHOTO_CHECKS:     "6"      # Grok photo checks per slide (photos of the place)
-      GENERIC_CHECKS:   "4"      # extra checks per slide for the generic Japan fallback
-      AREA_OVERLAY:     "0.75"   # black overlay on slides 2 & 3 (0.75 = 75%)
-      LIBRARY_MAX:      "60"     # photos kept in state/photo_library for reuse
+      PHOTO_CHECKS:     "6"
+      GENERIC_CHECKS:   "4"
+      AREA_OVERLAY:     "0.75"
+      LIBRARY_MAX:      "60"
 
       DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
 
@@ -90,6 +95,22 @@ jobs:
               f.write(f"skip={'true' if skip else 'false'}\n")
           EOF
 
+      - name: Check Google key
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          if [ -z "$GOOGLE_MAPS_KEY" ]; then
+            echo "::error::GOOGLE_MAPS_KEY is empty. Add it under Settings → Secrets and variables → Actions → Repository secrets, named exactly GOOGLE_MAPS_KEY."
+            exit 1
+          fi
+          echo "Google key present (${#GOOGLE_MAPS_KEY} characters)"
+
+      - name: Refresh road times (only when ticked)
+        if: steps.guard.outputs.skip != 'true' && inputs.refresh_road_times
+        run: |
+          mkdir -p state
+          files=$(find state -maxdepth 2 -type f \( -iname '*road*' -o -iname '*osrm*' -o -iname '*drive*' -o -iname '*route*' \))
+          if [ -z "$files" ]; then echo "No road-time cache found in state/"; else echo "Deleting:"; echo "$files"; rm -f $files; fi
+
       - name: Set up Python
         if: steps.guard.outputs.skip != 'true'
         uses: actions/setup-python@v5
@@ -99,7 +120,7 @@ jobs:
 
       - name: Install fonts
         if: steps.guard.outputs.skip != 'true'
-        run: sudo apt-get install -y fonts-dejavu-core
+        run: sudo apt-get install -y fonts-dejavu-core || echo "font install skipped"
 
       - name: Install Python packages
         if: steps.guard.outputs.skip != 'true'
@@ -113,6 +134,11 @@ jobs:
         run: python -u main.py
         env:
           PYTHONUNBUFFERED: "1"
+          # Blocked by a site? Add secret JP_PROXY = http://user:pass@host:port (a Japanese residential proxy).
+          # Empty = no proxy. Only this step uses it; APIs below always connect directly.
+          HTTPS_PROXY: ${{ secrets.JP_PROXY }}
+          HTTP_PROXY:  ${{ secrets.JP_PROXY }}
+          NO_PROXY: "googleapis.com,api.x.ai,pexels.com,api.telegram.org,airroi.com,project-osrm.org,github.com,localhost"
 
       - name: Upload slides (for checking)
         if: always() && steps.guard.outputs.skip != 'true'
