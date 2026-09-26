@@ -31,6 +31,8 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
       -> optional cover.html template ({{ hook }}, {{ location }} ...) -> out/cover.html
       -> 1080x1350 slides -> Telegram (album + copyable caption + reel video).
 """
+import faulthandler
+faulthandler.dump_traceback_later(15 * 60, exit=True)
 import base64, hashlib, io, itertools, json, math, os, re, shutil, subprocess, time
 from datetime import datetime, timezone, timedelta
 from functools import lru_cache
