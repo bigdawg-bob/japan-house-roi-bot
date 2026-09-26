@@ -37,8 +37,8 @@ jobs:
       MAX_DRIVE_MIN:    "45"
       MAX_WALK_MIN:     "15"
       FEE_LIMIT_PCT:    "15"
-      HOOK_KINDS:       "ski,onsen,sight,beach,nature"
-      MAX_AIRROI_CALLS: "15"
+      HOOK_KINDS:       "ski,onsen,sight,beach,nature,attraction"
+      MAX_AIRROI_CALLS: "1"
 
       # ── which sites to scrape ──
       # At Home + HOME'S block GitHub's servers (HTTP 403), so only Sumai for now.
