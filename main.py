@@ -22,11 +22,10 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
          -> photo library (any photo from any earlier post) -> unchecked stock
          -> this listing's photos -> fallback_photos/ folder. 75% black overlay.
          No photo at all -> no post today (retry next run).
-      -> Reel: 1080x1920, exactly 7.0 s, one shot with a slow zoom-in (Ken Burns),
-         70% black overlay, ONE centred line (max 6 words, Liberation Sans Bold,
-         +60 tracking), text fades in at 0.5 s and out at 6.5 s.
-         Line: "19 AIRBNBS IN NOZAWA ONSEN" > "19 AIRBNBS"
-               > "BEPPU ONSEN: WHY $203/NT WORKS" > "WHY $203/NT WORKS".
+      -> Reel: AI video (ai_reel.py, optional) or photo reel: 1080x1920, exactly 7.0 s,
+         one shot with a slow zoom-in (Ken Burns), 70% black overlay, ONE centred line
+         (max 4 words), text fades in at 0.5 s and out at 6.5 s.
+         Line: "$15K KINOSAKI" > "19 AIRBNBS HERE" > "25 MIN TO KINOSAKI" > "WHY $203 WORKS".
       -> optional cover.html template ({{ hook }}, {{ location }} ...) -> out/cover.html
       -> 1080x1350 slides -> Telegram (album + copyable caption + reel video).
 """
@@ -37,7 +36,7 @@ def _too_long(*_):
     raise SystemExit("!! Run hit the 25-minute limit – stopping (caches are saved)")
 signal.signal(signal.SIGALRM, _too_long)
 signal.alarm(RUN_LIMIT + 2)
-python
+
 import base64, hashlib, io, itertools, json, math, os, re, shutil, subprocess, sys, time
 T0 = time.time()                                  # run start (AI reel checks the time left)
 from datetime import datetime, timezone, timedelta
@@ -52,6 +51,13 @@ from PIL import features as pil_features
 import scraper
 import scraper_athome
 import scraper_homes
+from yield_calc import (estimate, caption_text, is_renovated, show_yield, fmt_k)
+
+try:
+    import ai_reel                                # optional: AI video reel
+except ImportError as _ex:
+    ai_reel = None
+    print(f"!! ai_reel.py not loaded ({_ex}) – photo reel only")
 
 
 # ─── settings ────────────────────────────────────────────────────────
@@ -1775,7 +1781,6 @@ def ffmpeg_exe():
         return shutil.which("ffmpeg")
 
 def build_reel(pic, h, facts, e, usd=None, l=None):
-      line = reel_line(md, h, facts, e, usd, l)
     """out/reel.mp4: 1080x1920, 7.0 s, one shot with a slow zoom-in (Ken Burns),
     70% black, one centred line fading in at 0.5 s and out at 6.5 s.
     Returns (path, line) or (None, None)."""
@@ -1792,7 +1797,7 @@ def build_reel(pic, h, facts, e, usd=None, l=None):
     # text is drawn once as a mask; it does NOT zoom (stays sharp and readable)
     mask = Image.new("L", (REEL_W, REEL_H), 0)
     md = ImageDraw.Draw(mask)
-    line = reel_line(md, h, facts, e)
+    line = reel_line(md, h, facts, e, usd, l)
     if not line:
         print("!! reel: no line fits – no reel today")
         return None, None
@@ -1857,7 +1862,7 @@ def build_reel(pic, h, facts, e, usd=None, l=None):
 
 def build_slides(l, hooks, usd, e, rot=None):
     """3 slides: cover, the payback (day), why this rents (dusk) + the reel.
-    Returns (slide paths, area photo credits, slide 3 wording, (reel path, reel line)),
+    Returns (slide paths, area photo credits, slide 3 wording, (reel path, reel line, reel caption)),
     or (None, None, None, None) if no photo at all."""
     OUT.mkdir(exist_ok=True)
     for old in (list(OUT.glob("slide_*.jpg")) + list(OUT.glob("reel*"))
@@ -1924,17 +1929,24 @@ def build_slides(l, hooks, usd, e, rot=None):
     # reel: AI video first (ski/onsen), photo reel as backup. Never stops the post.
     reel = (None, None, None)
     if REEL_ON:
-        try:
-            reel = ai_reel.make(sys.modules[__name__], h0, l, usd, e, facts) or reel
-        except Exception as ex:
-            print(f"!! AI reel error: {ex!r} – using the photo reel")
+        me = sys.modules[__name__]
+        if ai_reel:
+            try:
+                reel = ai_reel.make(me, h0, l, usd, e, facts) or reel
+            except Exception as ex:
+                print(f"!! AI reel error: {ex!r} – using the photo reel")
         if not reel[0]:
             try:
                 pic = {"dusk": dusk, "day": day, "cover": cover}.get(REEL_PHOTO, dusk)
                 path, line = build_reel(pic, h0, facts, e, usd, l)
                 if path:
-                    reel = (path, line, ai_reel.reel_caption(sys.modules[__name__],
-                                                             h0, l, usd, e))
+                    cap = None
+                    if ai_reel:
+                        try:
+                            cap = ai_reel.reel_caption(me, h0, l, usd, e)
+                        except Exception as ex:
+                            print(f"!! reel caption error: {ex!r}")
+                    reel = (path, line, cap)
             except Exception as ex:
                 print(f"!! reel error: {ex!r}")
 
@@ -2135,7 +2147,8 @@ def main():
           f"{'found' if FALLBACK_DIR.exists() else 'none'} | towns.json "
           f"{'found' if TOWNS_FILE.exists() else 'none'} | cover template "
           f"{'found' if COVER_TEMPLATE.exists() else 'none'}")
-    print(f"Reel: {'on' if REEL_ON else 'OFF'} | font {reel_font_file() or 'MISSING (fallback)'} | "
+    print(f"Reel: {'on' if REEL_ON else 'OFF'} | AI reel {'loaded' if ai_reel else 'not loaded'} | "
+          f"font {reel_font_file() or 'MISSING (fallback)'} | "
           f"{REEL_MIN_PX}-{REEL_MAX_PX}px, max {REEL_WORDS} words | photo {REEL_PHOTO} | "
           f"zoom {REEL_ZOOM:.2f} | ffmpeg {'found' if ffmpeg_exe() else 'MISSING'}")
     fx = get_fx()
@@ -2207,9 +2220,9 @@ def main():
     (OUT / "caption.txt").write_text(caption, encoding="utf-8")
 
     ok = tg_album(paths, caption) and tg_text(caption)
-    reel_path, reel_text = reel or (None, None)
+    reel_path, reel_text, reel_cap = (tuple(reel or ()) + (None, None, None))[:3]
     if ok and reel_path:
-        tg_video(reel_path, f"🎬 Reel (7s): {reel_text}")     # a failed reel doesn't block the post
+        tg_video(reel_path, reel_cap or f"🎬 Reel: {reel_text}")   # a failed reel doesn't block the post
     if ok and not DRY_RUN:
         for u in l.get("all_urls", [l["url"]]):
             posted[u] = today
