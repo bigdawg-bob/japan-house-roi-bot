@@ -13,6 +13,7 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
          (so location always matters most)
       -> 3 slides: 1 cover (house photo), 2 the payback (day photo),
          3 why this rents (dusk photo).
+         Attraction names always say what they are: "Beppu Onsen", "Rusutsu ski resort".
          Slide 3 wording: 5 rotating headlines (never the same twice in a row) +
          3 town-specific facts (never the same combo as a recent post) +
          2 SEO lines ("[Town] Onsen Airbnb = onsen access..." / "[Town] investment: ...").
@@ -22,14 +23,18 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
          -> photo library (any photo from any earlier post) -> unchecked stock
          -> this listing's photos -> fallback_photos/ folder. 75% black overlay.
          No photo at all -> no post today (retry next run).
-      -> Reel: 1080x1920, exactly 7.0 s, one shot, 70% black overlay, ONE centred line
-         (max 6 words, Liberation Sans Bold, +60 tracking), text on 0.5 s -> 6.5 s.
-         Line: "19 AIRBNBS IN NOZAWA ONSEN" > "19 AIRBNBS" > "WHY $203/NT WORKS".
+      -> Reel: 1080x1920, exactly 7.0 s, one shot with a slow zoom-in (Ken Burns),
+         70% black overlay, ONE centred line (max 6 words, Liberation Sans Bold,
+         +60 tracking), text fades in at 0.5 s and out at 6.5 s.
+         Line: "19 AIRBNBS IN NOZAWA ONSEN" > "19 AIRBNBS"
+               > "BEPPU ONSEN: WHY $203/NT WORKS" > "WHY $203/NT WORKS".
+      -> optional cover.html template ({{ hook }}, {{ location }} ...) -> out/cover.html
       -> 1080x1350 slides -> Telegram (album + copyable caption + reel video).
 """
 import base64, hashlib, io, itertools, json, math, os, re, shutil, subprocess, time
 from datetime import datetime, timezone, timedelta
 from functools import lru_cache
+from html import escape
 from pathlib import Path
 
 import requests
@@ -107,6 +112,8 @@ REEL_WORDS   = 6                                        # max words per line
 REEL_TRACK   = 60                                       # letter spacing, 1/1000 em (+60 tracking)
 REEL_MAXW    = 960                                      # max text width in px
 REEL_PHOTO   = _env("REEL_PHOTO", "dusk").lower()       # dusk | day | cover
+REEL_ZOOM    = max(1.0, float(_env("REEL_ZOOM", "1.12")))  # slow zoom-in: 1.00 -> 1.12 over 7 s
+REEL_FADE    = 0.3                                      # text fade in / out, seconds
 
 def _weights(s):
     out = {}
@@ -149,6 +156,7 @@ LIBRARY_FILE  = STATE / "photo_library.json"
 LIBRARY_DIR   = STATE / "photo_library"
 TOWNS_FILE    = ROOT / "towns.json"                      # optional: your own checked town facts
 FALLBACK_DIR  = ROOT / "fallback_photos"                 # optional: your own backup photos
+COVER_TEMPLATE = Path(_env("COVER_TEMPLATE", str(ROOT / "cover.html")))  # optional HTML cover
 OUT           = ROOT / "out"
 JST           = timezone(timedelta(hours=9))
 
@@ -348,6 +356,15 @@ def load_json(p):
 def save_json(p, data):
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+
+def hook_label(h):
+    """'Rusutsu' -> 'Rusutsu ski resort', 'Beppu' -> 'Beppu Onsen', others unchanged."""
+    name = h["name"]
+    if h["kind"] == "ski" and "ski" not in name.lower():
+        return f"{name} ski resort"
+    if h["kind"] == "onsen" and "onsen" not in name.lower():
+        return f"{name} Onsen"
+    return name
 
 
 # ─── Grok (xAI) ──────────────────────────────────────────────────────
@@ -1436,9 +1453,9 @@ def download(url):
         return None
 
 def cover_trip(h, l):
-    """'3 min to Ureshino Onsen' / '5 min walk to ...'"""
+    """'13 min to Beppu Onsen' / '5 min walk to Rusutsu ski resort'"""
     t = fmt_trip(h, l).lstrip("~").replace(" drive", "")
-    return f"{t} to {h['name']}"
+    return f"{t} to {hook_label(h)}"
 
 def cover_facts(l):
     """'6BR · 1984' – parts the listing doesn't have are left out."""
@@ -1449,43 +1466,68 @@ def cover_facts(l):
         parts.append(str(l["year_built"]))
     return " · ".join(parts)
 
+def cover_fields(l, hooks, usd, e):
+    """All cover text in one place (used by slide 1 AND the cover.html template).
+    hook = big number, sub_hook = small label under it, detail = monthly line,
+    price_usd / price_yen, specs = '5BR · 1960', location = '13 min to Beppu Onsen'."""
+    h0 = hooks[0]
+    free = l["price_yen"] == 0
+    price_usd = "FREE" if free else fmt_usd(usd)
+    price_yen = "" if free else fmt_yen(l["price_yen"])
+    has_income = bool(e) and e["net"] > 0
+    if has_income and show_yield(e):
+        hook, sub_hook = f"{e['roi'] * 100:.0f}%", "net yield"
+        detail, show_price = f"~ usd ${e['monthly']:,} / month net", True
+    elif has_income:
+        hook, sub_hook = f"${e['monthly']:,}", "month income (est.)"
+        detail, show_price = "usd, after management", True
+    else:                                          # no income estimate -> price is the hero
+        hook = price_usd
+        sub_hook = "house price" if free else price_yen
+        detail, show_price = "", False
+    return {"hook": hook, "sub_hook": sub_hook, "detail": detail,
+            "price_usd": price_usd, "price_yen": price_yen,
+            "price": "FREE" if free else f"{price_usd} ({price_yen})",
+            "show_price": show_price, "specs": cover_facts(l),
+            "location": cover_trip(h0, l), "place": hook_label(h0),
+            "kind": KINDS[h0["kind"]]["label"], "handle": HANDLE}
+
+def render_cover_html(fields):
+    """Fills cover.html ({{ hook }}, {{ location }} ...) -> out/cover.html.
+    Does nothing if there is no template file."""
+    if not COVER_TEMPLATE.exists():
+        return None
+    tpl = COVER_TEMPLATE.read_text(encoding="utf-8")
+
+    def fill(m):
+        k = m.group(1)
+        return escape(str(fields[k])) if k in fields else m.group(0)
+    out = OUT / "cover.html"
+    out.write_text(re.sub(r"\{\{\s*(\w+)\s*\}\}", fill, tpl), encoding="utf-8")
+    print(f"Cover HTML: {out} | {fields['hook']} | {fields['location']}")
+    return out
+
 def cover_slide(photo, l, hooks, usd, e):
     """Slide 1. photo = PIL image (always given)."""
-    h0 = hooks[0]
+    c = cover_fields(l, hooks, usd, e)
     cx, white = W // 2, (255, 255, 255)
     soft, grey = (230, 230, 230), (200, 200, 200)
     img = shade(ImageOps.fit(photo, (W, H), Image.LANCZOS))
     d = ImageDraw.Draw(img)
 
-    price = "FREE" if l["price_yen"] == 0 else f"{fmt_usd(usd)} ({fmt_yen(l['price_yen'])})"
-    has_income = bool(e) and e["net"] > 0
-    if has_income and show_yield(e):
-        big, label = f"{e['roi'] * 100:.0f}%", "net yield"
-        sub = f"~ usd ${e['monthly']:,} / month net"
-        bottom_price = price
-    elif has_income:
-        big, label = f"${e['monthly']:,}", "month income (est.)"
-        sub = "usd, after management"
-        bottom_price = price
-    else:                                          # no income estimate -> price is the hero
-        big = "FREE" if l["price_yen"] == 0 else fmt_usd(usd)
-        label = "house price" if l["price_yen"] == 0 else fmt_yen(l["price_yen"])
-        sub, bottom_price = None, None
-
     # (x, y, text, style, size, weight, colour, anchor, letter spacing)
     items = [
         (60, 60, HANDLE, "sans", 26, 500, white, "la", 1),
-        (cx, 640, big, "serif", 300, 300, white, "ms", -4),
-        (cx, 690, label, "sans", 40, 300, soft, "mt", 2),
+        (cx, 640, c["hook"], "serif", 300, 300, white, "ms", -4),
+        (cx, 690, c["sub_hook"], "sans", 40, 300, soft, "mt", 2),
     ]
-    if sub:
-        items.append((cx, 760, sub, "sans", 34, 400, soft, "mt", 0))
-    if bottom_price:
-        items.append((cx, H - 330, bottom_price, "serif", 88, 300, white, "mt", 0))
-    items.append((cx, H - 225, cover_trip(h0, l), "sans", 42, 500, white, "mt", 0))
-    facts = cover_facts(l)
-    if facts:
-        items.append((cx, H - 160, facts, "sans", 30, 400, grey, "mt", 3))
+    if c["detail"]:
+        items.append((cx, 760, c["detail"], "sans", 34, 400, soft, "mt", 0))
+    if c["show_price"]:
+        items.append((cx, H - 330, c["price"], "serif", 88, 300, white, "mt", 0))
+    items.append((cx, H - 225, c["location"], "sans", 42, 500, white, "mt", 0))
+    if c["specs"]:
+        items.append((cx, H - 160, c["specs"], "sans", 30, 400, grey, "mt", 3))
 
     for x, y, s, style, size, weight, fill, anchor, track in items:
         f = fit_font(d, s, size, weight, track, style=style)
@@ -1566,15 +1608,6 @@ def cost_breakdown(e, usd):
         return f"({fmt_k1(usd)} + {fmt_k1(rest)} reno & fees)"
     return f"({fmt_k1(usd)} + {fmt_k1(reno)} reno + {fmt_k1(buy)} fees)"
 
-def hook_label(h):
-    """'Rusutsu' -> 'Rusutsu ski resort', 'Beppu' -> 'Beppu Onsen', others unchanged."""
-    name = h["name"]
-    if h["kind"] == "ski" and "ski" not in name.lower():
-        return f"{name} ski resort"
-    if h["kind"] == "onsen" and "onsen" not in name.lower():
-        return f"{name} Onsen"
-    return name
-
 def area_slide(pic, h, l, e, usd=None):
     """Slide 2: daytime photo + THE PAYBACK (numbers from yield_calc.estimate)."""
     img = area_bg(pic)
@@ -1631,7 +1664,7 @@ def facts_slide(pic, h, l, hooks, facts, e, s3):
     X = 190                                            # left edge of the text block
     MAXW = W - X - 130
     f = facts or {}
-    name = place_name(h)
+    name = re.split(r"\s*[(/]", hook_label(h))[0].strip()   # 'Beppu Onsen', 'Rusutsu ski resort'
 
     put(d, (60, 62), HANDLE, cfont("sans", 26, 500), white, "la", 1, 2)
     put(d, (W // 2, 62), "WHY THIS RENTS", cfont("sans", 22, 500), soft, "mt", 5, 0)
@@ -1691,18 +1724,21 @@ def rfont(size):
     return ImageFont.truetype(p, size) if p else cfont("sans", size, 700)
 
 def reel_candidates(h, facts, e):
-    """Best line first: '19 AIRBNBS IN NOZAWA ONSEN' > '19 AIRBNBS' > 'WHY $203/NT WORKS'."""
+    """Best line first: '19 AIRBNBS IN BEPPU ONSEN' > '19 AIRBNBS'
+    > 'BEPPU ONSEN: WHY $203/NT WORKS' > 'WHY $203/NT WORKS'."""
     out = []
+    label = re.split(r"\s*[(/]", hook_label(h))[0].strip().upper()   # 'BEPPU ONSEN'
     comp = ((facts or {}).get("points") or {}).get("competition") or ""
     m = re.search(r"(\d[\d,]*)\s*\+?\s*(?:airbnbs?|vacation rentals?|rentals?|listings?)",
                   comp, re.I)
     if m:
         n = m.group(1)
         word = "AIRBNB" if n == "1" else "AIRBNBS"
-        out.append(f"{n} {word} IN {place_name(h).upper()}")
+        out.append(f"{n} {word} IN {label}")
         out.append(f"{n} {word}")
     adr = e.get("adr")
     if isinstance(adr, (int, float)) and adr > 0:
+        out.append(f"{label}: WHY ${int(round(adr)):,}/NT WORKS")
         out.append(f"WHY ${int(round(adr)):,}/NT WORKS")
     return out
 
@@ -1732,25 +1768,55 @@ def ffmpeg_exe():
         return shutil.which("ffmpeg")
 
 def build_reel(pic, h, facts, e):
-    """out/reel.mp4: 1080x1920, 7.0 s, one shot, 70% black, one centred line
-    visible 0.5 s -> 6.5 s. Returns (path, line) or (None, None)."""
+    """out/reel.mp4: 1080x1920, 7.0 s, one shot with a slow zoom-in (Ken Burns),
+    70% black, one centred line fading in at 0.5 s and out at 6.5 s.
+    Returns (path, line) or (None, None)."""
     exe = ffmpeg_exe()
     if not exe:
         print("!! reel: ffmpeg not found (pip install imageio-ffmpeg) – no reel today")
         return None, None
-    bg = ImageOps.fit(pic["img"], (REEL_W, REEL_H), Image.LANCZOS)
+
+    # background a bit bigger than the video, so zooming in keeps it sharp
+    big_w, big_h = int(REEL_W * REEL_ZOOM), int(REEL_H * REEL_ZOOM)
+    bg = ImageOps.fit(pic["img"], (big_w, big_h), Image.LANCZOS)
     bg = Image.blend(bg, Image.new("RGB", bg.size, (0, 0, 0)), REEL_OVERLAY)
-    line = reel_line(ImageDraw.Draw(bg), h, facts, e)
+
+    # text is drawn once as a mask; it does NOT zoom (stays sharp and readable)
+    mask = Image.new("L", (REEL_W, REEL_H), 0)
+    md = ImageDraw.Draw(mask)
+    line = reel_line(md, h, facts, e)
     if not line:
         print("!! reel: no line fits – no reel today")
         return None, None
     s, f, size, track = line
-    txt = bg.copy()
-    put(ImageDraw.Draw(txt), (REEL_W / 2, REEL_H / 2), s, f, (255, 255, 255), "mm", track, 0)
-    txt.save(OUT / "reel_frame.jpg", "JPEG", quality=90)          # preview still
+    put(md, (REEL_W / 2, REEL_H / 2), s, f, 255, "mm", track, 0)
+    white = Image.new("RGB", (REEL_W, REEL_H), (255, 255, 255))
 
     frames = int(round(REEL_SECS * REEL_FPS))
+    fade = max(1, round(REEL_FADE * REEL_FPS))
     on, off = round(REEL_TEXT_ON * REEL_FPS), round(REEL_TEXT_OFF * REEL_FPS)
+
+    def text_alpha(i):
+        if i < on or i >= off:
+            return 0.0
+        return min(1.0, (i - on + 1) / fade, (off - i) / fade)
+
+    def frame(i):
+        t = i / max(1, frames - 1)                       # 0 -> 1, steady speed
+        z = 1 + (REEL_ZOOM - 1) * t                      # zoom factor now
+        cw, ch = big_w / z, big_h / z                    # visible part of bg
+        mx, my = (big_w - cw) / 2, (big_h - ch) / 2      # free margin
+        x0, y0 = mx, my * (1 - 0.5 * t)                  # centred, drifting slightly up
+        img = bg.resize((REEL_W, REEL_H), Image.BICUBIC,
+                        box=(x0, y0, x0 + cw, y0 + ch))  # sub-pixel crop = smooth
+        a = text_alpha(i)
+        if a > 0:
+            m = mask if a >= 1 else mask.point(lambda v, a=a: int(v * a))
+            img.paste(white, (0, 0), m)
+        return img
+
+    frame(frames // 2).save(OUT / "reel_frame.jpg", "JPEG", quality=90)   # preview still
+
     out = OUT / "reel.mp4"
     cmd = [exe, "-y", "-loglevel", "error",
            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{REEL_W}x{REEL_H}",
@@ -1759,11 +1825,11 @@ def build_reel(pic, h, facts, e):
            "-t", f"{REEL_SECS}", "-c:v", "libx264", "-preset", "medium", "-crf", "18",
            "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", "-movflags", "+faststart",
            str(out)]
-    raw_bg, raw_txt = bg.tobytes(), txt.tobytes()
+    t0 = time.time()
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
         for i in range(frames):
-            proc.stdin.write(raw_txt if on <= i < off else raw_bg)
+            proc.stdin.write(frame(i).tobytes())
     except BrokenPipeError:
         pass
     finally:
@@ -1776,7 +1842,8 @@ def build_reel(pic, h, facts, e):
     if proc.returncode != 0 or not out.exists():
         print(f"!! reel: ffmpeg failed ({proc.returncode}): {err[:500]}")
         return None, None
-    print(f"Reel: {out} | {s} | {size}px | {frames} frames | font {Path(reel_font_file() or 'fallback').name}")
+    print(f"Reel: {out} | {s} | {size}px | {frames} frames, zoom 1.00→{REEL_ZOOM:.2f} | "
+          f"{time.time() - t0:.0f}s | font {Path(reel_font_file() or 'fallback').name}")
     return out, s
 
 
@@ -1785,7 +1852,8 @@ def build_slides(l, hooks, usd, e, rot=None):
     Returns (slide paths, area photo credits, slide 3 wording, (reel path, reel line)),
     or (None, None, None, None) if no photo at all."""
     OUT.mkdir(exist_ok=True)
-    for old in list(OUT.glob("slide_*.jpg")) + list(OUT.glob("reel*")):
+    for old in (list(OUT.glob("slide_*.jpg")) + list(OUT.glob("reel*"))
+                + list(OUT.glob("cover.html"))):
         old.unlink()
     h0 = hooks[0]
 
@@ -1837,6 +1905,13 @@ def build_slides(l, hooks, usd, e, rot=None):
         p = OUT / f"slide_{i}.jpg"
         s.save(p, "JPEG", quality=90)
         paths.append(p)
+    print(f"Cover: {cover_trip(h0, l)}")
+
+    # optional HTML cover template (never stops the post if it fails)
+    try:
+        render_cover_html(cover_fields(l, hooks, usd, e))
+    except Exception as ex:
+        print(f"!! cover.html error: {ex!r}")
 
     # reel (never stops the post if it fails)
     reel = (None, None)
@@ -1866,14 +1941,14 @@ def build_caption(l, hooks, usd, e, fees_yen, fees_usd, area_credits=()):
     price_line = ("💴 Price: FREE 🎉" if l["price_yen"] == 0
                   else f"💴 Price: {fmt_yen(l['price_yen'])} (≈ {fmt_usd(usd)})")
     headline = (f"{KINDS[h0['kind']]['emoji']} {fmt_usd(usd)} house, "
-                f"{fmt_trip(h0, l)} to {h0['name']}.")
+                f"{fmt_trip(h0, l)} to {hook_label(h0)}.")
     roi_block = caption_text(e, headline)
     lines = [roi_block or headline,
              "",
              price_line,
              f"📍 {l['location']} ({pref})"]
     if len(hooks) > 1:
-        also = ", ".join(f"{KINDS[h['kind']]['emoji']} {h['name']} ({fmt_trip(h, l)})"
+        also = ", ".join(f"{KINDS[h['kind']]['emoji']} {hook_label(h)} ({fmt_trip(h, l)})"
                          for h in hooks[1:4])
         lines.append(f"🗺 Also near: {also}")
     if l.get("bedrooms"):
@@ -2038,10 +2113,11 @@ def main():
           f"Pexels {'on' if PEXELS_KEY else 'OFF'} | overlay {AREA_OVERLAY:.0%} | "
           f"photo library {lib_size} | fallback_photos/ "
           f"{'found' if FALLBACK_DIR.exists() else 'none'} | towns.json "
-          f"{'found' if TOWNS_FILE.exists() else 'none'}")
+          f"{'found' if TOWNS_FILE.exists() else 'none'} | cover template "
+          f"{'found' if COVER_TEMPLATE.exists() else 'none'}")
     print(f"Reel: {'on' if REEL_ON else 'OFF'} | font {reel_font_file() or 'MISSING (fallback)'} | "
           f"{REEL_MIN_PX}-{REEL_MAX_PX}px, max {REEL_WORDS} words | photo {REEL_PHOTO} | "
-          f"ffmpeg {'found' if ffmpeg_exe() else 'MISSING'}")
+          f"zoom {REEL_ZOOM:.2f} | ffmpeg {'found' if ffmpeg_exe() else 'MISSING'}")
     fx = get_fx()
     max_yen = MAX_PRICE_USD / fx
     listings = gather()
@@ -2097,7 +2173,7 @@ def main():
     fees_usd = fees_yen * fx
     h0 = hooks[0]
     print(f"PICK [{l.get('source')}]: {l['location']} {fmt_yen(l['price_yen'])} "
-          f"{fmt_trip(h0, l)} to {h0['name']} ({h0['kind']}, {time_source(hooks)}), "
+          f"{fmt_trip(h0, l)} to {hook_label(h0)} ({h0['kind']}, {time_source(hooks)}), "
           f"{age_points(l.get('year_built'))[1]}, {e['roi'] * 100:.0f}% net yield, "
           f"~${e['monthly']:,}/mo\n  {l['url']}")
 
