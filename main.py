@@ -65,7 +65,7 @@ MAX_PRICE_USD    = float(_env("MAX_PRICE_USD", "100000"))
 MAX_DRIVE_MIN    = float(_env("MAX_DRIVE_MIN", "45"))
 MAX_WALK_MIN     = float(_env("MAX_WALK_MIN", "15"))
 FEE_LIMIT        = float(_env("FEE_LIMIT_PCT", "15")) / 100   # yearly fees vs price
-MAX_AIRROI_CALLS = int(_env("MAX_AIRROI_CALLS", "15"))        # paid calls per run
+MAX_AIRROI_CALLS = int(_env("MAX_AIRROI_CALLS", "1"))         # paid calls per run (1 = only the chosen house)
 CACHE_DAYS       = 90                                          # re-ask AirROI after this
 HOUSE_PHOTOS     = 3                                           # listing photos to download
 W, H             = 1080, 1350
