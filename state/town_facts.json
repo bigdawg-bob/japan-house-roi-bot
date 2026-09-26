@@ -1,15 +1,20 @@
 {
  "Nozawa Onsen": {
   "v": {
-   "known_for": "Authentic Japanese ski village",
-   "visitors": "715k tourists/yr",
-   "guests": [
-    "Australian ski tourists",
-    "Japanese onsen visitors",
-    "Western snowboarders"
-   ]
+   "known_for": "Ski resort, 13 public baths",
+   "visitors": "730k visitors/yr",
+   "minpaku_cap": null,
+   "points": {
+    "ryokan": "Ryokan: ¥7k-19k per person",
+    "competition": "207 vacation rentals",
+    "foreign": "Foreign guests 30% of stays",
+    "access": "2 hrs Tokyo by Shinkansen",
+    "occupancy": "Winter occupancy 80-90%",
+    "trend": "Ski users 405k last season",
+    "plan_b": "60 winter staff 15 countries"
+   }
   },
-  "d": "2026-09-24T21:16:36+09:00"
+  "d": "2026-09-26T13:17:06+09:00"
  },
  "Kinosaki Onsen": {
   "v": {
