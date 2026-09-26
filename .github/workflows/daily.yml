@@ -45,6 +45,10 @@ jobs:
       SOURCES:          "sumai"
       ROTATE_SOURCES:   "1"
 
+      # ── Sumai scraping speed ──
+      SUMAI_MAX_FETCH:       "150"   # listing pages per run (max)
+      SUMAI_TIME_BUDGET_MIN: "8"     # stop scraping after this many minutes, continue next run
+
       # ── ranking: location first, yield second ──
       HOOK_PRIORITY:    "ski=1.0,onsen=1.0,sight=0.9,beach=0.9,nature=0.8"
       YIELD_CAP_PCT:    "15"     # yield adds at most this many points (free house = cap)
@@ -52,9 +56,9 @@ jobs:
       MAX_CHECK:        "40"     # how many top-located houses to check fees/AirROI for
       RECENT_HOOKS:     "5"      # don't repeat an attraction featured in the last N posts
 
-      # ── listing check (updated recently, not sold / under negotiation) ──
+      # ── listing check (NOTE: not read by the current main.py/scraper.py) ──
       MAX_LISTING_AGE_DAYS: "90"
-      NO_DATE_OK:       "0"      # 1 = allow listings whose page shows no update date
+      NO_DATE_OK:       "0"
 
       # ── area slides (slides 2 & 3) ──
       GROK_MODEL:       "grok-4.6"
@@ -105,7 +109,7 @@ jobs:
 
       - name: Run the bot
         if: steps.guard.outputs.skip != 'true'
-        timeout-minutes: 20
+        timeout-minutes: 30
         run: python -u main.py
         env:
           PYTHONUNBUFFERED: "1"
