@@ -31,8 +31,13 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
       -> optional cover.html template ({{ hook }}, {{ location }} ...) -> out/cover.html
       -> 1080x1350 slides -> Telegram (album + copyable caption + reel video).
 """
-import faulthandler
-faulthandler.dump_traceback_later(15 * 60, exit=True)
+import faulthandler, signal
+RUN_LIMIT = 25 * 60                                         # seconds (workflow step allows 30 min)
+faulthandler.dump_traceback_later(RUN_LIMIT, exit=False)    # prints where the bot is at the limit
+def _too_long(*_):
+    raise SystemExit("!! Run hit the 25-minute limit – stopping (caches are saved)")
+signal.signal(signal.SIGALRM, _too_long)
+signal.alarm(RUN_LIMIT + 2)
 import base64, hashlib, io, itertools, json, math, os, re, shutil, subprocess, time
 from datetime import datetime, timezone, timedelta
 from functools import lru_cache
