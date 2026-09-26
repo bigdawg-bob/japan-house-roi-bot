@@ -38,7 +38,9 @@ def _too_long(*_):
     raise SystemExit("!! Run hit the 25-minute limit – stopping (caches are saved)")
 signal.signal(signal.SIGALRM, _too_long)
 signal.alarm(RUN_LIMIT + 2)
-import base64, hashlib, io, itertools, json, math, os, re, shutil, subprocess, time
+python
+import base64, hashlib, io, itertools, json, math, os, re, shutil, subprocess, sys, time
+T0 = time.time()                                  # run start (AI reel checks the time left)
 from datetime import datetime, timezone, timedelta
 from functools import lru_cache
 from html import escape
@@ -114,10 +116,10 @@ REEL_SECS    = 7.0                                      # exactly 7.0 s = 210 fr
 REEL_TEXT_ON, REEL_TEXT_OFF = 0.5, 6.5                  # text visible from 0.5 s to 6.5 s
 REEL_OVERLAY = min(1.0, max(0.0, float(_env("REEL_OVERLAY", "0.70"))))   # 70% black
 REEL_MAX_PX  = int(_env("REEL_MAX_PX", "130"))          # biggest text size
-REEL_MIN_PX  = int(_env("REEL_MIN_PX", "44"))           # smallest text allowed (6-word lines need ~46 px)
-REEL_WORDS   = 6                                        # max words per line
-REEL_TRACK   = 60                                       # letter spacing, 1/1000 em (+60 tracking)
-REEL_MAXW    = 960                                      # max text width in px
+REEL_MIN_PX  = int(_env("REEL_MIN_PX", "72"))           # smallest text allowed
+REEL_WORDS   = 4                                        # v2: max 4 words, one line
+REEL_TRACK   = int(_env("REEL_TRACK", "0"))             # letter spacing, 1/1000 em
+REEL_MAXW    = 950                                      # ~88% of 1080
 REEL_PHOTO   = _env("REEL_PHOTO", "dusk").lower()       # dusk | day | cover
 REEL_ZOOM    = max(1.0, float(_env("REEL_ZOOM", "1.12")))  # slow zoom-in: 1.00 -> 1.12 over 7 s
 REEL_FADE    = 0.3                                      # text fade in / out, seconds
@@ -1709,7 +1711,8 @@ def facts_slide(pic, h, l, hooks, facts, e, s3):
 
 
 # ─── reel (7 s vertical video, one centred line) ─────────────────────
-REEL_FONT_FILES = [FONT_DIR / "Reel-Bold.ttf",                     # optional: your own copy
+REEL_FONT_FILES = [FONT_DIR / "Arimo-Bold.ttf",
+                   FONT_DIR / "Reel-Bold.ttf",
                    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
                    "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
                    "LiberationSans-Bold.ttf",
@@ -1730,29 +1733,28 @@ def rfont(size):
     p = reel_font_file()
     return ImageFont.truetype(p, size) if p else cfont("sans", size, 700)
 
-def reel_candidates(h, facts, e):
-    """Best line first: '19 AIRBNBS IN BEPPU ONSEN' > '19 AIRBNBS'
-    > 'BEPPU ONSEN: WHY $203/NT WORKS' > 'WHY $203/NT WORKS'."""
+def reel_candidates(h, facts, e, usd=None, l=None):
+    """v2: max 4 words, [PRICE or NUMBER] + [PLACE or HOOK], all from our own data.
+    '$15K KINOSAKI' > '19 AIRBNBS HERE' > '25 MIN TO KINOSAKI' > 'WHY $203 WORKS'"""
     out = []
-    label = re.split(r"\s*[(/]", hook_label(h))[0].strip().upper()   # 'BEPPU ONSEN'
+    town = short_name(h["name"]).upper()
+    if usd is not None and l is not None:
+        out.append(f"FREE HOUSE, {town}" if l["price_yen"] == 0 else f"{fmt_usd(usd)} {town}")
     comp = ((facts or {}).get("points") or {}).get("competition") or ""
     m = re.search(r"(\d[\d,]*)\s*\+?\s*(?:airbnbs?|vacation rentals?|rentals?|listings?)",
                   comp, re.I)
     if m:
-        n = m.group(1)
-        word = "AIRBNB" if n == "1" else "AIRBNBS"
-        out.append(f"{n} {word} IN {label}")
-        out.append(f"{n} {word}")
+        out.append("1 AIRBNB HERE" if m.group(1) == "1" else f"{m.group(1)} AIRBNBS HERE")
+    if l is not None:
+        out.append(f"{trip_parts(h, l)[0]} MIN TO {town}")
     adr = e.get("adr")
     if isinstance(adr, (int, float)) and adr > 0:
-        out.append(f"{label}: WHY ${int(round(adr)):,}/NT WORKS")
-        out.append(f"WHY ${int(round(adr)):,}/NT WORKS")
+        out.append(f"WHY ${int(round(adr)):,} WORKS")
     return out
 
-def reel_line(d, h, facts, e):
-    """(text, font, size, tracking px) for the first line that fits, or None.
-    Skips lines over REEL_WORDS words or needing less than REEL_MIN_PX to fit."""
-    for s in reel_candidates(h, facts, e):
+def reel_line(d, h, facts, e, usd=None, l=None):
+    """(text, font, size, tracking px) for the first line that fits, or None."""
+    for s in reel_candidates(h, facts, e, usd, l):
         words = len(s.split())
         if words > REEL_WORDS:
             print(f"  reel: skip '{s}' ({words} words > {REEL_WORDS})")
@@ -1774,7 +1776,8 @@ def ffmpeg_exe():
     except Exception:
         return shutil.which("ffmpeg")
 
-def build_reel(pic, h, facts, e):
+def build_reel(pic, h, facts, e, usd=None, l=None):
+      line = reel_line(md, h, facts, e, usd, l)
     """out/reel.mp4: 1080x1920, 7.0 s, one shot with a slow zoom-in (Ken Burns),
     70% black, one centred line fading in at 0.5 s and out at 6.5 s.
     Returns (path, line) or (None, None)."""
@@ -1920,14 +1923,22 @@ def build_slides(l, hooks, usd, e, rot=None):
     except Exception as ex:
         print(f"!! cover.html error: {ex!r}")
 
-    # reel (never stops the post if it fails)
-    reel = (None, None)
+    # reel: AI video first (ski/onsen), photo reel as backup. Never stops the post.
+    reel = (None, None, None)
     if REEL_ON:
         try:
-            pic = {"dusk": dusk, "day": day, "cover": cover}.get(REEL_PHOTO, dusk)
-            reel = build_reel(pic, h0, facts, e)
+            reel = ai_reel.make(sys.modules[__name__], h0, l, usd, e, facts) or reel
         except Exception as ex:
-            print(f"!! reel error: {ex!r}")
+            print(f"!! AI reel error: {ex!r} – using the photo reel")
+        if not reel[0]:
+            try:
+                pic = {"dusk": dusk, "day": day, "cover": cover}.get(REEL_PHOTO, dusk)
+                path, line = build_reel(pic, h0, facts, e, usd, l)
+                if path:
+                    reel = (path, line, ai_reel.reel_caption(sys.modules[__name__],
+                                                             h0, l, usd, e))
+            except Exception as ex:
+                print(f"!! reel error: {ex!r}")
 
     # remember every photo used, so later posts can reuse it
     try:
