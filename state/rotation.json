@@ -2,19 +2,25 @@
  "last_source": "sumai",
  "date": "2026-09-26",
  "recent_hooks": [
+  "Takayama old town",
   "Kinosaki Onsen",
   "Nozawa Onsen",
   "Beppu",
-  "Tazawako",
-  "Ureshino Onsen"
+  "Tazawako"
  ],
  "s3_templates": [
+  "D",
   "E",
   "B",
   "C",
   "A"
  ],
  "s3_points": [
+  [
+   "foreign",
+   "ryokan",
+   "competition"
+  ],
   [
    "plan_b",
    "trend",

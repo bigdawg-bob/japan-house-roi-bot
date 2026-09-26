@@ -1401,7 +1401,10 @@
    "https://akiya.sumai.biz/wp-content/uploads/2026/09/49ym-4.jpg",
    "https://akiya.sumai.biz/wp-content/uploads/2026/09/49ym-5.jpg"
   ],
-  "lastmod": "2026-09-25T07:24:49+00:00"
+  "lastmod": "2026-09-25T07:24:49+00:00",
+  "lat": 37.976349,
+  "lng": 140.868164,
+  "geo_level": "district"
  },
  "https://akiya.sumai.biz/128134": {
   "id": "https://akiya.sumai.biz/128134",

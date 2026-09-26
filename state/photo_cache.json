@@ -309,6 +309,36 @@
    "light_ok": true,
    "score": 6,
    "why": "Busy night city with window reflections"
+  },
+  "pexels:35644914|day|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 5,
+   "why": "Dim hanging signs, not even daylight"
+  },
+  "pexels:31211118|day|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Dark wood facade, busy details, overcast"
+  },
+  "pexels:35644914|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 4,
+   "why": "white signs clash with overlay text"
   }
  }
 }

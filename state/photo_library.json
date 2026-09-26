@@ -141,5 +141,27 @@
   "added": "2026-09-26T13:46:48+09:00",
   "uses": 1,
   "last": "2026-09-26T13:46:48+09:00"
+ },
+ "8a9505fc75374e8e": {
+  "id": "pexels:31211118",
+  "credit": "Photo: Yun Li / Pexels",
+  "role": "area",
+  "mood": null,
+  "kind": "sight",
+  "generic": false,
+  "added": "2026-09-26T16:02:04+09:00",
+  "uses": 2,
+  "last": "2026-09-26T16:02:04+09:00"
+ },
+ "3b633d3b555b6ca5": {
+  "id": "pexels:35644914",
+  "credit": "Photo: Emiliano Lara / Pexels",
+  "role": "area",
+  "mood": "dusk",
+  "kind": "sight",
+  "generic": false,
+  "added": "2026-09-26T16:02:04+09:00",
+  "uses": 1,
+  "last": "2026-09-26T16:02:04+09:00"
  }
 }
