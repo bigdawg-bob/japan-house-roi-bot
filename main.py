@@ -5,12 +5,11 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
       -> real ROAD drive times for the best-located houses (Google Routes API if
          GOOGLE_MAPS_KEY is set, otherwise free OSRM / OpenStreetMap), cached
       -> keep houses within MAX_DRIVE_MIN by road, rank by LOCATION first
-      -> for the best-located houses: read yearly fees (skip if > 15% of price)
-         and get an AirROI estimate (cached). No AirROI data -> skip.
-      -> yield (yield_calc.py): AirROI rate x occupancy x 180 nights, minus 30%
-         management and yearly fees, divided by house + reno + buying fees
-      -> final score = attraction points + yield points (-10..+15) + build-year points
-         (so location always matters most)
+      -> rank by location points + build-year points (no yield, so no AirROI needed)
+      -> walk down that list: yearly fees rule (skip if > 15% of price), then ONE
+         AirROI estimate for the top house (MAX_AIRROI_CALLS, default 1; cached = free).
+         No AirROI data or no income -> skip.
+      -> yield (yield_calc.py) is only shown on the slides/caption, not scored
       -> 3 slides: 1 cover (house photo), 2 the payback (day photo),
          3 why this rents (dusk photo).
          Attraction names always say what they are: "Beppu Onsen", "Rusutsu ski resort".
@@ -53,8 +52,7 @@ from PIL import features as pil_features
 import scraper
 import scraper_athome
 import scraper_homes
-from yield_calc import (estimate, yield_points, caption_text, is_renovated,
-                        show_yield, fmt_k)
+
 
 # ─── settings ────────────────────────────────────────────────────────
 def _env(name, default):
@@ -2051,24 +2049,38 @@ def tg_video(path, caption=""):
 # ─── picking ─────────────────────────────────────────────────────────
 def pick(ranked, fx, last_source=None):
     """ranked = [(location_points, listing, hooks)], best location first.
-    Checks the top MAX_CHECK houses (fees + AirROI, spending paid calls on the
-    best locations first), then picks the highest
-    location points + yield points (-10..+15) + build-year points (-10..+5).
-    Houses without AirROI data or with negative income are skipped."""
+    Score = location points + build-year points (-10..+5). Yield is NOT scored, so
+    ranking needs no AirROI. Then walks down the list: fee rule (free page read),
+    then an AirROI estimate for the top house. Cached estimates are free; at most
+    MAX_AIRROI_CALLS paid calls per run (default 1). A house with no AirROI data
+    or no income is skipped (it isn't postable without numbers)."""
     ac, fc = load_json(AIRROI_CACHE), load_json(FEE_CACHE)
     if not AIRROI_KEY:
         print("!! AIRROI_API_KEY missing – only houses already in the AirROI cache can be used")
     budget = MAX_AIRROI_CALLS if AIRROI_KEY else 0
-    rotate = ROTATE and last_source is not None
-    scored, skip_fee, skip_yield, skip_data, no_year = [], 0, 0, 0, 0
+
+    # 1) free ranking: location + build year
+    order = []
+    for hp, l, hooks in ranked:
+        ap, age_label = age_points(l.get("year_built"))
+        order.append((hp + ap, hp, ap, age_label, l, hooks))
+    order.sort(key=lambda s: (s[0], s[1], -s[4]["price_yen"]), reverse=True)
+    if ROTATE and last_source is not None:
+        order.sort(key=lambda s: s[4].get("source") == last_source)   # other sites first (keeps order)
+    no_year = sum(1 for s in order if s[3] == "built ?")
+
+    # 2) first house that passes the fee rule gets the AirROI check
+    tried = skip_fee = skip_yield = skip_data = skip_budget = 0
+    chosen = None
     try:
-        for hp, l, hooks in ranked:
-            if len(scored) >= MAX_CHECK:
+        for total, hp, ap, age_label, l, hooks in order:
+            if tried >= MAX_CHECK:
                 break
             found, est = cached_estimate(l, ac)
             if not found and budget <= 0:
-                skip_data += 1                            # no AirROI data, no calls left
+                skip_budget += 1                          # would need a paid call, limit reached
                 continue
+            tried += 1
             fees = yearly_fees(l, fc)
             if fees is not None and fees > FEE_LIMIT * l["price_yen"]:
                 skip_fee += 1
@@ -2077,6 +2089,7 @@ def pick(ranked, fx, last_source=None):
                 continue
             if not found:
                 budget -= 1
+                print(f"  AirROI call for: {l['url']}")
                 est = fetch_estimate(l, ac)
             e = estimate(l["price_yen"], l.get("year_built"), est, fx,
                          floor_m2=l.get("area_m2"), renovated=is_renovated(l),
@@ -2090,34 +2103,23 @@ def pick(ranked, fx, last_source=None):
                 skip_yield += 1
                 print(f"  skip, net {fmt_k(e['net'])}/yr, yield {roi_pct:.0f}%: {l['url']}")
                 continue
-            yp = yield_points(e)
-            ap, age_label = age_points(l.get("year_built"))
-            if age_label == "built ?":
-                no_year += 1
-            total = hp + yp + ap
             h0 = hooks[0]
             how = "road" if h0.get("routed") else "est."
             print(f"  [{l.get('source')}] {l['location']} {fmt_yen(l['price_yen'])} | "
                   f"{h0['name']} {fmt_trip(h0, l)} ({how}) | location {hp:.0f} + "
-                  f"yield {roi_pct:.0f}% on {fmt_k(e['all_in'])} all-in ({yp:+.0f}) + "
-                  f"{age_label} ({ap:+.0f}) = {total:.0f}")
-            scored.append((total, hp, l, hooks, e, fees))
+                  f"{age_label} ({ap:+.0f}) = {total:.0f} | yield {roi_pct:.0f}% on "
+                  f"{fmt_k(e['all_in'])} all-in (not scored)")
+            chosen = (l, hooks, e, fees)
+            break
     finally:
         save_json(AIRROI_CACHE, ac)                       # never pay twice
         save_json(FEE_CACHE, fc)
-    print(f"Checked: {len(scored)}  |  fee rule skipped: {skip_fee}  |  no AirROI data: "
-          f"{skip_data}  |  yield rule skipped: {skip_yield}  |  build year unknown: "
-          f"{no_year}  |  AirROI calls used: {(MAX_AIRROI_CALLS if AIRROI_KEY else 0) - budget}"
-          f"  |  last source: {last_source}")
-
-    if not scored:
-        return None, None, None, None
-    scored.sort(key=lambda s: (s[0], s[1], -s[2]["price_yen"]), reverse=True)
-    best = scored[0]
-    if rotate:
-        best = next((s for s in scored if s[2].get("source") != last_source), best)
-    _, _, l, hooks, e, fees = best
-    return l, hooks, e, fees
+    used = (MAX_AIRROI_CALLS if AIRROI_KEY else 0) - budget
+    print(f"Tried: {tried}  |  fee rule skipped: {skip_fee}  |  no AirROI data: {skip_data}  |  "
+          f"no income skipped: {skip_yield}  |  skipped (call limit): {skip_budget}  |  "
+          f"build year unknown: {no_year}  |  AirROI calls used: {used}/{MAX_AIRROI_CALLS}  |  "
+          f"last source: {last_source}")
+    return chosen or (None, None, None, None)
 
 
 # ─── main ────────────────────────────────────────────────────────────
@@ -2182,8 +2184,9 @@ def main():
 
     l, hooks, e, fees = pick(cands, fx, last_source)
     if l is None:
-        tg_text(f"No deal today ({today}) – every candidate failed the fee "
-                f"({FEE_LIMIT:.0%}) rule, had no AirROI data, or wouldn't make money.")
+        tg_text(f"No deal today ({today}) – the top house(s) failed the fee "
+                f"({FEE_LIMIT:.0%}) rule, had no AirROI data, or wouldn't make money "
+                f"(AirROI limit: {MAX_AIRROI_CALLS} call/run). Will try the next one next run.")
         return
 
     usd = l["price_yen"] * fx
