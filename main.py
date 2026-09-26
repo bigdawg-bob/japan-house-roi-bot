@@ -156,7 +156,7 @@ LIBRARY_FILE  = STATE / "photo_library.json"
 LIBRARY_DIR   = STATE / "photo_library"
 TOWNS_FILE    = ROOT / "towns.json"                      # optional: your own checked town facts
 FALLBACK_DIR  = ROOT / "fallback_photos"                 # optional: your own backup photos
-COVER_TEMPLATE = Path(_env("COVER_TEMPLATE", str(ROOT / "cover.html")))  # optional HTML cover
+COVER_TEMPLATE = Path(_env("COVER_TEMPLATE", str(ROOT / "templates" / "cover.html")))  # optional HTML cover
 OUT           = ROOT / "out"
 JST           = timezone(timedelta(hours=9))
 
