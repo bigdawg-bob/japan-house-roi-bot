@@ -120,12 +120,12 @@ jobs:
 
       - name: Install fonts
         if: steps.guard.outputs.skip != 'true'
-        run: sudo apt-get install -y fonts-dejavu-core || echo "font install skipped"
+        run: sudo apt-get install -y fonts-dejavu-core fonts-liberation || echo "font install skipped"
 
       - name: Install Python packages
         if: steps.guard.outputs.skip != 'true'
         run: |
-          pip install requests pillow beautifulsoup4 lxml
+          pip install requests pillow beautifulsoup4 lxml imageio-ffmpeg
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run the bot
