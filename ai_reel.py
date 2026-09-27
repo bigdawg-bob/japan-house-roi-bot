@@ -1,5 +1,5 @@
 """
-Reel builder for Yama Yield: 1 background = 1 reel.
+Reel builder for Yama Yield: 1 background video = 1 reel.
 
 Background: ONE Pexels video from bg_videos.txt, downloaded with the Pexels API
 (PEXELS_KEY). Nothing is read from a reels/ folder.
@@ -9,16 +9,15 @@ bg_videos.txt, one video per line:
     1234567                        <- the ID alone also works
     1234567  ski                   <- only for ski houses (ski onsen sight beach nature)
     1234567  onsen town=kinosaki   <- preferred for Kinosaki houses
-    1234567  crop=10               <- cut off the bottom 10% (e.g. a logo or net)
+    1234567  crop=0                <- don't cut the bottom (default cuts 10%)
     # lines starting with # are ignored
 
-Reel: 1080x1920, 30 fps, 6.8 s seamless loop, max 8 MB.
-  0.0-0.3 s  full bright video (+5%), no overlay, no text
-  0.3-0.5 s  black overlay fades in to 55%
-  0.3 s      line 1 (hook) fades in (0.15 s)          } both gone by 6.5 s
-  1.5 s      line 2 (cheat sheet) fades in (0.15 s)   }
-  6.5-6.8 s  overlay fades out, so the last frame matches the first
-  Speed 100% -> 103%. Audio: soft generated wind, about -28 LUFS, loops.
+Reel: 1080x1920, 30 fps, 6.8 s seamless loop, H.264, < 8 MB, no sound.
+  0.0-0.3 s  video only (no overlay, no text)
+  0.3-0.5 s  black overlay 0% -> 55%
+  0.3 s      line 1 (hook) pops: scale 0.9 -> 1.05 -> 1.0, opacity 0 -> 100% in 0.15 s
+  1.5 s      line 2 rises 20 px, opacity 0 -> 85% in 0.2 s
+  6.5-6.8 s  overlay + both lines fade to 0%, so the last frame matches the first
 """
 import os, random, re, subprocess
 from pathlib import Path
@@ -32,29 +31,35 @@ def _env(name, default):
 ROOT       = Path(__file__).parent
 BG_LIST    = ROOT / _env("BG_LIST", "bg_videos.txt")
 PEXELS_KEY = os.getenv("PEXELS_KEY") or os.getenv("PEXELS_API_KEY")
-TRIES      = 3                         # videos to try before giving up for today
+TRIES      = 3                          # videos to try before giving up for today
 
 W, H, FPS  = 1080, 1920, 30
-SECS       = 6.8                       # final length
-XF         = 0.2                       # loop crossfade (end blends into the start)
-WIN        = SECS + XF                 # 7.0 s of footage used
-RAMP       = 0.03                      # speed 100% -> 103%
-NEED       = WIN * (1 + RAMP / 2)      # source seconds needed (a bit more due to the ramp)
-SKIP_START = 3.0                       # avoid the first 3 s of the source if possible
-FLASH_END, FLASH_GAIN = 0.3, 1.05      # +5% brightness for the first 0.3 s
-OV_ON, OV_FADE = 0.3, 0.2
+SECS       = 6.8
+FRAMES     = round(SECS * FPS)          # 204 frames
+LAST       = (FRAMES - 1) / FPS         # time of the final frame
+XF         = 0.2                        # loop crossfade (end blends into the start)
+WIN        = SECS + XF                  # 7.0 s of footage used
+SKIP_START = 3.0                        # avoid the first 3 s of the source if possible
+CROP_DEFAULT = 0.10                     # cut the bottom 10% (nets / branding)
+STABILIZE  = _env("REEL_STABILIZE", "0") == "1"   # 1 = ffmpeg deshake (shaky clips only)
+
 OV_ALPHA   = min(0.9, max(0.0, float(_env("REEL_OVERLAY", "0.55"))))
-OV_OUT     = 6.5                       # overlay fades out 6.5 s -> last frame
-HOOK_ON, SUB_ON, TEXT_FADE, TEXT_OFF = 0.3, 1.5, 0.15, 6.5
-HOOK_PX, HOOK_MIN_PX = 200, 90
-SUB_PX, SUB_ALPHA, LINE_SPACING = 48, 0.85, 1.4
-MARGIN     = 80                        # left/right
-SAFE_TOP, SAFE_BOTTOM = int(H * 0.30), int(H * 0.70)   # text only in the middle 40%
+OV_ON, OV_IN = 0.3, 0.2                 # overlay fades in 0.3 -> 0.5 s
+FADE_OUT   = 6.5                        # overlay + text fade out 6.5 s -> last frame
+
+HOOK_ON, HOOK_POP = 0.3, 0.15
+HOOK_PX, HOOK_MIN_PX, HOOK_WORDS = 190, 90, 3
+SUB_ON, SUB_POP = 1.5, 0.2
+SUB_PX, SUB_ALPHA, SUB_GAP, SUB_RISE, SUB_WORDS = 46, 0.85, 60, 20, 6
+MARGIN     = 80
+SAFE_TOP, SAFE_BOTTOM = int(H * 0.30), int(H * 0.70)
+PAD        = 6
 MAX_MB     = 8.0
-AUDIO      = _env("REEL_AUDIO", "wind").lower()        # wind | silent
-WIND_LUFS  = float(_env("REEL_WIND_LUFS", "-28"))
-STABILIZE  = _env("REEL_STABILIZE", "0") == "1"        # 1 = ffmpeg deshake (for shaky clips)
+AUDIO      = _env("REEL_AUDIO", "silent").lower()   # silent (no sound) | none (no track)
 KIND_NAMES = {"ski", "onsen", "sight", "beach", "nature"}
+STOP       = {"lake", "mt", "old", "town", "the", "castle", "shrine", "grand", "valley",
+              "beach", "bay", "coast", "falls", "river", "gorge", "kogen", "onsen",
+              "village", "thatched", "taisha", "hongu", "yumoto", "and"}
 SUB_FONTS  = [ROOT / "fonts" / "Arimo-Regular.ttf",
               "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
               "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"]
@@ -100,7 +105,7 @@ def read_list():
         if not ids:
             print(f"  reel bg: line {n} has no Pexels video ID, skipped: {raw[:60]}")
             continue
-        e = {"id": ids[-1], "kinds": set(), "town": "", "crop": 0.0}
+        e = {"id": ids[-1], "kinds": set(), "town": "", "crop": None}
         for p in (x.lower() for x in parts[1:]):
             if p in KIND_NAMES:
                 e["kinds"].add(p)
@@ -117,9 +122,8 @@ def read_list():
     return out
 
 def candidates(h, rot):
-    """Videos to try, best first: named after this town > tagged with this kind >
-    untagged. Videos tagged for another kind or town are never used.
-    Least recently used first (history = rotation.json 'reel_clips')."""
+    """Best first: named after this town > tagged with this kind > untagged.
+    Videos tagged for another kind are never used. Least recently used first."""
     entries = read_list()
     kind, town = h["kind"], slug(M.place_name(h))
     hist = [c for c in (rot.get("reel_clips") or []) if isinstance(c, str)]
@@ -156,8 +160,8 @@ def fetch(entry):
     except (requests.RequestException, ValueError) as ex:
         print(f"  reel bg: Pexels error for {vid}: {ex}")
         return None
-    if (v.get("duration") or 99) < NEED - 0.5:
-        print(f"  reel bg: video {vid} is only {v.get('duration')}s, need {NEED:.1f}s")
+    if (v.get("duration") or 99) < WIN:
+        print(f"  reel bg: video {vid} is only {v.get('duration')}s, need {WIN:.0f}s")
         return None
     files = [f for f in v.get("video_files") or []
              if f.get("file_type") == "video/mp4" and f.get("link")
@@ -182,7 +186,34 @@ def fetch(entry):
     return path, f"Video: {name} / Pexels"
 
 
-# ─── text (2 lines, middle 40% only) ─────────────────────────────────
+# ─── the 2 text lines ────────────────────────────────────────────────
+def main_word(name):
+    """'Lake Kawaguchiko' -> 'Kawaguchiko', 'Takayama old town' -> 'Takayama'"""
+    words = name.split()
+    keep = [w for w in words if w.lower() not in STOP]
+    return (keep or words)[0]
+
+def hook_line(h, l, usd):
+    """Line 1: '$PRICE LOCATION', max 3 words, bold, 190 px, shrinks to fit.
+    Width leaves room for the 1.05 pop, so it never crosses the 80 px margins."""
+    price = "FREE" if l["price_yen"] == 0 else M.fmt_usd(usd)
+    town = M.short_name(h["name"]).upper()
+    if len(town.split()) > HOOK_WORDS - 1:
+        town = main_word(town)
+    options = [f"{price} {town}"]
+    if " " in town:
+        options.append(f"{price} {main_word(town)}")    # shorter = bigger text
+    maxw = (W - 2 * MARGIN) / 1.05
+    for i, s in enumerate(options):
+        floor = HOOK_MIN_PX if i < len(options) - 1 else 60
+        size = HOOK_PX
+        while size >= floor:
+            f = M.rfont(size)
+            if f.getlength(s) <= maxw:
+                return s, f, size
+            size -= 2
+    return None
+
 def sub_font(px):
     for p in SUB_FONTS:
         try:
@@ -191,65 +222,92 @@ def sub_font(px):
             pass
     return M.cfont("sans", px, 400)
 
-def hook_line(h, l, e, usd, facts):
-    """Line 1: bold, 200 px, shrinks (min 90 px) to fit 80 px margins."""
-    d = ImageDraw.Draw(Image.new("L", (8, 8)))
-    maxw = W - 2 * MARGIN
-    for s in M.reel_candidates(h, facts, e, usd, l):
-        s = s.upper()
-        if len(s.split()) > M.REEL_WORDS:
-            continue
-        size = HOOK_PX
-        while size >= HOOK_MIN_PX:
-            f = M.rfont(size)
-            if M.text_width(d, s, f) <= maxw:
-                return s, f, size
-            size -= 4
-        print(f"  reel: skip '{s}' (would need < {HOOK_MIN_PX}px)")
-    return None
-
 def sub_line(h, l, e):
-    """Line 2 (cheat sheet): '4BR • 12 min to slopes • 15% net'."""
-    d = ImageDraw.Draw(Image.new("L", (8, 8)))
+    """Line 2: 'BEDS • DISTANCE • YIELD', max 6 words, e.g. '4BR • 12 min slopes • 15% net'."""
     mins, mode = M.trip_parts(h, l)
-    to = {"ski": "slopes", "onsen": "onsen", "beach": "beach"}.get(h["kind"],
-                                                                  M.short_name(h["name"]))
-    trip = f"{mins} min walk to {to}" if mode == "walk" else f"{mins} min to {to}"
+    to = {"ski": "slopes", "onsen": "onsen", "beach": "beach"}.get(
+        h["kind"], main_word(M.short_name(h["name"])))
+    dist = f"{mins} min walk" if mode == "walk" else f"{mins} min {to}"
     money = f"{e['roi'] * 100:.0f}% net" if M.show_yield(e) else f"${e['monthly']:,}/mo net"
     beds = f"{l['bedrooms']}BR" if l.get("bedrooms") else None
     f = sub_font(SUB_PX)
-    for parts in ([beds, trip, money], [trip, money], [beds, money], [money]):
-        s = " • ".join(p for p in parts if p)
-        if s and M.text_width(d, s, f) <= W - 2 * MARGIN:
+    for parts in ([beds, dist, money], [dist, money], [beds, money], [money]):
+        parts = [p for p in parts if p]
+        s = " • ".join(parts)
+        if sum(len(p.split()) for p in parts) <= SUB_WORDS and f.getlength(s) <= W - 2 * MARGIN:
             return s, f
     return None
 
-def text_pngs(hook, sub):
-    """Two transparent 1080x1920 PNGs, the text block centred vertically."""
-    s1, f1, _ = hook
-    d0 = ImageDraw.Draw(Image.new("L", (8, 8)))
-    b1 = d0.textbbox((0, 0), s1, font=f1, anchor="ls")
-    h1 = b1[3] - b1[1]
-    if sub:
-        s2, f2 = sub
-        b2 = d0.textbbox((0, 0), s2, font=f2, anchor="ls")
-        h2, gap = b2[3] - b2[1], round(SUB_PX * (LINE_SPACING - 1)) + 30
-    else:
-        h2 = gap = 0
-    top = (H - (h1 + gap + h2)) // 2
-    if top < SAFE_TOP or top + h1 + gap + h2 > SAFE_BOTTOM:
-        print("  reel: !! text leaves the middle 40% safe zone")
+def sprite(s, font):
+    """White text on a transparent image, trimmed to the text."""
+    d = ImageDraw.Draw(Image.new("L", (8, 8)))
+    x0, y0, x1, y1 = d.textbbox((0, 0), s, font=font, anchor="ls")
+    img = Image.new("RGBA", (x1 - x0 + 2 * PAD, y1 - y0 + 2 * PAD), (255, 255, 255, 0))
+    ImageDraw.Draw(img).text((PAD - x0, PAD - y0), s, font=font,
+                             fill=(255, 255, 255, 255), anchor="ls")
+    return img
 
-    p1, p2 = M.OUT / "reel_hook.png", M.OUT / "reel_sub.png"
-    img = Image.new("RGBA", (W, H), (255, 255, 255, 0))
-    M.put(ImageDraw.Draw(img), (W / 2, top - b1[1]), s1, f1, (255, 255, 255, 255), "ms", 0, 0)
-    img.save(p1)
-    img = Image.new("RGBA", (W, H), (255, 255, 255, 0))
-    if sub:
-        M.put(ImageDraw.Draw(img), (W / 2, top + h1 + gap - b2[1]), s2, f2,
-              (255, 255, 255, int(255 * SUB_ALPHA)), "ms", 0, 0)
-    img.save(p2)
-    return p1, p2
+def layout(hook, sub):
+    """Both lines centred as one block, line 2 60 px below line 1."""
+    hs = sprite(hook[0], hook[1])
+    ih = hs.height - 2 * PAD
+    ss = sprite(sub[0], sub[1]) if sub else None
+    ish = ss.height - 2 * PAD if ss else 0
+    gap = SUB_GAP if ss else 0
+    top = (H - (ih + gap + ish)) // 2
+    L = {"hook": hs, "hook_cy": top + ih / 2, "sub": ss, "sub_y": top + ih + gap - PAD}
+    hi = top + ih / 2 - ih * 1.05 / 2                   # top of the hook at its biggest
+    lo = top + ih + gap + ish + SUB_RISE                # bottom of line 2 at its lowest
+    area = (hs.width * hs.height + (ss.width * ss.height if ss else 0)) / (W * H)
+    ok = hi >= SAFE_TOP and lo <= SAFE_BOTTOM
+    print(f"  reel text: y {hi:.0f}-{lo:.0f} px (safe {SAFE_TOP}-{SAFE_BOTTOM}) "
+          f"{'OK' if ok else '!! outside safe zone'} | text area {area:.1%} of frame")
+    return L
+
+
+# ─── overlay frames (black layer + text), drawn in Python ────────────
+def ramp(t, start, dur):
+    return min(1.0, max(0.0, (t - start) / dur))
+
+def state(t):
+    out = 1.0 - ramp(t, FADE_OUT, LAST - FADE_OUT)      # reaches 0 on the final frame
+    ov = OV_ALPHA * ramp(t, OV_ON, OV_IN) * out
+    u = ramp(t, HOOK_ON, HOOK_POP)
+    sc = 0.9 + 0.15 * u / 0.6 if u < 0.6 else 1.05 - 0.05 * (u - 0.6) / 0.4
+    v = ramp(t, SUB_ON, SUB_POP)
+    dy = SUB_RISE * (1 - v) ** 3                        # eases into place
+    return (round(ov, 3), round(u * out, 3), round(sc, 3),
+            round(SUB_ALPHA * v * out, 3), round(dy, 1))
+
+def faded(sp, op):
+    if op >= 0.999:
+        return sp
+    sp = sp.copy()
+    sp.putalpha(sp.getchannel("A").point(lambda a: round(a * op)))
+    return sp
+
+def draw(st, L):
+    ov, hop, sc, sop, dy = st
+    img = Image.new("RGBA", (W, H), (0, 0, 0, round(255 * ov)))
+    if hop > 0:
+        sp = L["hook"]
+        if abs(sc - 1) > 1e-3:
+            sp = sp.resize((max(1, round(sp.width * sc)), max(1, round(sp.height * sc))),
+                           Image.LANCZOS)
+        sp = faded(sp, hop)
+        img.alpha_composite(sp, (round(W / 2 - sp.width / 2), round(L["hook_cy"] - sp.height / 2)))
+    if L["sub"] is not None and sop > 0:
+        sp = faded(L["sub"], sop)
+        img.alpha_composite(sp, (round(W / 2 - sp.width / 2), round(L["sub_y"] + dy)))
+    return img.tobytes()
+
+def overlay_frames(L):
+    prev = buf = None
+    for n in range(FRAMES):
+        st = state(n / FPS)
+        if st != prev:
+            buf, prev = draw(st, L), st
+        yield buf
 
 
 # ─── ffmpeg ──────────────────────────────────────────────────────────
@@ -261,118 +319,120 @@ def duration(exe, path):
 def crop_filter(crop):
     return f"crop=iw:trunc(ih*{1 - crop:.3f}/2)*2:0:0," if crop > 0 else ""
 
-def brightness(exe, path, crop=0.0):
-    """[(time, average brightness 0-255)] for every frame."""
-    vf = crop_filter(crop) + "scale=160:-2,signalstats,metadata=print:key=lavfi.signalstats.YAVG"
+def analyse(exe, path, crop=0.0):
+    """[(time, brightness 0-255, motion)] for every frame."""
+    vf = (crop_filter(crop) + "scale=160:-2,signalstats,"
+          "metadata=print:key=lavfi.signalstats.YAVG,"
+          "metadata=print:key=lavfi.signalstats.YDIF")
     try:
         p = subprocess.run([exe, "-hide_banner", "-nostats", "-i", str(path), "-vf", vf,
                             "-an", "-f", "null", "-"], capture_output=True, text=True, timeout=300)
     except subprocess.TimeoutExpired:
         return []
-    out, t = [], None
+    rows, t = {}, None
     for line in p.stderr.splitlines():
         m = re.search(r"pts_time:([\d.]+)", line)
         if m:
             t = float(m.group(1))
             continue
-        m = re.search(r"YAVG=([\d.]+)", line)
+        m = re.search(r"signalstats\.(YAVG|YDIF)=([\d.]+)", line)
         if m and t is not None:
-            out.append((t, float(m.group(1))))
-    return out
+            rows.setdefault(t, {})[m.group(1)] = float(m.group(2))
+    return sorted((t, v.get("YAVG", 0.0), v.get("YDIF", 0.0)) for t, v in rows.items())
 
 def best_start(samples, dur):
-    """Start of the steadiest window: even exposure, no dark flash, and the end
-    looks like the start (for the loop). Skips the first 3 s when the clip allows."""
-    latest = dur - NEED - 0.05
+    """Start of the best 7 s: steady exposure, no dark flicker, continuous motion,
+    and the end looks like the start (loop). Skips the first 3 s when possible."""
+    latest = dur - WIN - 0.05
     lo = max(0.0, min(SKIP_START, latest))
+    difs = sorted(d for _, _, d in samples if d > 0)
+    typical = difs[len(difs) // 2] if difs else 0.0
     best, s = None, lo
     while s <= latest + 1e-6:
-        win = [y for t, y in samples if s <= t <= s + NEED]
-        if len(win) >= 10 and sum(win) > len(win):
-            mean = sum(win) / len(win)
-            std = (sum((y - mean) ** 2 for y in win) / len(win)) ** 0.5 / mean
-            med = sorted(win)[len(win) // 2]
-            dip = max(0.0, (med - min(win)) / med - 0.10)
-            head = [y for t, y in samples if abs(t - (s + XF)) <= 0.05] or win[:3]
-            loop = abs(sum(head) / len(head) - sum(win[-3:]) / 3) / mean
-            score = std + 3 * dip + 2 * max(0.0, loop - 0.02)
+        win = [(y, d) for t, y, d in samples if s <= t <= s + WIN]
+        ys = [y for y, _ in win]
+        if len(ys) >= 10 and sum(ys) > len(ys):
+            mean = sum(ys) / len(ys)
+            std = (sum((y - mean) ** 2 for y in ys) / len(ys)) ** 0.5 / mean
+            med = sorted(ys)[len(ys) // 2]
+            dip = max(0.0, (med - min(ys)) / med - 0.10)
+            head = [y for t, y, _ in samples if abs(t - (s + XF)) <= 0.05] or ys[:3]
+            loop = abs(sum(head) / len(head) - sum(ys[-3:]) / 3) / mean
+            still = (sum(1 for _, d in win[1:] if d < 0.25 * typical) / len(win)) if typical else 0
+            score = std + 3 * dip + 2 * max(0.0, loop - 0.02) + 1.5 * still
             if best is None or score < best[0]:
-                best = (score, s, std, dip, loop)
+                best = (score, s, std, dip, loop, still)
         s += 0.25
     if best:
         print(f"  reel: best 7 s starts at {best[1]:.2f}s (exposure spread {best[2]:.1%}, "
-              f"dark dip {best[3]:.1%}, start/end diff {best[4]:.1%})")
+              f"dark dip {best[3]:.1%}, start/end diff {best[4]:.1%}, frozen {best[5]:.0%})")
         return best[1]
     return lo
 
-def build(exe, src, crop, hook_png, sub_png):
+def encode(exe, src, start, fc, rate, L, out):
+    cmd = [exe, "-y", "-hide_banner", "-loglevel", "error",
+           "-ss", f"{start:.3f}", "-t", f"{WIN + 0.3:.3f}", "-i", str(src),
+           "-f", "rawvideo", "-pix_fmt", "rgba", "-s", f"{W}x{H}",
+           "-framerate", str(FPS), "-i", "-"]
+    if AUDIO != "none":
+        cmd += ["-f", "lavfi", "-t", str(SECS), "-i", "anullsrc=r=44100:cl=stereo"]
+    cmd += ["-filter_complex", fc, "-map", "[v]"]
+    cmd += ["-map", "2:a", "-c:a", "aac", "-b:a", "32k"] if AUDIO != "none" else ["-an"]
+    cmd += ["-t", str(SECS), "-r", str(FPS),
+            "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+            "-maxrate", rate, "-bufsize", f"{int(rate[:-1]) * 2}M", "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart", str(out)]
+    log = M.OUT / "reel_ffmpeg.log"
+    with open(log, "wb") as err:
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=err)
+        try:
+            for frame in overlay_frames(L):
+                proc.stdin.write(frame)
+        except BrokenPipeError:
+            pass
+        finally:
+            try:
+                proc.stdin.close()
+            except OSError:
+                pass
+        try:
+            proc.wait(timeout=600)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            print("!! reel: ffmpeg took over 10 min")
+            return False
+    if proc.returncode != 0 or not out.exists():
+        print(f"!! reel: ffmpeg failed: {log.read_text(errors='replace')[-800:]}")
+        return False
+    return True
+
+def build(exe, src, crop, L):
     """One background -> out/reel.mp4 (6.8 s loop). Returns the path or None."""
     out = M.OUT / "reel.mp4"
     dur = duration(exe, src)
-    if dur < NEED + 0.05:
-        print(f"  reel bg: clip is {dur:.1f}s, need {NEED:.1f}s – trying another")
+    if dur < WIN + 0.05:
+        print(f"  reel bg: clip is {dur:.1f}s, need {WIN:.1f}s – trying another")
         return None
-    start = best_start(brightness(exe, src, crop), dur)
-    k = RAMP / WIN
-    last = SECS - 1 / FPS                                # time of the final frame
+    start = best_start(analyse(exe, src, crop), dur)
     pre = crop_filter(crop) + ("deshake," if STABILIZE else "")
-    fc = (f"[0:v]trim=duration={NEED:.3f},setpts=PTS-STARTPTS,{pre}"
+    fc = (f"[0:v]setpts=PTS-STARTPTS,fps={FPS},trim=duration={WIN},setpts=PTS-STARTPTS,{pre}"
           f"scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,"
-          f"crop={W}:{H},setsar=1,"
-          f"setpts='(sqrt(1+2*{k:.6f}*T)-1)/{k:.6f}/TB',fps={FPS},"
-          f"trim=duration={WIN},setpts=PTS-STARTPTS,split[a][b];"
+          f"crop={W}:{H},setsar=1,format=yuv420p,split[a][b];"
           f"[a]trim=start={XF},setpts=PTS-STARTPTS[body];"
           f"[b]trim=duration={XF},setpts=PTS-STARTPTS[head];"
-          f"[body][head]xfade=transition=fade:duration={XF}:offset={SECS - XF:.3f},"
-          f"colorchannelmixer=rr={FLASH_GAIN}:gg={FLASH_GAIN}:bb={FLASH_GAIN}"
-          f":enable='lt(t,{FLASH_END})'[base];"
-          f"[1:v]format=rgba,colorchannelmixer=aa={OV_ALPHA},"
-          f"fade=t=in:st={OV_ON}:d={OV_FADE}:alpha=1,"
-          f"fade=t=out:st={OV_OUT}:d={last - OV_OUT:.3f}:alpha=1[ov];"
-          f"[2:v]format=rgba,fade=t=in:st={HOOK_ON}:d={TEXT_FADE}:alpha=1,"
-          f"fade=t=out:st={TEXT_OFF - TEXT_FADE}:d={TEXT_FADE}:alpha=1[t1];"
-          f"[3:v]format=rgba,fade=t=in:st={SUB_ON}:d={TEXT_FADE}:alpha=1,"
-          f"fade=t=out:st={TEXT_OFF - TEXT_FADE}:d={TEXT_FADE}:alpha=1[t2];"
-          f"[base][ov]overlay=0:0[v1];[v1][t1]overlay=0:0[v2];"
-          f"[v2][t2]overlay=0:0,format=yuv420p[v];")
-    if AUDIO == "silent":
-        asrc = "anullsrc=r=44100:cl=mono:d=12"
-        fc += f"[4:a]atrim=duration={SECS},pan=stereo|c0=c0|c1=c0[a]"
-    else:                                                # soft wind, loops like the video
-        asrc = "anoisesrc=d=12:c=brown:r=44100:a=0.5"
-        fc += (f"[4:a]highpass=f=60,lowpass=f=500,loudnorm=I={WIND_LUFS}:TP=-10:LRA=5,"
-               f"aresample=44100,atrim=start=4:duration={WIN},asetpts=PTS-STARTPTS,"
-               f"asplit[x][y];[x]atrim=start={XF},asetpts=PTS-STARTPTS[ab];"
-               f"[y]atrim=duration={XF},asetpts=PTS-STARTPTS[ah];"
-               f"[ab][ah]acrossfade=d={XF}:c1=qsin:c2=qsin,pan=stereo|c0=c0|c1=c0[a]")
-
+          f"[body][head]xfade=transition=fade:duration={XF}:offset={SECS - XF:.3f}[base];"
+          f"[1:v]format=rgba,setpts=PTS-STARTPTS[ov];"
+          f"[base][ov]overlay=0:0:shortest=1,format=yuv420p[v]")
     mb = 0.0
-    for rate in ("8M", "5M"):                            # 2nd pass only if over 8 MB
-        cmd = [exe, "-y", "-hide_banner", "-loglevel", "error",
-               "-ss", f"{start:.3f}", "-t", f"{NEED + 0.3:.3f}", "-i", str(src),
-               "-f", "lavfi", "-i", f"color=c=black:s={W}x{H}:r={FPS}:d={SECS}",
-               "-loop", "1", "-framerate", str(FPS), "-t", str(SECS), "-i", str(hook_png),
-               "-loop", "1", "-framerate", str(FPS), "-t", str(SECS), "-i", str(sub_png),
-               "-f", "lavfi", "-i", asrc,
-               "-filter_complex", fc, "-map", "[v]", "-map", "[a]",
-               "-t", str(SECS), "-r", str(FPS),
-               "-c:v", "libx264", "-preset", "medium", "-crf", "20",
-               "-maxrate", rate, "-bufsize", f"{int(rate[:-1]) * 2}M", "-pix_fmt", "yuv420p",
-               "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", str(out)]
-        try:
-            p = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-        except subprocess.TimeoutExpired:
-            print("!! reel: ffmpeg took over 10 min")
-            return None
-        if p.returncode != 0 or not out.exists():
-            print(f"!! reel: ffmpeg failed: {p.stderr[-800:]}")
+    for rate in ("8M", "5M"):                           # 2nd pass only if over 8 MB
+        if not encode(exe, src, start, fc, rate, L, out):
             return None
         mb = out.stat().st_size / 1e6
         if mb <= MAX_MB:
             break
         print(f"  reel: {mb:.1f} MB > {MAX_MB:.0f} MB – encoding again smaller")
 
-    s = brightness(exe, out)                             # loop check: first vs last frame
+    s = analyse(exe, out)                               # loop check: first vs last frame
     if len(s) >= 2:
         a, b = s[0][1], s[-1][1]
         diff = abs(a - b) / max(a, b, 1) * 100
@@ -380,7 +440,8 @@ def build(exe, src, crop, hook_png, sub_png):
               f"{'(OK)' if diff <= 5 else '(!! over 5%)'}")
     subprocess.run([exe, "-y", "-loglevel", "error", "-ss", "3", "-i", str(out),
                     "-frames:v", "1", str(M.OUT / "reel_frame.jpg")], capture_output=True)
-    print(f"  reel: {SECS}s, {mb:.1f} MB, overlay {OV_ALPHA:.0%}, audio {AUDIO}")
+    print(f"  reel: {SECS}s, {len(s) or FRAMES} frames, {mb:.1f} MB, overlay {OV_ALPHA:.0%}, "
+          f"crop {crop:.0%}, {'no sound' if AUDIO != 'none' else 'no audio track'}")
     return out
 
 
@@ -423,7 +484,7 @@ def reel_caption(m, h, l, usd, e, dream=None, credit=""):
 
 
 # ─── entry point used by main.build_slides() ─────────────────────────
-def make(m, h, l, usd, e, facts, rot=None, video=None):
+def make(m, h, l, usd, e, facts=None, rot=None, video=None):
     """Returns (reel path, hook line, caption, 'pexels:ID') or None.
     video = a local mp4 instead of Pexels (only for preview.py)."""
     global M
@@ -432,16 +493,16 @@ def make(m, h, l, usd, e, facts, rot=None, video=None):
     if not exe:
         print("Reel: ffmpeg not found – no reel today")
         return None
-    hook = hook_line(h, l, e, usd, facts)
+    hook = hook_line(h, l, usd)
     if not hook:
-        print("Reel: no hook line fits – no reel today")
+        print("Reel: hook line doesn't fit – no reel today")
         return None
     sub = sub_line(h, l, e)
-    hook_png, sub_png = text_pngs(hook, sub)
-    print(f"Reel text: {hook[0]} ({hook[2]}px) / {sub[0] if sub else '-'}")
+    print(f"Reel text: {hook[0]} ({hook[2]}px) / {sub[0] if sub else '-'} ({SUB_PX}px)")
+    L = layout(hook, sub)
 
     if video:
-        out = build(exe, Path(video), 0.0, hook_png, sub_png)
+        out = build(exe, Path(video), CROP_DEFAULT, L)
         return (out, hook[0], reel_caption(m, h, l, usd, e), None) if out else None
 
     order = candidates(h, rot or {})
@@ -453,10 +514,11 @@ def make(m, h, l, usd, e, facts, rot=None, video=None):
         if not got:
             continue
         src, credit = got
+        crop = CROP_DEFAULT if entry["crop"] is None else entry["crop"]
         try:
-            out = build(exe, src, entry["crop"], hook_png, sub_png)
+            out = build(exe, src, crop, L)
         finally:
-            src.unlink(missing_ok=True)                  # don't keep the big source file
+            src.unlink(missing_ok=True)                 # don't keep the big source file
         if out:
             print(f"Reel: pexels {entry['id']} -> {out}")
             return (out, hook[0], reel_caption(m, h, l, usd, e, credit=credit),
