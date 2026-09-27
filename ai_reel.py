@@ -12,6 +12,13 @@ bg_videos.txt, one video per line:
     1234567  crop=0                <- don't cut the bottom (default cuts 10%)
     # lines starting with # are ignored
 
+Text:
+  line 1 (hook)  '$25K AMINO'                           bold, up to 190 px
+  line 2         '4BR • 7 min drive to beach • 18% net' 46 px, 85% opacity
+                 SIZE • DISTANCE • MONEY. The distance is always shown when known
+                 ('drive' is added for car trips). If the line is too long, the size
+                 gets shorter first, then is dropped. The distance is kept.
+
 Reel: 1080x1920, 30 fps, 6.8 s seamless loop, H.264, < 8 MB, no sound.
   0.0-0.3 s  video only (no overlay, no text)
   0.3-0.5 s  black overlay 0% -> 55%
@@ -180,10 +187,22 @@ def fetch(entry):
                     fh.write(chunk)
     except (requests.RequestException, OSError) as ex:
         print(f"  reel bg: download failed for {vid}: {ex}")
+        path.unlink(missing_ok=True)                    # don't leave a half file behind
         return None
     name = (v.get("user") or {}).get("name") or "Pexels"
     print(f"  reel bg: pexels {vid} {best['width']}x{best['height']} by {name}")
     return path, f"Video: {name} / Pexels"
+
+
+# ─── trip time (shared by line 2 and the caption) ────────────────────
+def trip(h, l):
+    """(minutes as a clean string like '7', True if by car) or (None, False)."""
+    mins, mode = M.trip_parts(h, l)
+    try:
+        m = float(mins)
+    except (TypeError, ValueError):
+        return None, False
+    return f"{m:g}" if m != int(m) else str(int(m)), "drive" in str(mode).lower()
 
 
 # ─── the 2 text lines ────────────────────────────────────────────────
@@ -222,15 +241,15 @@ def sub_font(px):
             pass
     return M.cfont("sans", px, 400)
 
-# Edges found in the listing's own text. (reel text, kinds allowed or None = any, words to find)
-# Order = priority. Add words here if your listings describe things differently.
+# Features found in the listing's own text. (reel text, kinds allowed or None = any, words to find)
+# Only used if FEATURE_FIRST = True, or when there's no trip time.
 EDGE_WORDS = [
     ("ski-in/out",    {"ski"}, ["ski-in", "ski in/out", "スキーイン"]),
     ("private onsen", None,    ["private onsen", "onsen bath", "温泉付き", "温泉引込", "温泉引き込み"]),
     ("onsen source",  None,    ["onsen source", "自家源泉", "源泉かけ流し"]),
     ("Fuji view",     None,    ["fuji view", "view of mt. fuji", "富士山が見え", "富士山眺望", "富士山ビュー"]),
 ]
-CLOSE_MIN = 3                       # only show distance if it's this many minutes or less
+FEATURE_FIRST = False   # True = a listed feature ("private onsen") replaces the distance
 
 def listing_text(l):
     """All text in the listing, lowercased, to search for features."""
@@ -275,30 +294,46 @@ def size_options(l):
         opts.append(f"{m2:.0f}m²")
     return opts or [None]
 
-def edge(h, l):
-    """A real feature from the listing first, then distance if it's 3 min or less, else None."""
-    kind = h["kind"]
+def trip_text(h, l):
+    """'7 min drive to beach', '2 min to lift', 'steps to onsen', or None if no time."""
+    mins, drive = trip(h, l)
+    if mins is None:
+        return None
+    to = {"ski": "lift", "onsen": "onsen", "beach": "beach"}.get(
+        h["kind"], main_word(M.short_name(h["name"])))
+    if float(mins) <= 1 and not drive:
+        return f"steps to {to}"
+    return f"{mins} min drive to {to}" if drive else f"{mins} min to {to}"
+
+def feature(h, l):
+    """A real feature named in the listing's own text, else None."""
     text = listing_text(l)
     for label, kinds, words in EDGE_WORDS:
-        if (kinds is None or kind in kinds) and any(w in text for w in words):
+        if (kinds is None or h["kind"] in kinds) and any(w in text for w in words):
             return label
-    mins, mode = M.trip_parts(h, l)
-    try:
-        m = float(mins)
-    except (TypeError, ValueError):
-        return None
-    if m > CLOSE_MIN:
-        return None                                     # 20 min onsen -> don't say it
-    to = {"ski": "lift", "onsen": "onsen", "beach": "beach"}.get(
-        kind, main_word(M.short_name(h["name"])))
-    return f"steps to {to}" if m <= 1 else f"{mins} min {to}"
+    return None
+
+def edge(h, l):
+    """Distance always, unless FEATURE_FIRST is on and the listing names a feature."""
+    if FEATURE_FIRST:
+        return feature(h, l) or trip_text(h, l)
+    return trip_text(h, l) or feature(h, l)
+
+def money_text(e, long=False):
+    """'18% net' / '$925/mo net' (long=True: '18% net yield')."""
+    if M.show_yield(e):
+        return f"{e['roi'] * 100:.0f}% net" + (" yield" if long else "")
+    return f"${round(e['monthly']):,}/mo net"
 
 def sub_line(h, l, e):
-    """Line 2: SIZE • EDGE • MONEY, e.g. '4BR • private onsen • 11% net'."""
-    money = f"{e['roi'] * 100:.0f}% net" if M.show_yield(e) else f"${e['monthly']:,}/mo net"
+    """Line 2: SIZE • EDGE • MONEY, e.g. '4BR • 7 min drive to beach • 18% net'.
+    Returns (text, font) or None if nothing fits."""
+    money = money_text(e)
     ed = edge(h, l)
     sizes = size_options(l)
-    print(f"  reel line 2: size {sizes}, edge {ed or 'none (not within 3 min, no feature in listing)'}")
+    _, mode = M.trip_parts(h, l)
+    print(f"  reel line 2: size {sizes}, edge {ed or 'none (no trip time, no feature in listing)'}"
+          f" | trip mode {mode!r}")
     f = sub_font(SUB_PX)
     tries = ([[s, ed, money] for s in sizes]           # full line, shorter size if too wide
              + ([[ed, money]] if ed else [])           # keep the edge over the size
@@ -505,6 +540,8 @@ def build(exe, src, crop, L):
         if mb <= MAX_MB:
             break
         print(f"  reel: {mb:.1f} MB > {MAX_MB:.0f} MB – encoding again smaller")
+    if mb > MAX_MB:
+        print(f"  reel: still {mb:.1f} MB after the smaller pass – check before posting")
 
     s = analyse(exe, out)                               # loop check: first vs last frame
     if s:
@@ -526,9 +563,6 @@ def build(exe, src, crop, L):
 
 
 # ─── caption + hashtags (all from our own data) ──────────────────────
-def yield_text(e):
-    return f"{e['roi'] * 100:.0f}% net yield" if M.show_yield(e) else f"${e['monthly']:,}/mo net"
-
 def tag(s):
     return "#" + slug(s)
 
@@ -545,22 +579,25 @@ def hashtags(h, l):
     return tags[:8]
 
 def fallback_dream(h, l):
-    mins, _ = M.trip_parts(h, l)
+    """'Sea breeze, 7 min drive from your own front door.' (matches line 2)."""
     start = {"ski": "Fresh powder, ", "onsen": "Evening steam, ", "beach": "Sea breeze, ",
              "nature": "Forest air, ", "sight": "Quiet old streets, "}.get(h["kind"], "")
-    return f"{start}{mins} min from your own front door."
+    mins, drive = trip(h, l)
+    if mins is None:
+        return f"{start}right from your own front door." if start else ""
+    return f"{start}{mins} min{' drive' if drive else ''} from your own front door."
 
 def reel_caption(m, h, l, usd, e, dream=None, credit=""):
     global M
     M = m
     price = "FREE" if l["price_yen"] == 0 else M.fmt_usd(usd)
     pref = M.PREF_EN.get(l["pref"], l["pref"])
-    lines = [f"{M.short_name(h['name'])} Akiya ROI: {price} house → {yield_text(e)}",
+    lines = [f"{M.short_name(h['name'])} Akiya ROI: {price} house → {money_text(e, long=True)}",
              dream or fallback_dream(h, l),
              CTA.format(pref=pref)]
     if credit:
         lines.append(f"🎥 {credit}")
-    return "\n".join(lines + ["", " ".join(hashtags(h, l))])
+    return "\n".join([x for x in lines if x] + ["", " ".join(hashtags(h, l))])
 
 
 # ─── entry point used by main.build_slides() ─────────────────────────
