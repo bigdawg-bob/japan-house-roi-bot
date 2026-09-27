@@ -1526,18 +1526,54 @@ def render_cover_html(fields):
     print(f"Cover HTML: {out} | {fields['hook']} | {fields['location']}")
     return out
 
+# ── hero number (same font + size on slides 1 and 2) + slide 2 small math ──
+HERO_MAX  = 210                       # biggest hero size (px); slides 1 and 2 always match
+MATH_PX   = 28                        # slide 2 small math: Inter Regular, never smaller
+MATH_FILL = (255, 255, 255, 230)      # white at 90% opacity
+MATH_TOP  = 1019                      # first math line (was 1085) -> 25% more room below it
+MATH_GAP  = 42                        # space between math lines
+DIVIDER_Y = 965                       # thin line above the math (was 1000)
+
+def payback_text(e):
+    """Slide 2 hero wording: (big, label, sub, real, fees_on)."""
+    fees_on = bool(e.get("fees_yearly"))
+    after = "after management" + (" & fees" if fees_on else "")
+    yrs = e.get("breakeven_yrs")
+    real = bool(show_yield(e) and yrs)                  # same rule as slide 1 (hide if > 60%)
+    if real:
+        return (fmt_years(yrs), "to payback",
+                f"≈ ${e['monthly']:,} / month net, {after}", real, fees_on)
+    return f"${e['monthly']:,}", "per month (est.)", f"usd net, {after}", real, fees_on
+
+def hero_size(e):
+    """Slide 2 hero size: both big lines shrink together until they fit.
+    Slide 1 uses this same size, so the two heroes always match."""
+    big, label = payback_text(e)[:2]
+    d = ImageDraw.Draw(Image.new("RGB", (8, 8)))
+    size = HERO_MAX
+    while size > 80 and max(text_width(d, s, pfont(size)) for s in (big, label)) > W - 120:
+        size -= 4
+    return size
+
 def cover_slide(photo, l, hooks, usd, e):
-    """Slide 1. photo = PIL image (always given)."""
+    """Slide 1. photo = PIL image (always given). Hero = Playfair, same size as slide 2."""
     c = cover_fields(l, hooks, usd, e)
     cx, white = W // 2, (255, 255, 255)
     soft, grey = (230, 230, 230), (200, 200, 200)
     img = shade(ImageOps.fit(photo, (W, H), Image.LANCZOS))
     d = ImageDraw.Draw(img)
 
+    # hero: same font (Playfair Display) and size as the slide 2 hero
+    size = hero_size(e) if e else HERO_MAX
+    hf = pfont(size)
+    while size > 80 and text_width(d, c["hook"], hf) > W - 120:   # safety, rarely needed
+        size -= 4
+        hf = pfont(size)
+    put(d, (cx, 640), c["hook"], hf, white, "ms", 0, 3)
+
     # (x, y, text, style, size, weight, colour, anchor, letter spacing)
     items = [
         (60, 60, HANDLE, "sans", 26, 500, white, "la", 1),
-        (cx, 640, c["hook"], "serif", 300, 300, white, "ms", -4),
         (cx, 690, c["sub_hook"], "sans", 40, 300, soft, "mt", 2),
     ]
     if c["detail"]:
@@ -1571,7 +1607,7 @@ def fmt_years(y):
     n = f"{y:.1f}".removesuffix(".0") if y < 10 else f"{y:.0f}"
     return f"~{n} year{'' if n == '1' else 's'}"
 
-PLAYFAIR = FONT_DIR / "Serif-Playfair.ttf"        # Playfair Display Regular (slide 2)
+PLAYFAIR = FONT_DIR / "Serif-Playfair.ttf"        # Playfair Display Regular (slides 1 & 2 hero)
 
 @lru_cache(maxsize=64)
 def pfont(size):
@@ -1581,7 +1617,7 @@ def pfont(size):
     except OSError:
         if PLAYFAIR not in _missing:
             _missing.add(PLAYFAIR)
-            print(f"!! FONT MISSING: {PLAYFAIR} – slide 2 uses Serif-Light instead")
+            print(f"!! FONT MISSING: {PLAYFAIR} – slides 1 & 2 hero use Serif-Light instead")
         return cfont("serif", size, 300)
 
 def fit_pfont(d, s, size, maxw=W - 120):
@@ -1627,42 +1663,50 @@ def cost_breakdown(e, usd):
         return f"({fmt_k1(usd)} + {fmt_k1(rest)} reno & fees)"
     return f"({fmt_k1(usd)} + {fmt_k1(reno)} reno + {fmt_k1(buy)} fees)"
 
+def wrap_math(d, s, f, maxw):
+    """Splits a math line at its ' • ' breaks (then at spaces if still too long),
+    so every piece fits maxw WITHOUT making the text smaller than MATH_PX."""
+    out, cur = [], ""
+    for part in s.split(" • "):
+        t = f"{cur} • {part}" if cur else part
+        if text_width(d, t, f) <= maxw:
+            cur = t
+            continue
+        if cur:
+            out.append(cur)
+        if text_width(d, part, f) <= maxw:
+            cur = part
+        else:
+            pieces = wrap_px(d, part, f, maxw)
+            out += pieces[:-1]
+            cur = pieces[-1]
+    if cur:
+        out.append(cur)
+    return out
+
 def area_slide(pic, h, l, e, usd=None):
     """Slide 2: daytime photo + THE PAYBACK (numbers from yield_calc.estimate)."""
     img = area_bg(pic)
     d = ImageDraw.Draw(img)
     cx = W // 2
     white = (255, 255, 255)
-    w85, w70, w60, w30 = (217, 217, 217), (179, 179, 179), (153, 153, 153), (77, 77, 77)
-    SMALL = 21                                          # size of the 2 bottom lines
-    fees_on = bool(e.get("fees_yearly"))
-    after = "after management" + (" & fees" if fees_on else "")
-    yrs = e.get("breakeven_yrs")
-    real = show_yield(e) and yrs                        # same rule as slide 1 (hide if > 60%)
+    w70, w60, w30 = (179, 179, 179), (153, 153, 153), (77, 77, 77)
+    big, label, sub, real, fees_on = payback_text(e)
 
     # top: handle + title on one line
     put(d, (60, 62), HANDLE, cfont("sans", 24, 300), w70, "la", 1, 2)
     put(d, (cx, 62), "THE PAYBACK", cfont("sans", 22, 300), w60, "mt", 6, 0)
 
-    if real:
-        big, label = fmt_years(yrs), "to payback"
-        sub = f"≈ ${e['monthly']:,} / month net, {after}"
-    else:
-        big, label = f"${e['monthly']:,}", "per month (est.)"
-        sub = f"usd net, {after}"
-
-    # 2 big Playfair lines, same size (both shrink together if one is too wide)
-    size = 210
-    while size > 80 and max(text_width(d, s, pfont(size)) for s in (big, label)) > W - 120:
-        size -= 4
+    # 2 big Playfair lines, same size (slide 1's hero uses this exact size too)
+    size = hero_size(e)
     bf = pfont(size)
     put(d, (cx, 600), big, bf, white, "ms", 0, 3)
     put(d, (cx, 600 + int(size * 0.95)), label, bf, white, "ms", 0, 3)
 
     put(d, (cx, 900), sub, fit_pfont(d, sub, 36), white, "ms", 0, 2)
-    d.line([(cx - 100, 1000), (cx + 100, 1000)], fill=w30, width=1)
+    d.line([(cx - 100, DIVIDER_Y), (cx + 100, DIVIDER_Y)], fill=w30, width=1)
 
-    # 2 detail lines, same font (Inter Regular)
+    # small math: Inter Regular 28px (never smaller), white 90%, wraps instead of shrinking
     all_in = f"{fmt_k1(e['all_in'])} all-in {cost_breakdown(e, usd)}"
     line_a = f"{e['roi'] * 100:.0f}% net yield • {all_in}" if real else all_in
     mg = _num(e, "mgmt_pct", "management_pct", "mgmt_rate", "mgmt", "management")
@@ -1670,10 +1714,14 @@ def area_slide(pic, h, l, e, usd=None):
     line_b = (f"{hook_label(h)} • ${e['adr']:,}/nt × {e['occ'] * 100:.0f}% × "
               f"{e['nights']} days • After {mg:.0f}% mgmt{' & fees' if fees_on else ''}: "
               f"{fmt_k1(e['net'])}/yr")
-    for y, s in ((1085, line_a), (1140, line_b)):
-        put(d, (cx, y), s, fit_font(d, s, SMALL, 400), w85, "mm", 0, 2)
+    mf = cfont("sans", MATH_PX, 400)
+    rows = wrap_math(d, line_a, mf, W - 120) + wrap_math(d, line_b, mf, W - 120)
 
-    return img
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))     # separate layer = real 90% opacity
+    ld = ImageDraw.Draw(layer)
+    for i, s in enumerate(rows):
+        put(ld, (cx, MATH_TOP + i * MATH_GAP), s, mf, MATH_FILL, "mm", 0, 2)
+    return Image.alpha_composite(img.convert("RGBA"), layer).convert("RGB")
 
 def facts_slide(pic, h, l, hooks, facts, e, s3):
     """Slide 3: dusk photo + WHY THIS RENTS. Same layout as before; wording from s3."""
