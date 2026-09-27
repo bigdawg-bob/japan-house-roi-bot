@@ -22,9 +22,11 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
          -> photo library (any photo from any earlier post) -> unchecked stock
          -> this listing's photos -> fallback_photos/ folder. 75% black overlay.
          No photo at all -> no post today (retry next run).
-      -> Reel: AI video (ai_reel.py, optional) or photo reel: 1080x1920, exactly 7.0 s,
-         one shot with a slow zoom-in (Ken Burns), 70% black overlay, ONE centred line
+      -> Reel: 1080x1920, exactly 7.0 s, NO zoom, 70% black overlay, ONE centred line
          (max 4 words), text fades in at 0.5 s and out at 6.5 s.
+         Background: your own video clip (reels/<kind>/ or reels/any/, a clip named
+         after the town wins, clips take turns) > AI video (ai_reel.py, optional)
+         > still photo.
          Line: "$15K KINOSAKI" > "19 AIRBNBS HERE" > "25 MIN TO KINOSAKI" > "WHY $203 WORKS".
       -> optional cover.html template ({{ hook }}, {{ location }} ...) -> out/cover.html
       -> 1080x1350 slides -> Telegram (album + copyable caption + reel video).
@@ -112,8 +114,9 @@ LIBRARY_MAX    = int(_env("LIBRARY_MAX", "60"))           # photos kept for reus
 SLIDE3_HISTORY = 30                                       # slide 3 fact combos remembered
 BOT_UA         = {"User-Agent": "yama-yield-akiya-bot/1.0 (Instagram @yama.yield; GitHub Actions)"}
 
-# ── reel (7 s vertical video, one line of text) ──
+# ── reel (7 s vertical video, one line of text, no zoom) ──
 REEL_ON      = _env("REEL", "1") == "1"                 # REEL=0 turns the reel off
+REEL_CLIPS_ON = _env("REEL_CLIPS", "1") == "1"          # REEL_CLIPS=0 ignores the reels/ folder
 REEL_W, REEL_H = 1080, 1920
 REEL_FPS     = 30
 REEL_SECS    = 7.0                                      # exactly 7.0 s = 210 frames
@@ -124,9 +127,11 @@ REEL_MIN_PX  = int(_env("REEL_MIN_PX", "72"))           # smallest text allowed
 REEL_WORDS   = 4                                        # v2: max 4 words, one line
 REEL_TRACK   = int(_env("REEL_TRACK", "0"))             # letter spacing, 1/1000 em
 REEL_MAXW    = 950                                      # ~88% of 1080
-REEL_PHOTO   = _env("REEL_PHOTO", "dusk").lower()       # dusk | day | cover
-REEL_ZOOM    = max(1.0, float(_env("REEL_ZOOM", "1.12")))  # slow zoom-in: 1.00 -> 1.12 over 7 s
+REEL_PHOTO   = _env("REEL_PHOTO", "dusk").lower()       # dusk | day | cover (photo reel only)
+REEL_ZOOM    = 1.0                                      # zoom removed (kept only so ai_reel.py still finds it)
 REEL_FADE    = 0.3                                      # text fade in / out, seconds
+CLIP_EXT     = (".mp4", ".mov", ".m4v")                 # video files used from reels/
+CLIP_HISTORY = 20                                       # recently used clips remembered
 
 def _weights(s):
     out = {}
@@ -169,6 +174,7 @@ LIBRARY_FILE  = STATE / "photo_library.json"
 LIBRARY_DIR   = STATE / "photo_library"
 TOWNS_FILE    = ROOT / "towns.json"                      # optional: your own checked town facts
 FALLBACK_DIR  = ROOT / "fallback_photos"                 # optional: your own backup photos
+REEL_DIR      = ROOT / "reels"                           # optional: your own reel videos
 COVER_TEMPLATE = Path(_env("COVER_TEMPLATE", str(ROOT / "templates" / "cover.html")))  # optional HTML cover
 OUT           = ROOT / "out"
 JST           = timezone(timedelta(hours=9))
@@ -1714,7 +1720,7 @@ def facts_slide(pic, h, l, hooks, facts, e, s3):
     return img
 
 
-# ─── reel (7 s vertical video, one centred line) ─────────────────────
+# ─── reel (7 s vertical video, one centred line, no zoom) ────────────
 REEL_FONT_FILES = [FONT_DIR / "Arimo-Bold.ttf",
                    FONT_DIR / "Reel-Bold.ttf",
                    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
@@ -1773,6 +1779,26 @@ def reel_line(d, h, facts, e, usd=None, l=None):
         print(f"  reel: skip '{s}' (would need < {REEL_MIN_PX}px to fit)")
     return None
 
+def reel_text_mask(h, facts, e, usd=None, l=None):
+    """The reel's one centred line as a 1080x1920 greyscale mask (255 = text).
+    Returns (mask, text, size) or None if no line fits."""
+    mask = Image.new("L", (REEL_W, REEL_H), 0)
+    md = ImageDraw.Draw(mask)
+    line = reel_line(md, h, facts, e, usd, l)
+    if not line:
+        return None
+    s, f, size, track = line
+    put(md, (REEL_W / 2, REEL_H / 2), s, f, 255, "mm", track, 0)
+    return mask, s, size
+
+def reel_text_alpha(i):
+    """Text opacity (0..1) in frame i: fades in from 0.5 s, fades out until 6.5 s."""
+    fade = max(1, round(REEL_FADE * REEL_FPS))
+    on, off = round(REEL_TEXT_ON * REEL_FPS), round(REEL_TEXT_OFF * REEL_FPS)
+    if i < on or i >= off:
+        return 0.0
+    return min(1.0, (i - on + 1) / fade, (off - i) / fade)
+
 def ffmpeg_exe():
     try:
         import imageio_ffmpeg
@@ -1781,7 +1807,7 @@ def ffmpeg_exe():
         return shutil.which("ffmpeg")
 
 def build_reel(pic, h, facts, e, usd=None, l=None):
-    """out/reel.mp4: 1080x1920, 7.0 s, one shot with a slow zoom-in (Ken Burns),
+    """Photo reel -> out/reel.mp4: 1080x1920, 7.0 s, still photo (no zoom),
     70% black, one centred line fading in at 0.5 s and out at 6.5 s.
     Returns (path, line) or (None, None)."""
     exe = ffmpeg_exe()
@@ -1789,43 +1815,24 @@ def build_reel(pic, h, facts, e, usd=None, l=None):
         print("!! reel: ffmpeg not found (pip install imageio-ffmpeg) – no reel today")
         return None, None
 
-    # background a bit bigger than the video, so zooming in keeps it sharp
-    big_w, big_h = int(REEL_W * REEL_ZOOM), int(REEL_H * REEL_ZOOM)
-    bg = ImageOps.fit(pic["img"], (big_w, big_h), Image.LANCZOS)
+    bg = ImageOps.fit(pic["img"], (REEL_W, REEL_H), Image.LANCZOS)
     bg = Image.blend(bg, Image.new("RGB", bg.size, (0, 0, 0)), REEL_OVERLAY)
 
-    # text is drawn once as a mask; it does NOT zoom (stays sharp and readable)
-    mask = Image.new("L", (REEL_W, REEL_H), 0)
-    md = ImageDraw.Draw(mask)
-    line = reel_line(md, h, facts, e, usd, l)
-    if not line:
+    layer = reel_text_mask(h, facts, e, usd, l)
+    if not layer:
         print("!! reel: no line fits – no reel today")
         return None, None
-    s, f, size, track = line
-    put(md, (REEL_W / 2, REEL_H / 2), s, f, 255, "mm", track, 0)
+    mask, s, size = layer
     white = Image.new("RGB", (REEL_W, REEL_H), (255, 255, 255))
-
     frames = int(round(REEL_SECS * REEL_FPS))
-    fade = max(1, round(REEL_FADE * REEL_FPS))
-    on, off = round(REEL_TEXT_ON * REEL_FPS), round(REEL_TEXT_OFF * REEL_FPS)
-
-    def text_alpha(i):
-        if i < on or i >= off:
-            return 0.0
-        return min(1.0, (i - on + 1) / fade, (off - i) / fade)
 
     def frame(i):
-        t = i / max(1, frames - 1)                       # 0 -> 1, steady speed
-        z = 1 + (REEL_ZOOM - 1) * t                      # zoom factor now
-        cw, ch = big_w / z, big_h / z                    # visible part of bg
-        mx, my = (big_w - cw) / 2, (big_h - ch) / 2      # free margin
-        x0, y0 = mx, my * (1 - 0.5 * t)                  # centred, drifting slightly up
-        img = bg.resize((REEL_W, REEL_H), Image.BICUBIC,
-                        box=(x0, y0, x0 + cw, y0 + ch))  # sub-pixel crop = smooth
-        a = text_alpha(i)
-        if a > 0:
-            m = mask if a >= 1 else mask.point(lambda v, a=a: int(v * a))
-            img.paste(white, (0, 0), m)
+        a = reel_text_alpha(i)
+        if a <= 0:
+            return bg
+        img = bg.copy()
+        m = mask if a >= 1 else mask.point(lambda v, a=a: int(v * a))
+        img.paste(white, (0, 0), m)
         return img
 
     frame(frames // 2).save(OUT / "reel_frame.jpg", "JPEG", quality=90)   # preview still
@@ -1855,14 +1862,154 @@ def build_reel(pic, h, facts, e, usd=None, l=None):
     if proc.returncode != 0 or not out.exists():
         print(f"!! reel: ffmpeg failed ({proc.returncode}): {err[:500]}")
         return None, None
-    print(f"Reel: {out} | {s} | {size}px | {frames} frames, zoom 1.00→{REEL_ZOOM:.2f} | "
+    print(f"Reel (photo): {out} | {s} | {size}px | {frames} frames, no zoom | "
           f"{time.time() - t0:.0f}s | font {Path(reel_font_file() or 'fallback').name}")
     return out, s
 
 
+# ── your own video clips (reels/<kind>/ and reels/any/) ──
+# words that are not town names ('Lake Akan' -> only 'akan' counts)
+TOWN_STOP = {"lake", "mt", "old", "town", "the", "castle", "shrine", "grand", "valley",
+             "beach", "bay", "coast", "falls", "river", "gorge", "kogen", "onsen",
+             "village", "thatched", "taisha", "hongu", "yumoto", "and"}
+
+def rel(p):
+    """Path relative to the repo, e.g. 'reels/any/snow-night.mp4'."""
+    try:
+        return Path(p).relative_to(ROOT).as_posix()
+    except ValueError:
+        return Path(p).as_posix()
+
+def town_words(name):
+    """'Kinosaki Onsen' -> {'kinosaki'}, 'Hakuba Happo-one' -> {'hakuba', 'happo', 'one'}"""
+    words = re.findall(r"[a-z]+", short_name(name).lower())
+    return {w for w in words if w not in TOWN_STOP and len(w) >= 3}
+
+def clip_words(p):
+    """'snow-night_kinosaki.mp4' -> {'snow', 'night', 'kinosaki'}"""
+    return set(re.findall(r"[a-z]+", p.stem.lower()))
+
+def list_clips(folder):
+    if not folder.is_dir():
+        return []
+    return sorted(p for p in folder.iterdir()
+                  if p.is_file() and p.suffix.lower() in CLIP_EXT)
+
+def count_clips():
+    if not REEL_DIR.is_dir():
+        return 0
+    return sum(1 for p in REEL_DIR.rglob("*") if p.is_file() and p.suffix.lower() in CLIP_EXT)
+
+def pick_clip(h, rot):
+    """Your own video for this post, or None.
+    Order: clip named after this town (reels/<kind>/, then reels/any/)
+           > other clips in reels/<kind>/ > other clips in reels/any/.
+    Clips named after a DIFFERENT town are never used. Least recently used first."""
+    if not REEL_CLIPS_ON or not REEL_DIR.is_dir():
+        return None
+    mine = town_words(h["name"])
+    others = set().union(*(town_words(n) for _, n, _, _ in HOOKS)) - mine
+    hist = [c for c in (rot.get("reel_clips") or []) if isinstance(c, str)]
+
+    town_kind, town_any, plain_kind, plain_any = [], [], [], []
+    for folder, town_list, plain_list in ((REEL_DIR / h["kind"], town_kind, plain_kind),
+                                          (REEL_DIR / "any", town_any, plain_any)):
+        for p in list_clips(folder):
+            w = clip_words(p)
+            if w & mine:
+                town_list.append(p)
+            elif not (w & others):
+                plain_list.append(p)
+
+    def key(p):
+        r = rel(p)
+        return (r in hist, -hist.index(r) if r in hist else 0)
+
+    for label, pool in (("named after this town", town_kind + town_any),
+                        (f"reels/{h['kind']}/", plain_kind),
+                        ("reels/any/", plain_any)):
+        if pool:
+            pick = sorted(pool, key=key)[0]
+            print(f"  reel clip: {len(pool)} usable ({label}) -> {rel(pick)}")
+            return pick
+    print(f"  reel clip: none usable in reels/{h['kind']}/ or reels/any/")
+    return None
+
+def build_clip_reel(clip, h, facts, e, usd=None, l=None):
+    """Your video as the reel background -> out/reel.mp4: 1080x1920, exactly 7.0 s,
+    no zoom. The clip is cropped to fill the frame, looped if shorter than 7 s,
+    darkened 70% (REEL_OVERLAY), with the same one centred line as the photo reel.
+    Returns (path, line) or (None, None)."""
+    exe = ffmpeg_exe()
+    if not exe:
+        print("!! reel: ffmpeg not found (pip install imageio-ffmpeg)")
+        return None, None
+    layer = reel_text_mask(h, facts, e, usd, l)
+    if not layer:
+        print("!! reel: no line fits")
+        return None, None
+    mask, s, size = layer
+
+    text_png = OUT / "reel_text.png"
+    txt = Image.new("RGBA", (REEL_W, REEL_H), (255, 255, 255, 0))
+    txt.putalpha(mask)                                   # white text, see-through elsewhere
+    txt.save(text_png)
+
+    keep = f"{1 - REEL_OVERLAY:.3f}"                     # 70% black = keep 30% of the colour
+    fade_out = REEL_TEXT_OFF - REEL_FADE
+    fc = (f"[0:v]setpts=PTS-STARTPTS,"
+          f"scale={REEL_W}:{REEL_H}:force_original_aspect_ratio=increase,"
+          f"crop={REEL_W}:{REEL_H},setsar=1,fps={REEL_FPS},format=rgb24,"
+          f"colorchannelmixer=rr={keep}:gg={keep}:bb={keep}[bg];"
+          f"[1:v]setpts=PTS-STARTPTS,format=rgba,"
+          f"fade=t=in:st={REEL_TEXT_ON}:d={REEL_FADE}:alpha=1,"
+          f"fade=t=out:st={fade_out}:d={REEL_FADE}:alpha=1[txt];"
+          f"[bg][txt]overlay=0:0,format=yuv420p[v]")
+    out = OUT / "reel.mp4"
+    cmd = [exe, "-y", "-loglevel", "error",
+           "-stream_loop", "-1", "-i", str(clip),                       # loop if < 7 s
+           "-loop", "1", "-framerate", str(REEL_FPS), "-i", str(text_png),
+           "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
+           "-filter_complex", fc, "-map", "[v]", "-map", "2:a",
+           "-t", f"{REEL_SECS}", "-r", str(REEL_FPS),
+           "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+           "-c:a", "aac", "-movflags", "+faststart", str(out)]
+    t0 = time.time()
+    try:
+        proc = subprocess.run(cmd, capture_output=True, timeout=300)
+    except subprocess.TimeoutExpired:
+        print("!! reel: ffmpeg took over 5 min on the clip – skipping it")
+        return None, None
+    if proc.returncode != 0 or not out.exists():
+        err = proc.stderr.decode(errors="replace")
+        print(f"!! reel: ffmpeg failed on {rel(clip)} ({proc.returncode}): {err[:500]}")
+        return None, None
+
+    try:                                                 # preview still (optional)
+        subprocess.run([exe, "-y", "-loglevel", "error", "-ss", f"{REEL_SECS / 2}",
+                        "-i", str(out), "-frames:v", "1", str(OUT / "reel_frame.jpg")],
+                       capture_output=True, timeout=60)
+    except Exception:
+        pass
+    print(f"Own reel: {rel(clip)} -> {out} | {s} | {size}px | {REEL_SECS} s, no zoom | "
+          f"{time.time() - t0:.0f}s | font {Path(reel_font_file() or 'fallback').name}")
+    return out, s
+
+def safe_reel_caption(me, h0, l, usd, e):
+    """Caption for the reel from ai_reel.py (if loaded), else None."""
+    if not ai_reel:
+        return None
+    try:
+        return ai_reel.reel_caption(me, h0, l, usd, e)
+    except Exception as ex:
+        print(f"!! reel caption error: {ex!r}")
+        return None
+
+
 def build_slides(l, hooks, usd, e, rot=None):
     """3 slides: cover, the payback (day), why this rents (dusk) + the reel.
-    Returns (slide paths, area photo credits, slide 3 wording, (reel path, reel line, reel caption)),
+    Returns (slide paths, area photo credits, slide 3 wording,
+    (reel path, reel line, reel caption, clip used or None)),
     or (None, None, None, None) if no photo at all."""
     OUT.mkdir(exist_ok=True)
     for old in (list(OUT.glob("slide_*.jpg")) + list(OUT.glob("reel*"))
@@ -1926,13 +2073,23 @@ def build_slides(l, hooks, usd, e, rot=None):
     except Exception as ex:
         print(f"!! cover.html error: {ex!r}")
 
-    # reel: AI video first (ski/onsen), photo reel as backup. Never stops the post.
-    reel = (None, None, None)
+    # reel: 1) your own clip from reels/  2) AI video  3) still photo. Never stops the post.
+    reel = (None, None, None, None)
     if REEL_ON:
         me = sys.modules[__name__]
-        if ai_reel:
+        try:
+            clip = pick_clip(h0, rot or {})
+            if clip:
+                path, line = build_clip_reel(clip, h0, facts, e, usd, l)
+                if path:
+                    reel = (path, line, safe_reel_caption(me, h0, l, usd, e), rel(clip))
+        except Exception as ex:
+            print(f"!! own reel error: {ex!r} – trying the next option")
+        if not reel[0] and ai_reel:
             try:
-                reel = ai_reel.make(me, h0, l, usd, e, facts) or reel
+                got = ai_reel.make(me, h0, l, usd, e, facts)
+                if got and got[0]:
+                    reel = (tuple(got) + (None, None, None))[:3] + (None,)
             except Exception as ex:
                 print(f"!! AI reel error: {ex!r} – using the photo reel")
         if not reel[0]:
@@ -1940,13 +2097,7 @@ def build_slides(l, hooks, usd, e, rot=None):
                 pic = {"dusk": dusk, "day": day, "cover": cover}.get(REEL_PHOTO, dusk)
                 path, line = build_reel(pic, h0, facts, e, usd, l)
                 if path:
-                    cap = None
-                    if ai_reel:
-                        try:
-                            cap = ai_reel.reel_caption(me, h0, l, usd, e)
-                        except Exception as ex:
-                            print(f"!! reel caption error: {ex!r}")
-                    reel = (path, line, cap)
+                    reel = (path, line, safe_reel_caption(me, h0, l, usd, e), None)
             except Exception as ex:
                 print(f"!! reel error: {ex!r}")
 
@@ -2147,10 +2298,12 @@ def main():
           f"{'found' if FALLBACK_DIR.exists() else 'none'} | towns.json "
           f"{'found' if TOWNS_FILE.exists() else 'none'} | cover template "
           f"{'found' if COVER_TEMPLATE.exists() else 'none'}")
-    print(f"Reel: {'on' if REEL_ON else 'OFF'} | AI reel {'loaded' if ai_reel else 'not loaded'} | "
+    print(f"Reel: {'on' if REEL_ON else 'OFF'} | own clips "
+          f"{count_clips() if REEL_CLIPS_ON else 'OFF'} in reels/ | "
+          f"AI reel {'loaded' if ai_reel else 'not loaded'} | "
           f"font {reel_font_file() or 'MISSING (fallback)'} | "
           f"{REEL_MIN_PX}-{REEL_MAX_PX}px, max {REEL_WORDS} words | photo {REEL_PHOTO} | "
-          f"zoom {REEL_ZOOM:.2f} | ffmpeg {'found' if ffmpeg_exe() else 'MISSING'}")
+          f"no zoom | ffmpeg {'found' if ffmpeg_exe() else 'MISSING'}")
     fx = get_fx()
     max_yen = MAX_PRICE_USD / fx
     listings = gather()
@@ -2220,7 +2373,7 @@ def main():
     (OUT / "caption.txt").write_text(caption, encoding="utf-8")
 
     ok = tg_album(paths, caption) and tg_text(caption)
-    reel_path, reel_text, reel_cap = (tuple(reel or ()) + (None, None, None))[:3]
+    reel_path, reel_text, reel_cap, reel_clip = (tuple(reel or ()) + (None,) * 4)[:4]
     if ok and reel_path:
         tg_video(reel_path, reel_cap or f"🎬 Reel: {reel_text}")   # a failed reel doesn't block the post
     if ok and not DRY_RUN:
@@ -2233,6 +2386,9 @@ def main():
                     "recent_hooks": recent,
                     "s3_templates": ([s3["template"]] + (rot.get("s3_templates") or []))[:SLIDE3_HISTORY],
                     "s3_points": ([s3["kinds"]] + (rot.get("s3_points") or []))[:SLIDE3_HISTORY]})
+        if reel_clip:
+            rot["reel_clips"] = ([reel_clip] + [c for c in (rot.get("reel_clips") or [])
+                                                if c != reel_clip])[:CLIP_HISTORY]
         save_json(ROTATION_FILE, rot)
         print("Saved to state/posted.json + state/rotation.json")
     elif not ok:
