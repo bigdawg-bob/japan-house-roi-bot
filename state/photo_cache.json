@@ -349,6 +349,76 @@
    "light_ok": true,
    "score": 6,
    "why": "Busy slopes, snow hurts white text"
+  },
+  "pexels:8551382|day|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": true,
+   "score": 7,
+   "why": "Fuji view, people on bridge, busy"
+  },
+  "pexels:39557614|day|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": true,
+   "score": 6,
+   "why": "Overcast Hakone torii, sky too pale"
+  },
+  "pexels:26968604|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": false,
+   "score": 7,
+   "why": "Scenic Hakone torii lake daytime view"
+  },
+  "pexels:31413472|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": false,
+   "score": 8,
+   "why": "Dark fg frames iconic misty torii well"
+  },
+  "pexels:20408263|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": false,
+   "score": 6,
+   "why": "Busy ship people daytime not calm"
+  },
+  "pexels:8551382|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": false,
+   "score": 7,
+   "why": "Fuji lake view, small people, daytime"
+  },
+  "pexels:32276426|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": true,
+   "score": 7,
+   "why": "Mt Fuji night dark sky good overlay"
   }
  }
 }

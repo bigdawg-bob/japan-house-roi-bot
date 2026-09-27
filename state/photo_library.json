@@ -218,5 +218,38 @@
   "added": "2026-09-27T20:08:42+09:00",
   "uses": 1,
   "last": "2026-09-27T20:08:42+09:00"
+ },
+ "b52384e29b10bd0d": {
+  "id": "house:https://akiya.sumai.biz/wp-content/uploads/2026/08/16mz-0.jpg",
+  "credit": "Photo: akiya.sumai.biz",
+  "role": "house",
+  "mood": null,
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-27T20:32:26+09:00",
+  "uses": 1,
+  "last": "2026-09-27T20:32:26+09:00"
+ },
+ "3aa503943aeae233": {
+  "id": "pexels:39557614",
+  "credit": "Photo: Eli Zhao / Pexels",
+  "role": "area",
+  "mood": "day",
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-27T20:32:26+09:00",
+  "uses": 1,
+  "last": "2026-09-27T20:32:26+09:00"
+ },
+ "460f69c032c9e58b": {
+  "id": "pexels:32276426",
+  "credit": "Photo: Tran Chi / Pexels",
+  "role": "area",
+  "mood": "dusk",
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-27T20:32:26+09:00",
+  "uses": 1,
+  "last": "2026-09-27T20:32:26+09:00"
  }
 }

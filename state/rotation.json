@@ -2,13 +2,14 @@
  "last_source": "sumai",
  "date": "2026-09-27",
  "recent_hooks": [
+  "Hakone Yumoto",
   "Nozawa Onsen",
   "Myoko Akakura",
   "Takayama old town",
-  "Kinosaki Onsen",
-  "Beppu"
+  "Kinosaki Onsen"
  ],
  "s3_templates": [
+  "D",
   "E",
   "B",
   "C",
@@ -20,6 +21,11 @@
   "A"
  ],
  "s3_points": [
+  [
+   "tattoo",
+   "pets",
+   "ryokan"
+  ],
   [
    "plan_b",
    "trend",
@@ -67,6 +73,7 @@
   ]
  ],
  "reel_clips": [
+  "pexels:20666702",
   "reels/any/animate_this_exact_video.mp4"
  ]
 }
