@@ -2,13 +2,14 @@
  "last_source": "sumai",
  "date": "2026-09-27",
  "recent_hooks": [
+  "Kotohikihama",
   "Hakone Yumoto",
   "Nozawa Onsen",
   "Myoko Akakura",
-  "Takayama old town",
-  "Kinosaki Onsen"
+  "Takayama old town"
  ],
  "s3_templates": [
+  "A",
   "D",
   "E",
   "B",
@@ -21,6 +22,11 @@
   "A"
  ],
  "s3_points": [
+  [
+   "ryokan",
+   "access",
+   "occ"
+  ],
   [
    "tattoo",
    "pets",
@@ -73,6 +79,7 @@
   ]
  ],
  "reel_clips": [
+  "pexels:6985328",
   "pexels:20666702",
   "reels/any/animate_this_exact_video.mp4"
  ]

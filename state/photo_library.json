@@ -95,8 +95,8 @@
   "kind": "ski",
   "generic": false,
   "added": "2026-09-25T10:46:09+09:00",
-  "uses": 1,
-  "last": "2026-09-25T10:46:09+09:00"
+  "uses": 2,
+  "last": "2026-09-27T21:09:42+09:00"
  },
  "ab2fa403c0379144": {
   "id": "pexels:9254451",
@@ -251,5 +251,27 @@
   "added": "2026-09-27T20:32:26+09:00",
   "uses": 1,
   "last": "2026-09-27T20:32:26+09:00"
+ },
+ "48bc191a724bd192": {
+  "id": "house:https://akiya.sumai.biz/wp-content/uploads/2026/09/1021kt-1.jpg",
+  "credit": "Photo: akiya.sumai.biz",
+  "role": "house",
+  "mood": null,
+  "kind": "beach",
+  "generic": false,
+  "added": "2026-09-27T21:09:42+09:00",
+  "uses": 1,
+  "last": "2026-09-27T21:09:42+09:00"
+ },
+ "6f077219d975af78": {
+  "id": "pexels:19667686",
+  "credit": "Photo: ON VIXION / Pexels",
+  "role": "area",
+  "mood": "day",
+  "kind": "beach",
+  "generic": false,
+  "added": "2026-09-27T21:09:42+09:00",
+  "uses": 1,
+  "last": "2026-09-27T21:09:42+09:00"
  }
 }

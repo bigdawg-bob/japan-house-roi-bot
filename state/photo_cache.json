@@ -419,6 +419,116 @@
    "light_ok": true,
    "score": 7,
    "why": "Mt Fuji night dark sky good overlay"
+  },
+  "pexels:19667686|day|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Calm pier view, ample sky space"
+  },
+  "pexels:38230341|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 2,
+   "why": "Busy izakaya not beach, person visible"
+  },
+  "pexels:30641513|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 3,
+   "why": "Urban night street, not beach"
+  },
+  "pexels:15837551|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 2,
+   "why": "Tokyo bar not Kyoto beach, cluttered"
+  },
+  "pexels:32305068|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 2,
+   "why": "Greek bar, not Kyoto beach"
+  },
+  "pexels:35516147|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": false,
+   "score": 2,
+   "why": "Moon not beach, busy texture"
+  },
+  "pexels:6017449|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Dark moon sky, unrelated to beach"
+  },
+  "pexels:13455259|dusk|generic": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": true,
+   "score": 6,
+   "why": "Urban skyline not rural, large sky"
+  },
+  "pexels:30973030|dusk|generic": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 4,
+   "why": "urban skyline not rural calm"
+  },
+  "pexels:35834184|dusk|generic": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": false,
+   "score": 4,
+   "why": "Urban dusk not rural, pale sky contrast"
+  },
+  "pexels:5235917|dusk|generic": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": false,
+   "score": 7,
+   "why": "Daytime port, open sky, not rural Japan"
   }
  }
 }
