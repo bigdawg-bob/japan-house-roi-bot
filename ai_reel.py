@@ -50,7 +50,7 @@ FADE_OUT   = 6.5                        # overlay + text fade out 6.5 s -> last 
 HOOK_ON, HOOK_POP = 0.3, 0.15
 HOOK_PX, HOOK_MIN_PX, HOOK_WORDS = 190, 90, 3
 SUB_ON, SUB_POP = 1.5, 0.2
-SUB_PX, SUB_ALPHA, SUB_GAP, SUB_RISE, SUB_WORDS = 46, 0.85, 60, 20, 6
+SUB_PX, SUB_ALPHA, SUB_GAP, SUB_RISE, SUB_WORDS = 46, 0.85, 60, 20, 7
 MARGIN     = 80
 SAFE_TOP, SAFE_BOTTOM = int(H * 0.30), int(H * 0.70)
 PAD        = 6
@@ -222,19 +222,92 @@ def sub_font(px):
             pass
     return M.cfont("sans", px, 400)
 
-def sub_line(h, l, e):
-    """Line 2: 'BEDS • DISTANCE • YIELD', max 6 words, e.g. '4BR • 12 min slopes • 15% net'."""
+# Edges found in the listing's own text. (reel text, kinds allowed or None = any, words to find)
+# Order = priority. Add words here if your listings describe things differently.
+EDGE_WORDS = [
+    ("ski-in/out",    {"ski"}, ["ski-in", "ski in/out", "スキーイン"]),
+    ("private onsen", None,    ["private onsen", "onsen bath", "温泉付き", "温泉引込", "温泉引き込み"]),
+    ("onsen source",  None,    ["onsen source", "自家源泉", "源泉かけ流し"]),
+    ("Fuji view",     None,    ["fuji view", "view of mt. fuji", "富士山が見え", "富士山眺望", "富士山ビュー"]),
+]
+CLOSE_MIN = 3                       # only show distance if it's this many minutes or less
+
+def listing_text(l):
+    """All text in the listing, lowercased, to search for features."""
+    out = []
+    def walk(v):
+        if isinstance(v, str):
+            out.append(v)
+        elif isinstance(v, dict):
+            for x in v.values():
+                walk(x)
+        elif isinstance(v, (list, tuple)):
+            for x in v:
+                walk(x)
+    walk(l)
+    return " ".join(out).lower()
+
+def num(l, *keys):
+    """First positive number found under any of these keys, else None."""
+    for k in keys:
+        try:
+            v = float(str(l.get(k)).replace(",", "").replace("m²", "").replace("㎡", "").strip())
+            if v > 0:
+                return v
+        except (TypeError, ValueError):
+            pass
+    return None
+
+def size_options(l):
+    """Most specific first: '127m² / 4BR', '4BR / 2 bath', '4BR', '127m²'."""
+    beds = l.get("bedrooms")
+    br = f"{beds}BR" if beds else None
+    baths = num(l, "bathrooms", "baths", "bath")
+    m2 = num(l, "floor_m2", "building_m2", "floor_area", "building_area")   # building, NOT land
+    opts = []
+    if br and m2:
+        opts.append(f"{m2:.0f}m² / {br}")
+    if br and baths:
+        opts.append(f"{br} / {baths:g} bath")
+    if br:
+        opts.append(br)
+    if m2:
+        opts.append(f"{m2:.0f}m²")
+    return opts or [None]
+
+def edge(h, l):
+    """A real feature from the listing first, then distance if it's 3 min or less, else None."""
+    kind = h["kind"]
+    text = listing_text(l)
+    for label, kinds, words in EDGE_WORDS:
+        if (kinds is None or kind in kinds) and any(w in text for w in words):
+            return label
     mins, mode = M.trip_parts(h, l)
-    to = {"ski": "slopes", "onsen": "onsen", "beach": "beach"}.get(
-        h["kind"], main_word(M.short_name(h["name"])))
-    dist = f"{mins} min walk" if mode == "walk" else f"{mins} min {to}"
+    try:
+        m = float(mins)
+    except (TypeError, ValueError):
+        return None
+    if m > CLOSE_MIN:
+        return None                                     # 20 min onsen -> don't say it
+    to = {"ski": "lift", "onsen": "onsen", "beach": "beach"}.get(
+        kind, main_word(M.short_name(h["name"])))
+    return f"steps to {to}" if m <= 1 else f"{mins} min {to}"
+
+def sub_line(h, l, e):
+    """Line 2: SIZE • EDGE • MONEY, e.g. '4BR • private onsen • 11% net'."""
     money = f"{e['roi'] * 100:.0f}% net" if M.show_yield(e) else f"${e['monthly']:,}/mo net"
-    beds = f"{l['bedrooms']}BR" if l.get("bedrooms") else None
+    ed = edge(h, l)
+    sizes = size_options(l)
+    print(f"  reel line 2: size {sizes}, edge {ed or 'none (not within 3 min, no feature in listing)'}")
     f = sub_font(SUB_PX)
-    for parts in ([beds, dist, money], [dist, money], [beds, money], [money]):
+    tries = ([[s, ed, money] for s in sizes]           # full line, shorter size if too wide
+             + ([[ed, money]] if ed else [])           # keep the edge over the size
+             + [[s, money] for s in sizes] + [[money]])
+    for parts in tries:
         parts = [p for p in parts if p]
         s = " • ".join(parts)
-        if sum(len(p.split()) for p in parts) <= SUB_WORDS and f.getlength(s) <= W - 2 * MARGIN:
+        words = sum(len([w for w in p.split() if w != "/"]) for p in parts)
+        if words <= SUB_WORDS and f.getlength(s) <= W - 2 * MARGIN:
             return s, f
     return None
 
