@@ -529,6 +529,126 @@
    "light_ok": false,
    "score": 7,
    "why": "Daytime port, open sky, not rural Japan"
+  },
+  "pexels:37502518|day|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 5,
+   "why": "people and harsh shadows clutter scene"
+  },
+  "pexels:33347958|day|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 6,
+   "why": "Sunny framed bay, high contrast"
+  },
+  "pexels:36617172|day|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 4,
+   "why": "Busy with people and flying birds"
+  },
+  "pexels:36055355|day|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 6,
+   "why": "People and harsh sun shadows on sand"
+  },
+  "pexels:32662779|day|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 5,
+   "why": "Cluttered harbor boats not calm beach"
+  },
+  "pexels:29284719|day|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Pines clutter, pale sand/sky weak contrast"
+  },
+  "pexels:18693523|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 3,
+   "why": "Urban restaurant night, not beach"
+  },
+  "pexels:11571558|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 3,
+   "why": "Urban night not beach, person visible"
+  },
+  "pexels:10146519|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 5,
+   "why": "Busy palm, urban not beach"
+  },
+  "pexels:9654147|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Spacious dusk sky good for white text"
+  },
+  "pexels:31002119|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": true,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 3,
+   "why": "Busy indoor lanterns, not beach"
+  },
+  "pexels:30142246|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Dark night store not beach"
   }
  }
 }

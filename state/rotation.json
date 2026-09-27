@@ -2,13 +2,14 @@
  "last_source": "sumai",
  "date": "2026-09-27",
  "recent_hooks": [
+  "Chirihama",
   "Kotohikihama",
   "Hakone Yumoto",
   "Nozawa Onsen",
-  "Myoko Akakura",
-  "Takayama old town"
+  "Myoko Akakura"
  ],
  "s3_templates": [
+  "C",
   "A",
   "D",
   "E",
@@ -22,6 +23,11 @@
   "A"
  ],
  "s3_points": [
+  [
+   "access",
+   "trend",
+   "plan_b"
+  ],
   [
    "ryokan",
    "access",
@@ -79,6 +85,7 @@
   ]
  ],
  "reel_clips": [
+  "pexels:30819865",
   "pexels:6985328",
   "pexels:20666702",
   "reels/any/animate_this_exact_video.mp4"

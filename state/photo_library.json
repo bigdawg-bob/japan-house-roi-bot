@@ -273,5 +273,38 @@
   "added": "2026-09-27T21:09:42+09:00",
   "uses": 1,
   "last": "2026-09-27T21:09:42+09:00"
+ },
+ "82b051fd8c07fea6": {
+  "id": "house:https://akiya.sumai.biz/wp-content/uploads/2026/05/437hakui-1.jpg",
+  "credit": "Photo: akiya.sumai.biz",
+  "role": "house",
+  "mood": null,
+  "kind": "beach",
+  "generic": false,
+  "added": "2026-09-27T22:27:23+09:00",
+  "uses": 1,
+  "last": "2026-09-27T22:27:23+09:00"
+ },
+ "e343a0024bfae347": {
+  "id": "pexels:29284719",
+  "credit": "Photo: allen / Pexels",
+  "role": "area",
+  "mood": "day",
+  "kind": "beach",
+  "generic": false,
+  "added": "2026-09-27T22:27:23+09:00",
+  "uses": 1,
+  "last": "2026-09-27T22:27:23+09:00"
+ },
+ "d0dd027545568de3": {
+  "id": "pexels:30142246",
+  "credit": "Photo: Julien / Pexels",
+  "role": "area",
+  "mood": "dusk",
+  "kind": "beach",
+  "generic": false,
+  "added": "2026-09-27T22:27:23+09:00",
+  "uses": 1,
+  "last": "2026-09-27T22:27:23+09:00"
  }
 }
