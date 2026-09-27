@@ -1,14 +1,15 @@
 {
  "last_source": "sumai",
- "date": "2026-09-26",
+ "date": "2026-09-27",
  "recent_hooks": [
+  "Nozawa Onsen",
   "Myoko Akakura",
   "Takayama old town",
   "Kinosaki Onsen",
-  "Nozawa Onsen",
   "Beppu"
  ],
  "s3_templates": [
+  "C",
   "A",
   "D",
   "E",
@@ -17,6 +18,11 @@
   "A"
  ],
  "s3_points": [
+  [
+   "ryokan",
+   "occupancy",
+   "access"
+  ],
   [
    "occupancy",
    "stay",
