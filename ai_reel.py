@@ -420,8 +420,9 @@ def build(exe, src, crop, L):
           f"crop={W}:{H},setsar=1,format=yuv420p,split[a][b];"
           f"[a]trim=start={XF},setpts=PTS-STARTPTS,fps={FPS}[body];"
           f"[b]trim=duration={XF},setpts=PTS-STARTPTS,fps={FPS}[head];"
-          f"[body][head]xfade=transition=fade:duration={XF}:offset={SECS - XF:.3f}[base];"
-          f"[1:v]format=rgba,setpts=PTS-STARTPTS[ov];"
+          f"[body][head]xfade=transition=fade:duration={XF}:offset={SECS - XF:.3f}[xf];"
+          f"[xf]setpts=N/({FPS}*TB)[base];"
+          f"[1:v]format=rgba,setpts=N/({FPS}*TB)[ov];"
           f"[base][ov]overlay=0:0:shortest=1,format=yuv420p[v]")
     mb = 0.0
     for rate in ("8M", "5M"):                           # 2nd pass only if over 8 MB
