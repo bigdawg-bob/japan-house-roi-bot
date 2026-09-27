@@ -434,6 +434,12 @@ def build(exe, src, crop, L):
         print(f"  reel: {mb:.1f} MB > {MAX_MB:.0f} MB – encoding again smaller")
 
     s = analyse(exe, out)                               # loop check: first vs last frame
+    if s:
+        def y(t):
+            return min(s, key=lambda r: abs(r[0] - t))[1]
+        print(f"  reel timing: brightness 0.0s={y(0):.0f} 0.2s={y(0.2):.0f} "
+              f"0.6s={y(0.6):.0f} 1.5s={y(1.5):.0f} 6.3s={y(6.3):.0f} end={s[-1][1]:.0f} "
+              f"| first frame at {s[0][0]:.2f}s, length {s[-1][0] - s[0][0] + 1 / FPS:.2f}s")
     if len(s) >= 2:
         a, b = s[0][1], s[-1][1]
         diff = abs(a - b) / max(a, b, 1) * 100
