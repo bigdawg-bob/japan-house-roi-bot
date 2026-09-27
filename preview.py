@@ -111,15 +111,17 @@ try:
 except Exception as ex:
     print(f"cover.html skipped: {ex!r}")
 
-# ── optional reel ──
+# ── optional reel (1 Pexels video from bg_videos.txt, or --video=my.mp4) ──
 if MAKE_REEL:
-    path, line = main.build_reel(pic, h0, FACTS, EST)
-    if path:
+    import ai_reel
+    video = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--video=")), None)
+    got = ai_reel.make(main, h0, LISTING, usd, EST, FACTS, {}, video)
+    if got:
         dest = main.OUT / "preview_reel.mp4"
-        path.replace(dest)
+        got[0].replace(dest)
         frame = main.OUT / "reel_frame.jpg"
         if frame.exists():
             frame.replace(main.OUT / "preview_reel_frame.jpg")
-        print(f"saved {dest} ({line})")
+        print(f"saved {dest} ({got[1]})")
 else:
-    print("(add --reel to also make the 7 s reel)")
+    print("(add --reel to also make the reel; needs PEXELS_KEY, or add --video=my.mp4)")
