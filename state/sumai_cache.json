@@ -3863,14 +3863,6 @@
   "why": "no sale price",
   "lastmod": "2026-09-10T03:52:22+00:00"
  },
- "https://akiya.sumai.biz/79382": {
-  "id": "https://akiya.sumai.biz/79382",
-  "url": "https://akiya.sumai.biz/79382",
-  "title": "(交渉中) 空き家バンク【売買】150万円 岐阜県加茂郡白川町上佐見 平成18年築・広い敷地 駐車場付き4LDK2階建 水洗トイレ",
-  "ok": false,
-  "why": "not available",
-  "lastmod": "2026-09-10T02:36:03+00:00"
- },
  "https://akiya.sumai.biz/95056": {
   "id": "https://akiya.sumai.biz/95056",
   "url": "https://akiya.sumai.biz/95056",
@@ -5904,28 +5896,11 @@
  "https://akiya.sumai.biz/126489": {
   "id": "https://akiya.sumai.biz/126489",
   "url": "https://akiya.sumai.biz/126489",
-  "title": "空き家バンク【売買】350万円 岐阜県中津川市付知町 庭・広いテラス・物置・駐車場付き8DK2階建古民家 上下水道",
-  "ok": true,
-  "price_yen": 3500000.0,
-  "pref": "岐阜県",
-  "location": "岐阜県中津川市付知町",
-  "bedrooms": 8,
-  "year_built": 1956,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/売R8-22-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/売R8-22-22.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/売R8-22-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/売R8-22-5.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/売R8-22-9.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/売R8-22-10.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/売R8-22-11.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/売R8-22-13.jpg"
-  ],
-  "lastmod": "2026-09-02T22:53:38+00:00",
-  "lat": 35.664539,
-  "lng": 137.439575,
-  "geo_level": "district"
+  "title": "(交渉中) 空き家バンク【売買】350万円 岐阜県中津川市付知町 庭・広いテラス・物置・駐車場付き8DK2階建古民家 上下水道",
+  "ok": false,
+  "pv": 2,
+  "why": "not available",
+  "lastmod": "2026-09-27T17:26:10+00:00"
  },
  "https://akiya.sumai.biz/83634": {
   "id": "https://akiya.sumai.biz/83634",
@@ -8612,14 +8587,6 @@
   "lat": 34.364807,
   "lng": 135.791687,
   "geo_level": "district"
- },
- "https://akiya.sumai.biz/115980": {
-  "id": "https://akiya.sumai.biz/115980",
-  "url": "https://akiya.sumai.biz/115980",
-  "title": "(交渉中) 空き家バンク【売買】280万円 奈良県五條市黒駒町 自然豊かな場所・補修不要 田畑・山林・物置・車庫付き8DK2階建古民家 井戸・回り廊下有",
-  "ok": false,
-  "why": "not available",
-  "lastmod": "2026-08-24T04:32:13+00:00"
  },
  "https://akiya.sumai.biz/36383": {
   "id": "https://akiya.sumai.biz/36383",
@@ -15086,32 +15053,6 @@
   "why": "not available",
   "lastmod": "2026-07-23T22:34:25+00:00"
  },
- "https://akiya.sumai.biz/120711": {
-  "id": "https://akiya.sumai.biz/120711",
-  "url": "https://akiya.sumai.biz/120711",
-  "title": "空き家バンク【売買】95万円 岡山県笠岡市神島外浦 畑・駐車場2台付き3DKコンパクト平屋古民家 土間・広縁・続き間有",
-  "ok": true,
-  "price_yen": 950000.0,
-  "pref": "岡山県",
-  "location": "岡山県笠岡市神島外浦",
-  "bedrooms": 3,
-  "year_built": 1955,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/731ko-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/731ko-2.png",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/731ko-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/731ko-4.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/731ko-5.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/731ko-6.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/731ko-7.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/731ko-8.jpg"
-  ],
-  "lastmod": "2026-07-23T22:14:38+00:00",
-  "lat": 34.454674,
-  "lng": 133.507339,
-  "geo_level": "district"
- },
  "https://akiya.sumai.biz/121609": {
   "id": "https://akiya.sumai.biz/121609",
   "url": "https://akiya.sumai.biz/121609",
@@ -19492,15 +19433,6 @@
   "lng": 138.758957,
   "geo_level": "district"
  },
- "https://akiya.sumai.biz/114618": {
-  "id": "https://akiya.sumai.biz/114618",
-  "url": "https://akiya.sumai.biz/114618",
-  "title": "(交渉中) 空き家バンク【売買】200万円 岐阜県加茂郡七宗町上麻生 広い敷地・日当り良好 田畑・山林・土蔵・倉庫・駐車場3台付き9部屋2階建古民家 水洗トイレ",
-  "ok": false,
-  "pv": 2,
-  "why": "not available",
-  "lastmod": "2026-06-30T13:42:55+00:00"
- },
  "https://akiya.sumai.biz/118621": {
   "id": "https://akiya.sumai.biz/118621",
   "url": "https://akiya.sumai.biz/118621",
@@ -20864,26 +20796,6 @@
   "lastmod": "2026-06-19T22:07:37+00:00",
   "lat": 33.574436,
   "lng": 131.705978,
-  "geo_level": "district"
- },
- "https://akiya.sumai.biz/118571": {
-  "id": "https://akiya.sumai.biz/118571",
-  "url": "https://akiya.sumai.biz/118571",
-  "title": "空き家バンク【売買】80万円 長野県下伊那郡高森町下市田 駅徒歩3分・生活便利・室内片付け済 2DKコンパクト2階建 上下水道",
-  "ok": true,
-  "pv": 2,
-  "price_yen": 800000.0,
-  "pref": "長野県",
-  "location": "長野県下伊那郡高森町下市田",
-  "bedrooms": 2,
-  "year_built": null,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/06/2026_07：高森町下市田.jpg"
-  ],
-  "lastmod": "2026-06-19T22:05:43+00:00",
-  "lat": 35.544605,
-  "lng": 137.874954,
   "geo_level": "district"
  },
  "https://akiya.sumai.biz/118594": {
@@ -23225,15 +23137,6 @@
   "lng": 137.834091,
   "geo_level": "district"
  },
- "https://akiya.sumai.biz/109046": {
-  "id": "https://akiya.sumai.biz/109046",
-  "url": "https://akiya.sumai.biz/109046",
-  "title": "(交渉中)空き家バンク【売買】100万円 京都府京丹後市峰山町安小字森替 小川のほとり・広い敷地 庭・物置・駐車場2台付き4K平屋古民家 土間・縁側・続き間・五右衛門風呂有",
-  "ok": false,
-  "pv": 2,
-  "why": "not available",
-  "lastmod": "2026-06-07T08:44:03+00:00"
- },
  "https://akiya.sumai.biz/116651": {
   "id": "https://akiya.sumai.biz/116651",
   "url": "https://akiya.sumai.biz/116651",
@@ -24073,27 +23976,11 @@
  "https://akiya.sumai.biz/110225": {
   "id": "https://akiya.sumai.biz/110225",
   "url": "https://akiya.sumai.biz/110225",
-  "title": "空き家バンク【売買】88万円 京都府綾部市多田町 田畑・山林・宅地・離れ・倉庫・小屋・車庫3棟付き5部屋平屋古民家 農集排",
-  "ok": true,
+  "title": "(交渉中) 空き家バンク【売買】88万円 京都府綾部市多田町 田畑・山林・宅地・離れ・倉庫・小屋・車庫3棟付き5部屋平屋古民家 農集排",
+  "ok": false,
   "pv": 2,
-  "price_yen": 880000.0,
-  "pref": "京都府",
-  "location": "京都府綾部市多田町",
-  "bedrooms": 5,
-  "year_built": null,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/04/T-514-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/04/T-514-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/04/T-514-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/04/T-514-4.jpeg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/04/T-514-5.jpeg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/04/T-514-6.jpeg"
-  ],
-  "lastmod": "2026-06-02T01:41:43+00:00",
-  "lat": 35.320705,
-  "lng": 135.269165,
-  "geo_level": "district"
+  "why": "not available",
+  "lastmod": "2026-09-27T21:27:06+00:00"
  },
  "https://akiya.sumai.biz/96585": {
   "id": "https://akiya.sumai.biz/96585",
@@ -24916,7 +24803,7 @@
    "https://akiya.sumai.biz/wp-content/uploads/2026/05/60sosa-3.jpg",
    "https://akiya.sumai.biz/wp-content/uploads/2026/05/60sosa-2.jpg"
   ],
-  "lastmod": "2026-05-27T22:07:31+00:00",
+  "lastmod": "2026-09-27T20:34:43+00:00",
   "lat": 35.647308,
   "lng": 140.572403,
   "geo_level": "district"
@@ -30935,10 +30822,10 @@
  "https://akiya.sumai.biz/99419": {
   "id": "https://akiya.sumai.biz/99419",
   "url": "https://akiya.sumai.biz/99419",
-  "title": "(価格変更)空き家バンク【売買】300万円→280万円 岡山県新見市哲多町成松 田畑・山林・駐車場3台以上付き8DK和風2階建 上下水道",
+  "title": "空き家バンク【売買】250万円 岡山県新見市哲多町成松 田畑・山林・駐車場3台以上付き8DK和風2階建 上下水道",
   "ok": true,
   "pv": 2,
-  "price_yen": 2800000.0,
+  "price_yen": 2500000.0,
   "pref": "岡山県",
   "location": "岡山県新見市哲多町成松",
   "bedrooms": 8,
@@ -30954,7 +30841,7 @@
    "https://akiya.sumai.biz/wp-content/uploads/2026/01/248niimi-5.jpg",
    "https://akiya.sumai.biz/wp-content/uploads/2026/01/248niimi-8.jpg"
   ],
-  "lastmod": "2026-04-17T21:36:26+00:00",
+  "lastmod": "2026-09-27T20:26:39+00:00",
   "lat": 34.923325,
   "lng": 133.439987,
   "geo_level": "district"
@@ -32511,29 +32398,11 @@
  "https://akiya.sumai.biz/110245": {
   "id": "https://akiya.sumai.biz/110245",
   "url": "https://akiya.sumai.biz/110245",
-  "title": "(内覧中)空き家バンク【売買】100万円 奈良県吉野郡吉野町上市 吉野川を望む高台・駅徒歩4分 物置付き5部屋平屋古民家 台所天窓有",
-  "ok": true,
+  "title": "(交渉中) 空き家バンク【売買】100万円 奈良県吉野郡吉野町上市 吉野川を望む高台・駅徒歩4分 物置付き5部屋平屋古民家 台所天窓有",
+  "ok": false,
   "pv": 2,
-  "price_yen": 1000000.0,
-  "pref": "奈良県",
-  "location": "奈良県吉野郡吉野町上市",
-  "bedrooms": 5,
-  "year_built": 1959,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/04/Y227-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/04/Y227-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/04/Y227-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/04/Y227-6.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/04/Y227-7.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/04/Y227-5.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/04/Y227-4.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/04/Y227-8.jpg"
-  ],
-  "lastmod": "2026-04-08T04:17:09+00:00",
-  "lat": 34.39777,
-  "lng": 135.852127,
-  "geo_level": "district"
+  "why": "not available",
+  "lastmod": "2026-09-27T22:31:58+00:00"
  },
  "https://akiya.sumai.biz/11264": {
   "id": "https://akiya.sumai.biz/11264",
@@ -32565,10 +32434,10 @@
  "https://akiya.sumai.biz/7293": {
   "id": "https://akiya.sumai.biz/7293",
   "url": "https://akiya.sumai.biz/7293",
-  "title": "(価格変更)空き家バンク【売買】350万円→290万円 岐阜県飛騨市古川町杉崎 閑静住宅地 庭・物置・車庫・駐車場付き10部屋2階建古民家 上下水道",
+  "title": "(価格変更)空き家バンク【売買】290万円→200万円 岐阜県飛騨市古川町杉崎 閑静住宅地 庭・物置・車庫・駐車場付き10部屋2階建古民家 上下水道",
   "ok": true,
   "pv": 2,
-  "price_yen": 2900000.0,
+  "price_yen": 2000000.0,
   "pref": "岐阜県",
   "location": "岐阜県飛騨市古川町杉崎",
   "bedrooms": 10,
@@ -32581,7 +32450,7 @@
    "https://akiya.sumai.biz/wp-content/uploads/2024/02/297hida-4.jpg",
    "https://akiya.sumai.biz/wp-content/uploads/2024/02/297hida-5.jpg"
   ],
-  "lastmod": "2026-04-07T23:33:16+00:00",
+  "lastmod": "2026-09-27T17:31:37+00:00",
   "lat": 36.261166,
   "lng": 137.162994,
   "geo_level": "district"
@@ -34040,25 +33909,11 @@
  "https://akiya.sumai.biz/107685": {
   "id": "https://akiya.sumai.biz/107685",
   "url": "https://akiya.sumai.biz/107685",
-  "title": "空き家バンク【売買】100万円 三重県鈴鹿市若松東二丁目 駅徒歩圏内・買物便利 バルコニー・倉庫・カーポート付き6DK2階建 上下水道",
-  "ok": true,
+  "title": "(受付停止)空き家バンク【売買】100万円 三重県鈴鹿市若松東二丁目 駅徒歩圏内・買物便利 バルコニー・倉庫・カーポート付き6DK2階建 上下水道",
+  "ok": false,
   "pv": 2,
-  "price_yen": 1000000.0,
-  "pref": "三重県",
-  "location": "三重県鈴鹿市若松東二丁目",
-  "bedrooms": 6,
-  "year_built": 1972,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/03/R7-113-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/03/R7-113-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/03/R7-113-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/03/R7-113-4.jpg"
-  ],
-  "lastmod": "2026-03-30T21:52:51+00:00",
-  "lat": 34.863415,
-  "lng": 136.619507,
-  "geo_level": "district"
+  "why": "not available",
+  "lastmod": "2026-09-27T18:34:37+00:00"
  },
  "https://akiya.sumai.biz/109474": {
   "id": "https://akiya.sumai.biz/109474",
@@ -36771,33 +36626,6 @@
   "lng": 136.208496,
   "geo_level": "district"
  },
- "https://akiya.sumai.biz/62609": {
-  "id": "https://akiya.sumai.biz/62609",
-  "url": "https://akiya.sumai.biz/62609",
-  "title": "空き家バンク【売買】300万円 三重県熊野市神川町 平成8年築・山々を望む高台 物置・駐車場付き3LDK平屋 水洗トイレ",
-  "ok": true,
-  "pv": 2,
-  "price_yen": 3000000.0,
-  "pref": "三重県",
-  "location": "三重県熊野市神川町",
-  "bedrooms": 3,
-  "year_built": 1996,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2025/03/1681791639_002.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/03/1681786865.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/03/1681791639.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/03/1681791692.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/03/1681791700_003.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/03/1681791700_002.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/03/1681791700_005.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/03/1681791846_006.jpg"
-  ],
-  "lastmod": "2026-03-09T15:00:53+00:00",
-  "lat": 33.958115,
-  "lng": 135.986557,
-  "geo_level": "district"
- },
  "https://akiya.sumai.biz/12671": {
   "id": "https://akiya.sumai.biz/12671",
   "url": "https://akiya.sumai.biz/12671",
@@ -37424,28 +37252,6 @@
   "pv": 2,
   "why": "no sale price",
   "lastmod": "2026-03-06T22:08:23+00:00"
- },
- "https://akiya.sumai.biz/103718": {
-  "id": "https://akiya.sumai.biz/103718",
-  "url": "https://akiya.sumai.biz/103718",
-  "title": "空き家バンク【売買】70万円 北海道上川郡鷹栖町南1条2丁目 市街地・生活便利 4LDK2階建付き売地",
-  "ok": true,
-  "pv": 2,
-  "price_yen": 700000.0,
-  "pref": "北海道",
-  "location": "北海道上川郡鷹栖町南1条2丁目",
-  "bedrooms": 4,
-  "year_built": 1982,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/167takasu-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/167takasu-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/167takasu-3.jpg"
-  ],
-  "lastmod": "2026-03-05T23:03:31+00:00",
-  "lat": 43.844833,
-  "lng": 142.358185,
-  "geo_level": "district"
  },
  "https://akiya.sumai.biz/106061": {
   "id": "https://akiya.sumai.biz/106061",
@@ -38376,10 +38182,10 @@
  "https://akiya.sumai.biz/15659": {
   "id": "https://akiya.sumai.biz/15659",
   "url": "https://akiya.sumai.biz/15659",
-  "title": "(価格変更)空き家バンク【売買】280万円→230万円 兵庫県たつの市御津町岩見 畑・山林・別宅地・庭・倉庫・駐車場2台付き12部屋2階建古民家 上下水道",
+  "title": "(価格変更)空き家バンク【売買】230万円→150万円 兵庫県たつの市御津町岩見 畑・山林・別宅地・庭・倉庫・駐車場2台付き12部屋2階建古民家 上下水道",
   "ok": true,
   "pv": 2,
-  "price_yen": 2300000.0,
+  "price_yen": 1500000.0,
   "pref": "兵庫県",
   "location": "兵庫県たつの市御津町岩見",
   "bedrooms": 12,
@@ -38395,7 +38201,7 @@
    "https://akiya.sumai.biz/wp-content/uploads/2024/03/203tatsuno-8.jpg",
    "https://akiya.sumai.biz/wp-content/uploads/2024/03/203tatsuno-9.jpg"
   ],
-  "lastmod": "2026-02-25T22:31:23+00:00",
+  "lastmod": "2026-09-27T20:30:35+00:00",
   "lat": 34.780144,
   "lng": 134.540436,
   "geo_level": "district"
@@ -41981,33 +41787,6 @@
   "lastmod": "2026-01-22T23:18:25+00:00",
   "lat": 36.635715,
   "lng": 140.491608,
-  "geo_level": "district"
- },
- "https://akiya.sumai.biz/100732": {
-  "id": "https://akiya.sumai.biz/100732",
-  "url": "https://akiya.sumai.biz/100732",
-  "title": "空き家バンク【売買】150万円 富山県南砺市高儀 駅徒歩6分 車庫兼倉庫付き7部屋2階建 上下水道",
-  "ok": true,
-  "pv": 2,
-  "price_yen": 1500000.0,
-  "pref": "富山県",
-  "location": "富山県南砺市高儀",
-  "bedrooms": 7,
-  "year_built": 1968,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/01/430nanto-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/01/430nanto-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/01/430nanto-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/01/430nanto-4.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/01/430nanto-5.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/01/430nanto-10.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/01/430nanto-6.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/01/430nanto-9.jpg"
-  ],
-  "lastmod": "2026-01-22T22:37:27+00:00",
-  "lat": 36.601204,
-  "lng": 136.931808,
   "geo_level": "district"
  },
  "https://akiya.sumai.biz/100291": {
@@ -52770,7 +52549,7 @@
    "https://akiya.sumai.biz/wp-content/uploads/2025/08/84hcs-3.jpg",
    "https://akiya.sumai.biz/wp-content/uploads/2025/08/84hcs-4.jpg"
   ],
-  "lastmod": "2025-08-25T23:05:25+00:00",
+  "lastmod": "2026-09-27T17:38:13+00:00",
   "lat": 35.589428,
   "lng": 137.082977,
   "geo_level": "district"
@@ -59692,10 +59471,10 @@
  "https://akiya.sumai.biz/15124": {
   "id": "https://akiya.sumai.biz/15124",
   "url": "https://akiya.sumai.biz/15124",
-  "title": "空き家バンク【売買】290万円 長崎県南島原市口之津町乙 補修不要・海水浴場近い ビルトインガレージ付き5部屋2階建古民家 下水道",
+  "title": "(価格変更)空き家バンク【売買】290万円→150万円 長崎県南島原市口之津町乙 補修不要・海水浴場近い ビルトインガレージ付き5部屋2階建古民家 下水道",
   "ok": true,
   "pv": 2,
-  "price_yen": 2900000.0,
+  "price_yen": 1500000.0,
   "pref": "長崎県",
   "location": "長崎県南島原市口之津町乙",
   "bedrooms": 5,
@@ -59706,7 +59485,7 @@
    "https://akiya.sumai.biz/wp-content/uploads/2024/03/259ms-0.jpg",
    "https://akiya.sumai.biz/wp-content/uploads/2024/03/259ms-2.jpg"
   ],
-  "lastmod": "2025-05-01T21:37:39+00:00",
+  "lastmod": "2026-09-27T20:22:55+00:00",
   "lat": 32.597233,
   "lng": 130.176788,
   "geo_level": "district"
@@ -73416,6 +73195,181 @@
   "lastmod": "2024-02-02T00:23:14+00:00",
   "lat": 35.468102,
   "lng": 136.692261,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/129147": {
+  "id": "https://akiya.sumai.biz/129147",
+  "url": "https://akiya.sumai.biz/129147",
+  "title": "空き家バンク【売買】1万円 新潟県東蒲原郡阿賀町天満 駐車場2台付き1Kコンパクト平屋 井戸・小縁側・裏玄関有",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 10000.0,
+  "pref": "新潟県",
+  "location": "新潟県東蒲原郡阿賀町天満",
+  "bedrooms": 1,
+  "year_built": 1983,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/津-空き家72-3.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/津-空き家72-2.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/津-空き家72-4.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/津-空き家72-6.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/津-空き家72-5.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/津-空き家72-1.jpeg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/津-空き家72-7.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/津-空き家72-8.png"
+  ],
+  "lastmod": "2026-09-27T22:18:32+00:00",
+  "lat": 37.661716,
+  "lng": 139.484604,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/129171": {
+  "id": "https://akiya.sumai.biz/129171",
+  "url": "https://akiya.sumai.biz/129171",
+  "title": "空き家バンク【売買】200万円 静岡県榛原郡川根本町徳山 茶畑を望む長閑な場所 駐車場付き10部屋2階建古民家 水洗トイレ・エコキュート有",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 2000000.0,
+  "pref": "静岡県",
+  "location": "静岡県榛原郡川根本町徳山",
+  "bedrooms": 10,
+  "year_built": 1967,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/R8-4kh-1.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/R8-4kh-2.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/R8-4kh-3.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/R8-4kh-4.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/R8-4kh-5.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/R8-4kh-6.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/R8-4kh-7.jpg"
+  ],
+  "lastmod": "2026-09-27T22:17:24+00:00",
+  "lat": 35.068321,
+  "lng": 138.121277,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/126786": {
+  "id": "https://akiya.sumai.biz/126786",
+  "url": "https://akiya.sumai.biz/126786",
+  "title": "空き家バンク【売買】88万円 山形県西村山郡河北町谷地甲 街中住宅地・通学便利 庭付き7DK2階建 上下水道",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 880000.0,
+  "pref": "山形県",
+  "location": "山形県西村山郡河北町谷地甲",
+  "bedrooms": 7,
+  "year_built": 1979,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/6-6kahoku-1.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/6-6kahoku-14.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/6-6kahoku-2.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/6-6kahoku-3.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/6-6kahoku-4.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/6-6kahoku-5.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/6-6kahoku-6.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/6-6kahoku-7.png"
+  ],
+  "lastmod": "2026-09-27T22:15:00+00:00",
+  "lat": 38.431267,
+  "lng": 140.291611,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/128709": {
+  "id": "https://akiya.sumai.biz/128709",
+  "url": "https://akiya.sumai.biz/128709",
+  "title": "空き家バンク【売買】180万円 石川県加賀市津波倉町ロ 車庫・駐車場付き6K2階建古民家 水洗トイレ",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 1800000.0,
+  "pref": "石川県",
+  "location": "石川県加賀市津波倉町ロ",
+  "bedrooms": 6,
+  "year_built": 1959,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/616kaga-1.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/616kaga-2.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/616kaga-3.png"
+  ],
+  "lastmod": "2026-09-27T22:13:30+00:00",
+  "lat": 36.310619,
+  "lng": 136.379333,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/128980": {
+  "id": "https://akiya.sumai.biz/128980",
+  "url": "https://akiya.sumai.biz/128980",
+  "title": "空き家バンク【売買】180万円 鹿児島県霧島市牧園町宿窪田 生活便利 駐車場付き3SK平屋古民家 水洗トイレ 土間・広縁・続き間有",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 1800000.0,
+  "pref": "鹿児島県",
+  "location": "鹿児島県霧島市牧園町宿窪田",
+  "bedrooms": null,
+  "year_built": 1965,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/0287ks-1.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/0287ks-2.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/0287ks-3.jpg"
+  ],
+  "lastmod": "2026-09-27T22:09:45+00:00",
+  "lat": 31.843349,
+  "lng": 130.751465,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/129133": {
+  "id": "https://akiya.sumai.biz/129133",
+  "url": "https://akiya.sumai.biz/129133",
+  "title": "空き家バンク【売買】300万円 新潟県糸魚川市田中 自然豊かな場所・広い敷地・全面簓子張り 農地・駐車場付き6DK2階建 水洗トイレ",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 3000000.0,
+  "pref": "新潟県",
+  "location": "新潟県糸魚川市田中",
+  "bedrooms": 6,
+  "year_built": 1985,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/糸ー354-1.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/糸ー354-2.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/糸ー354-3.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/糸ー354-4.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/糸ー354-5.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/糸ー354-6.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/糸ー354-7.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/糸ー354-8.jpg"
+  ],
+  "lastmod": "2026-09-27T22:05:28+00:00",
+  "lat": 37.008705,
+  "lng": 137.898712,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/129218": {
+  "id": "https://akiya.sumai.biz/129218",
+  "url": "https://akiya.sumai.biz/129218",
+  "title": "空き家バンク【売買】350万円 京都府亀岡市畑野町千ヶ畑 平成4年築・玄関アプローチ有 庭・バルコニー・物置2棟・駐車場付き4LDK2階建",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 3500000.0,
+  "pref": "京都府",
+  "location": "京都府亀岡市畑野町千ヶ畑",
+  "bedrooms": 4,
+  "year_built": 1992,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/2026010-1.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/2026010-5.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/2026010-2.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/2026010-3.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/2026010-4.jpg"
+  ],
+  "lastmod": "2026-09-27T22:02:56+00:00",
+  "lat": 35.019669,
+  "lng": 135.437424,
   "geo_level": "district"
  }
 }
