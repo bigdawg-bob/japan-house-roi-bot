@@ -2,13 +2,14 @@
  "last_source": "sumai",
  "date": "2026-09-27",
  "recent_hooks": [
-  "Nozawa Onsen",
   "Myoko Akakura",
+  "Nozawa Onsen",
   "Takayama old town",
   "Kinosaki Onsen",
   "Beppu"
  ],
  "s3_templates": [
+  "B",
   "C",
   "A",
   "D",
@@ -18,6 +19,11 @@
   "A"
  ],
  "s3_points": [
+  [
+   "competition",
+   "trend",
+   "tattoo"
+  ],
   [
    "ryokan",
    "occupancy",
@@ -53,5 +59,8 @@
    "competition",
    "occupancy"
   ]
+ ],
+ "reel_clips": [
+  "reels/any/animate_this_exact_video.mp4"
  ]
 }
