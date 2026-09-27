@@ -418,8 +418,8 @@ def build(exe, src, crop, L):
     fc = (f"[0:v]setpts=PTS-STARTPTS,fps={FPS},trim=duration={WIN},setpts=PTS-STARTPTS,{pre}"
           f"scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,"
           f"crop={W}:{H},setsar=1,format=yuv420p,split[a][b];"
-          f"[a]trim=start={XF},setpts=PTS-STARTPTS[body];"
-          f"[b]trim=duration={XF},setpts=PTS-STARTPTS[head];"
+          f"[a]trim=start={XF},setpts=PTS-STARTPTS,fps={FPS}[body];"
+          f"[b]trim=duration={XF},setpts=PTS-STARTPTS,fps={FPS}[head];"
           f"[body][head]xfade=transition=fade:duration={XF}:offset={SECS - XF:.3f}[base];"
           f"[1:v]format=rgba,setpts=PTS-STARTPTS[ov];"
           f"[base][ov]overlay=0:0:shortest=1,format=yuv420p[v]")
@@ -509,10 +509,17 @@ def make(m, h, l, usd, e, facts=None, rot=None, video=None):
     if not order:
         print(f"Reel: no usable video in {BG_LIST.name} – no reel today (post still goes out)")
         return None
-    for entry in order[:TRIES]:
+    if not PEXELS_KEY:
+        print("Reel: PEXELS_KEY missing – no reel today (post still goes out)")
+        return None
+    tries = 0
+    for entry in order:                                 # go through all videos...
+        if tries >= TRIES:                              # ...but build at most 3
+            break
         got = fetch(entry)
-        if not got:
-            continue
+        if not got:                                     # deleted / too short / not vertical:
+            continue                                    # skip it, doesn't count as a try
+        tries += 1
         src, credit = got
         crop = CROP_DEFAULT if entry["crop"] is None else entry["crop"]
         try:
@@ -523,5 +530,6 @@ def make(m, h, l, usd, e, facts=None, rot=None, video=None):
             print(f"Reel: pexels {entry['id']} -> {out}")
             return (out, hook[0], reel_caption(m, h, l, usd, e, credit=credit),
                     f"pexels:{entry['id']}")
-    print(f"Reel: none of the first {TRIES} videos worked – no reel today (post still goes out)")
+    print(f"Reel: {tries} video(s) built and failed, {len(order)} in list – "
+          f"no reel today (post still goes out)")
     return None
