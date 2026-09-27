@@ -2,13 +2,14 @@
  "last_source": "sumai",
  "date": "2026-09-27",
  "recent_hooks": [
-  "Myoko Akakura",
   "Nozawa Onsen",
+  "Myoko Akakura",
   "Takayama old town",
   "Kinosaki Onsen",
   "Beppu"
  ],
  "s3_templates": [
+  "E",
   "B",
   "C",
   "A",
@@ -19,6 +20,11 @@
   "A"
  ],
  "s3_points": [
+  [
+   "plan_b",
+   "trend",
+   "foreign"
+  ],
   [
    "competition",
    "trend",
