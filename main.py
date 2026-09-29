@@ -53,6 +53,7 @@ from PIL import features as pil_features
 import scraper
 import scraper_athome
 import scraper_homes
+import n8n_handoff
 from yield_calc import (estimate, caption_text, is_renovated, show_yield, fmt_k)
 
 try:
@@ -2150,12 +2151,22 @@ def main():
         return
     caption = build_caption(l, hooks, usd, e, fees_yen, fees_usd, area_credits)
     (OUT / "caption.txt").write_text(caption, encoding="utf-8")
-
-    ok = tg_album(paths, caption) and tg_text(caption)
     reel_path, reel_text, reel_cap, reel_clip = (tuple(reel or ()) + (None,) * 4)[:4]
+
+    # 1) post package -> n8n (AI agent + your approval). None = handoff not configured.
+    try:
+        pkg = n8n_handoff.build_package(sys.modules[__name__], l, hooks, usd, e, fees_yen,
+                                        caption, s3, reel_path, reel_text, reel_cap, reel_clip)
+        handed = n8n_handoff.send(pkg, paths, reel_path)
+    except Exception as ex:
+        print(f"!! n8n handoff error: {ex!r}")
+        handed = False
+
+    # 2) Telegram copy (as before)
+    ok = tg_album(paths, caption) and tg_text(caption)
     if ok and reel_path:
         tg_video(reel_path, reel_cap or f"🎬 Reel: {reel_text}")   # a failed reel doesn't block the post
-    if ok and not DRY_RUN:
+    if ok and handed is not False and not DRY_RUN:
         for u in l.get("all_urls", [l["url"]]):
             posted[u] = today
         posted["fp:" + l["fp"]] = today
@@ -2172,6 +2183,9 @@ def main():
         print("Saved to state/posted.json + state/rotation.json")
     elif not ok:
         print("Telegram failed – not marking as posted, will retry next run")
+    if handed is False:
+        print("!! n8n did NOT get the post package – not marked as posted, will retry next run")
+        sys.exit(1)                                   # red X in GitHub instead of a false green
 
 
 if __name__ == "__main__":
