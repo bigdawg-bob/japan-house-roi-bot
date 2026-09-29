@@ -649,6 +649,16 @@
    "light_ok": true,
    "score": 7,
    "why": "Dark night store not beach"
+  },
+  "pexels:36900993|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Dark sky usable but busy warm lights"
   }
  }
 }

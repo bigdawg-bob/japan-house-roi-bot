@@ -51,8 +51,8 @@
   "kind": "onsen",
   "generic": false,
   "added": "2026-09-24T22:32:10+09:00",
-  "uses": 2,
-  "last": "2026-09-26T13:46:48+09:00"
+  "uses": 3,
+  "last": "2026-09-29T17:29:28+09:00"
  },
  "b359c5e760605040": {
   "id": "pexels:28969414",
@@ -339,5 +339,27 @@
   "added": "2026-09-29T17:02:57+09:00",
   "uses": 1,
   "last": "2026-09-29T17:02:57+09:00"
+ },
+ "c49fa098d5e1faf6": {
+  "id": "house:https://akiya.sumai.biz/wp-content/uploads/2024/04/2022-1misasa-5.jpg",
+  "credit": "Photo: akiya.sumai.biz",
+  "role": "house",
+  "mood": null,
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-29T17:29:28+09:00",
+  "uses": 1,
+  "last": "2026-09-29T17:29:28+09:00"
+ },
+ "a4c0abe370048713": {
+  "id": "pexels:36900993",
+  "credit": "Photo: Alec Doualetas / Pexels",
+  "role": "area",
+  "mood": "dusk",
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-29T17:29:28+09:00",
+  "uses": 1,
+  "last": "2026-09-29T17:29:28+09:00"
  }
 }
