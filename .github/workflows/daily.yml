@@ -140,6 +140,22 @@ jobs:
           HTTP_PROXY:  ${{ secrets.JP_PROXY }}
           NO_PROXY: "googleapis.com,api.x.ai,pexels.com,api.telegram.org,airroi.com,project-osrm.org,github.com,localhost"
 
+      - name: Send listing to n8n
+        if: steps.guard.outputs.skip != 'true'
+        continue-on-error: true
+        env:
+          N8N_URL: ${{ secrets.N8N_URL }}
+          N8N_TOKEN: ${{ secrets.N8N_TOKEN }}
+        run: |
+          if [ ! -f out/listing.json ]; then
+            echo "No out/listing.json found, skipping n8n handoff"
+            exit 0
+          fi
+          curl --fail-with-body -sS -X POST "$N8N_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Intake-Token: $N8N_TOKEN" \
+            --data-binary @out/listing.json
+
       - name: Upload slides (for checking)
         if: always() && steps.guard.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
