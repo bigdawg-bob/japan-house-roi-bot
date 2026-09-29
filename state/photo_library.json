@@ -18,8 +18,8 @@
   "kind": "ski",
   "generic": false,
   "added": "2026-09-24T20:41:03+09:00",
-  "uses": 7,
-  "last": "2026-09-27T20:08:42+09:00"
+  "uses": 8,
+  "last": "2026-09-29T17:02:57+09:00"
  },
  "be9cafde84811b6c": {
   "id": "pexels:6279604",
@@ -29,8 +29,8 @@
   "kind": "ski",
   "generic": false,
   "added": "2026-09-24T20:41:03+09:00",
-  "uses": 11,
-  "last": "2026-09-28T08:59:41+09:00"
+  "uses": 12,
+  "last": "2026-09-29T17:02:57+09:00"
  },
  "3d9af773508aa589": {
   "id": "house:https://akiya.sumai.biz/wp-content/uploads/2025/08/902kt-1.jpg",
@@ -328,5 +328,16 @@
   "added": "2026-09-29T10:17:44+09:00",
   "uses": 1,
   "last": "2026-09-29T10:17:44+09:00"
+ },
+ "a030bc6fd682db0d": {
+  "id": "house:https://akiya.sumai.biz/wp-content/uploads/2025/04/81nakano-1.jpg",
+  "credit": "Photo: akiya.sumai.biz",
+  "role": "house",
+  "mood": null,
+  "kind": "ski",
+  "generic": false,
+  "added": "2026-09-29T17:02:57+09:00",
+  "uses": 1,
+  "last": "2026-09-29T17:02:57+09:00"
  }
 }

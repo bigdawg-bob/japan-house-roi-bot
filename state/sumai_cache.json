@@ -15310,14 +15310,6 @@
   "lng": 140.924042,
   "geo_level": "district"
  },
- "https://akiya.sumai.biz/120820": {
-  "id": "https://akiya.sumai.biz/120820",
-  "url": "https://akiya.sumai.biz/120820",
-  "title": "(交渉中) 空き家バンク【売買】1600万円 岩手県花巻市東和町安俵 平成17年築・閑静角地・L小上がり有 庭・ベランダ・小屋・車庫付き3LDK2階建 上下水道",
-  "ok": false,
-  "why": "not available",
-  "lastmod": "2026-07-22T20:28:29+00:00"
- },
  "https://akiya.sumai.biz/116802": {
   "id": "https://akiya.sumai.biz/116802",
   "url": "https://akiya.sumai.biz/116802",
@@ -35938,10 +35930,10 @@
  "https://akiya.sumai.biz/106047": {
   "id": "https://akiya.sumai.biz/106047",
   "url": "https://akiya.sumai.biz/106047",
-  "title": "空き家バンク【売買】298万円 富山県高岡市常国 長閑な田園地帯平野部 屋根裏収納・倉庫兼車庫2台付き10SDK2階建古民家 水洗トイレ",
+  "title": "(価格変更)空き家バンク【売買】298万円→123万円 富山県高岡市常国 長閑な田園地帯平野部 屋根裏収納・倉庫兼車庫2台付き10SDK2階建古民家 水洗トイレ",
   "ok": true,
   "pv": 2,
-  "price_yen": 2980000.0,
+  "price_yen": 1230000.0,
   "pref": "富山県",
   "location": "富山県高岡市常国",
   "bedrooms": 10,
@@ -35951,7 +35943,7 @@
    "https://akiya.sumai.biz/wp-content/uploads/2026/03/491takaoka-1.jpg",
    "https://akiya.sumai.biz/wp-content/uploads/2026/03/491takaoka-2.jpg"
   ],
-  "lastmod": "2026-03-12T22:56:51+00:00",
+  "lastmod": "2026-09-29T06:47:51+00:00",
   "lat": 36.686749,
   "lng": 137.030746,
   "geo_level": "district"
@@ -39538,27 +39530,6 @@
   "lastmod": "2026-02-11T22:17:01+00:00",
   "lat": 33.858871,
   "lng": 135.839142,
-  "geo_level": "district"
- },
- "https://akiya.sumai.biz/102767": {
-  "id": "https://akiya.sumai.biz/102767",
-  "url": "https://akiya.sumai.biz/102767",
-  "title": "空き家バンク【売買】30万円 山形県長井市成田 駅徒歩圏内 物置・駐車場付き4DKコンパクト平屋古民家 水洗トイレ",
-  "ok": true,
-  "pv": 2,
-  "price_yen": 300000.0,
-  "pref": "山形県",
-  "location": "山形県長井市成田",
-  "bedrooms": 4,
-  "year_built": 1957,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/070nagai-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/070nagai-2.jpg"
-  ],
-  "lastmod": "2026-02-11T22:12:53+00:00",
-  "lat": 38.125923,
-  "lng": 140.04039,
   "geo_level": "district"
  },
  "https://akiya.sumai.biz/103071": {
@@ -73217,6 +73188,33 @@
   "lastmod": "2026-09-28T22:17:24+00:00",
   "lat": 34.33736,
   "lng": 131.612717,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/129526": {
+  "id": "https://akiya.sumai.biz/129526",
+  "url": "https://akiya.sumai.biz/129526",
+  "title": "空き家バンク【売買】98万円 茨城県那珂市額田南郷 広い敷地・通学便利 庭・駐車場付き5DK平屋古民家 濡れ縁・縁側・続き間有",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 980000.0,
+  "pref": "茨城県",
+  "location": "茨城県那珂市額田南郷",
+  "bedrooms": 5,
+  "year_built": 1966,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/25naka-1.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/25naka-2.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/25naka-3.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/25naka-4.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/25naka-5.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/25naka-6.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/25naka-7.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/25naka-8.png"
+  ],
+  "lastmod": "2026-09-29T07:21:58+00:00",
+  "lat": 36.482018,
+  "lng": 140.5168,
   "geo_level": "district"
  }
 }
