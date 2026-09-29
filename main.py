@@ -2067,40 +2067,48 @@ def pick(ranked, fx, last_source=None):
 
 # ─── main ────────────────────────────────────────────────────────────
 # ─── n8n handoff (the ONE chosen listing -> out/listing.json) ────────
+EXTRAS_REQUIRED = ("hook", "trip", "net_yield_pct", "caption")
+
 def write_handoff(l, hooks, usd, e, fees_yen, caption):
     """Writes the posted house to out/listing.json. The workflow step
     'Send listing to n8n' sends this file. One run = one house at most."""
     h0 = hooks[0]
     uid = hashlib.sha1(l["url"].encode("utf-8")).hexdigest()[:12]
+    occ = e.get("occ")
     data = {
         "listing_id": f"{l.get('source') or 'sumai'}-{uid}",
         "source_url": l["url"],
         "scraped_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "dry_run": DRY_RUN,
         "facts": {
             "price_jpy": int(l["price_yen"]),
-            "layout": l.get("layout") or (f"{l['bedrooms']}BR" if l.get("bedrooms") else None),
+            "bedrooms": l.get("bedrooms"),
             "building_m2": l.get("area_m2"),
-            "land_m2": l.get("land_m2"),
             "year_built": l.get("year_built"),
             "prefecture": PREF_EN.get(l["pref"], l["pref"]),
             "city": l.get("location"),
         },
         "photos": list(l.get("photos") or []),
         "themes": list(dict.fromkeys(h["kind"] for h in hooks)),
-        "dry_run": DRY_RUN,
-        "extras": {                       # for the AI copywriter later (Milestone 2)
-            "hook": hook_label(h0),
-            "trip": fmt_trip(h0, l),
-            "nearby": [f"{hook_label(h)} ({fmt_trip(h, l)})" for h in hooks[1:4]],
+        "extras": {                                   # for the n8n social media copywriter
+            "hook": hook_label(h0),                   # "Kinosaki Onsen"
+            "hook_kind": h0["kind"],                  # "onsen"
+            "trip": fmt_trip(h0, l),                  # "~13 min drive"
+            "nearby": "; ".join(f"{hook_label(h)} ({fmt_trip(h, l)})" for h in hooks[1:4]),
             "price_usd": round(usd),
             "net_yield_pct": round(e["roi"] * 100, 1),
+            "yield_ok": bool(show_yield(e)),          # False = slides hide the yield (too high to trust)
             "monthly_usd": e.get("monthly"),
             "adr_usd": e.get("adr"),
-            "occupancy": e.get("occ"),
-            "fees_yearly_jpy": fees_yen,
-            "caption": caption,
+            "occupancy_pct": round(occ * 100) if isinstance(occ, (int, float)) else None,
+            "fees_yearly_jpy": round(fees_yen or 0),
+            "caption": caption,                       # the full Telegram caption
         },
     }
+    missing = [k for k in EXTRAS_REQUIRED if data["extras"].get(k) in (None, "")]
+    if missing:
+        print(f"!! n8n handoff NOT written, missing extras: {missing}")
+        return
     OUT.mkdir(exist_ok=True)
     (OUT / "listing.json").write_text(
         json.dumps(data, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
