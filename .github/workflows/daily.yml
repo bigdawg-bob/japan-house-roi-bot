@@ -37,6 +37,9 @@ jobs:
       GROK_API_KEY:    ${{ secrets.GROK_API_KEY }}
       PEXELS_KEY:      ${{ secrets.PEXELS_KEY }}
       GOOGLE_MAPS_KEY: ${{ secrets.GOOGLE_MAPS_KEY || vars.GOOGLE_MAPS_KEY }}   # ← was missing
+      N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
+      N8N_SECRET:      ${{ secrets.N8N_SECRET }}
+      GH_TOKEN:        ${{ github.token }}
 
       # ── your settings ──
       MAX_PRICE_USD:    "100000"
