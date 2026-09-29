@@ -293,8 +293,8 @@
   "kind": "beach",
   "generic": false,
   "added": "2026-09-27T22:27:23+09:00",
-  "uses": 1,
-  "last": "2026-09-27T22:27:23+09:00"
+  "uses": 2,
+  "last": "2026-09-29T10:17:44+09:00"
  },
  "d0dd027545568de3": {
   "id": "pexels:30142246",
@@ -304,8 +304,8 @@
   "kind": "beach",
   "generic": false,
   "added": "2026-09-27T22:27:23+09:00",
-  "uses": 1,
-  "last": "2026-09-27T22:27:23+09:00"
+  "uses": 2,
+  "last": "2026-09-29T10:17:44+09:00"
  },
  "6dbb6bd97aab6a60": {
   "id": "house:https://akiya.sumai.biz/wp-content/uploads/2026/08/157iz-1.jpg",
@@ -317,5 +317,16 @@
   "added": "2026-09-28T08:59:41+09:00",
   "uses": 1,
   "last": "2026-09-28T08:59:41+09:00"
+ },
+ "19da3453bac1d023": {
+  "id": "house:https://akiya.sumai.biz/wp-content/uploads/2025/05/250hakui-1.jpg",
+  "credit": "Photo: akiya.sumai.biz",
+  "role": "house",
+  "mood": null,
+  "kind": "beach",
+  "generic": false,
+  "added": "2026-09-29T10:17:44+09:00",
+  "uses": 1,
+  "last": "2026-09-29T10:17:44+09:00"
  }
 }

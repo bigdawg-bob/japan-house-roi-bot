@@ -1,14 +1,15 @@
 {
  "last_source": "sumai",
- "date": "2026-09-28",
+ "date": "2026-09-29",
  "recent_hooks": [
-  "Myoko Akakura",
   "Chirihama",
+  "Myoko Akakura",
   "Kotohikihama",
   "Hakone Yumoto",
   "Nozawa Onsen"
  ],
  "s3_templates": [
+  "E",
   "B",
   "C",
   "A",
@@ -24,6 +25,11 @@
   "A"
  ],
  "s3_points": [
+  [
+   "plan_b",
+   "trend",
+   "near1"
+  ],
   [
    "competition",
    "foreign",
@@ -91,6 +97,7 @@
   ]
  ],
  "reel_clips": [
+  "pexels:35383884",
   "pexels:29650757",
   "pexels:30819865",
   "pexels:6985328",
