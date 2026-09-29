@@ -29,19 +29,19 @@ jobs:
     timeout-minutes: 45
 
     env:
-  # ── secrets (Settings → Secrets and variables → Actions) ──
-  BOT_TOKEN:       ${{ secrets.BOT_TOKEN }}
-  CHAT_ID:         ${{ secrets.CHAT_ID }}
-  AIRROI_API_KEY:  ${{ secrets.AIRROI_API_KEY }}
-  AIRROI_KEY:      ${{ secrets.AIRROI_API_KEY }}   # same secret, old name some code may still read
-  GROK_API_KEY:    ${{ secrets.GROK_API_KEY }}
-  PEXELS_KEY:      ${{ secrets.PEXELS_KEY }}
-  GOOGLE_MAPS_KEY: ${{ secrets.GOOGLE_MAPS_KEY || vars.GOOGLE_MAPS_KEY }}
-  SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
-  N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
-  N8N_TOKEN:       ${{ secrets.N8N_TOKEN }}
-  N8N_SECRET:      ${{ secrets.N8N_TOKEN }}        # same secret, old name the script may still read
-  GH_TOKEN:        ${{ github.token }}
+      # ── secrets (Settings → Secrets and variables → Actions) ──
+      BOT_TOKEN:       ${{ secrets.BOT_TOKEN }}
+      CHAT_ID:         ${{ secrets.CHAT_ID }}
+      AIRROI_API_KEY:  ${{ secrets.AIRROI_API_KEY }}
+      AIRROI_KEY:      ${{ secrets.AIRROI_API_KEY }}   # same secret, old name some code may still read
+      GROK_API_KEY:    ${{ secrets.GROK_API_KEY }}
+      PEXELS_KEY:      ${{ secrets.PEXELS_KEY }}
+      GOOGLE_MAPS_KEY: ${{ secrets.GOOGLE_MAPS_KEY || vars.GOOGLE_MAPS_KEY }}
+      SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
+      N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
+      N8N_TOKEN:       ${{ secrets.N8N_TOKEN }}
+      N8N_SECRET:      ${{ secrets.N8N_TOKEN }}        # n8n_handoff.py reads N8N_SECRET
+      GH_TOKEN:        ${{ github.token }}
 
       # ── your settings ──
       MAX_PRICE_USD:    "100000"
@@ -108,6 +108,15 @@ jobs:
             exit 1
           fi
           echo "Google key present (${#GOOGLE_MAPS_KEY} characters)"
+
+      - name: Check n8n token
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          if [ -n "$N8N_WEBHOOK_URL" ] && [ -z "$N8N_SECRET" ]; then
+            echo "::warning::N8N_TOKEN secret is empty – n8n will reject the post with 403."
+          else
+            echo "n8n token present (${#N8N_SECRET} characters)"
+          fi
 
       - name: Refresh road times (only when ticked)
         if: steps.guard.outputs.skip != 'true' && inputs.refresh_road_times
