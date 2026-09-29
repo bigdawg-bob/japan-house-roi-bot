@@ -2066,6 +2066,46 @@ def pick(ranked, fx, last_source=None):
 
 
 # ─── main ────────────────────────────────────────────────────────────
+# ─── n8n handoff (the ONE chosen listing -> out/listing.json) ────────
+def write_handoff(l, hooks, usd, e, fees_yen, caption):
+    """Writes the posted house to out/listing.json. The workflow step
+    'Send listing to n8n' sends this file. One run = one house at most."""
+    h0 = hooks[0]
+    uid = hashlib.sha1(l["url"].encode("utf-8")).hexdigest()[:12]
+    data = {
+        "listing_id": f"{l.get('source') or 'sumai'}-{uid}",
+        "source_url": l["url"],
+        "scraped_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "facts": {
+            "price_jpy": int(l["price_yen"]),
+            "layout": l.get("layout") or (f"{l['bedrooms']}BR" if l.get("bedrooms") else None),
+            "building_m2": l.get("area_m2"),
+            "land_m2": l.get("land_m2"),
+            "year_built": l.get("year_built"),
+            "prefecture": PREF_EN.get(l["pref"], l["pref"]),
+            "city": l.get("location"),
+        },
+        "photos": list(l.get("photos") or []),
+        "themes": list(dict.fromkeys(h["kind"] for h in hooks)),
+        "dry_run": DRY_RUN,
+        "extras": {                       # for the AI copywriter later (Milestone 2)
+            "hook": hook_label(h0),
+            "trip": fmt_trip(h0, l),
+            "nearby": [f"{hook_label(h)} ({fmt_trip(h, l)})" for h in hooks[1:4]],
+            "price_usd": round(usd),
+            "net_yield_pct": round(e["roi"] * 100, 1),
+            "monthly_usd": e.get("monthly"),
+            "adr_usd": e.get("adr"),
+            "occupancy": e.get("occ"),
+            "fees_yearly_jpy": fees_yen,
+            "caption": caption,
+        },
+    }
+    OUT.mkdir(exist_ok=True)
+    (OUT / "listing.json").write_text(
+        json.dumps(data, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+    print(f"n8n handoff: out/listing.json written ({data['listing_id']})")
+      
 def main():
     today = datetime.now(JST).strftime("%Y-%m-%d")
     print(f"Fonts folder: {FONT_DIR} | files: "
@@ -2155,6 +2195,11 @@ def main():
     reel_path, reel_text, reel_cap, reel_clip = (tuple(reel or ()) + (None,) * 4)[:4]
     if ok and reel_path:
         tg_video(reel_path, reel_cap or f"🎬 Reel: {reel_text}")   # a failed reel doesn't block the post
+    if ok:
+        try:
+            write_handoff(l, hooks, usd, e, fees_yen, caption)
+        except Exception as ex:
+            print(f"!! n8n handoff file error: {ex!r} – the post is unaffected")      
     if ok and not DRY_RUN:
         for u in l.get("all_urls", [l["url"]]):
             posted[u] = today
