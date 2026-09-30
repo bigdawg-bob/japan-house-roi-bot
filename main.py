@@ -22,12 +22,13 @@ Flow: scrape the enabled sites (SOURCES) -> merge + remove duplicates
          -> photo library (any photo from any earlier post) -> unchecked stock
          -> this listing's photos -> fallback_photos/ folder. 75% black overlay.
          No photo at all -> no post today (retry next run).
-      -> Reel: 1080x1920, exactly 7.0 s, NO zoom, 70% black overlay, ONE centred line
-         (max 4 words), text fades in at 0.5 s and out at 6.5 s.
-         Background: your own video clip (reels/<kind>/ or reels/any/, a clip named
-         after the town wins, clips take turns) > AI video (ai_reel.py, optional)
-         > still photo.
-         Line: "$15K KINOSAKI" > "19 AIRBNBS HERE" > "25 MIN TO KINOSAKI" > "WHY $203 WORKS".
+      -> Wording (ai_copy.py, optional, DeepSeek): free wording inside fixed limits for
+         the reel lines, the slide 2 math sentences (numbers only as {placeholders},
+         filled in by this file), the slide 3 headline + 3 bullets + 2 SEO lines, and the
+         caption lines + hashtags. Any line that fails a check uses the template text.
+      -> Reel (ai_reel.py): 1080x1920, 7.0 s seamless loop, NO zoom, 70% black overlay,
+         2 centred lines: hook (bold, up to 190 px, max 3 words) + line 2 (46 px, 85%).
+         Background: ONE Pexels video from bg_videos.txt.
       -> optional cover.html template ({{ hook }}, {{ location }} ...) -> out/cover.html
       -> 1080x1350 slides -> Telegram (album + copyable caption + reel video).
 """
@@ -61,6 +62,12 @@ try:
 except ImportError as _ex:
     ai_reel = None
     print(f"!! ai_reel.py not loaded ({_ex}) – photo reel only")
+
+try:
+    import ai_copy                                # optional: DeepSeek wording
+except ImportError as _ex:
+    ai_copy = None
+    print(f"!! ai_copy.py not loaded ({_ex}) – template text only")
 
 
 # ─── settings ────────────────────────────────────────────────────────
@@ -118,7 +125,7 @@ BOT_UA         = {"User-Agent": "yama-yield-akiya-bot/1.0 (Instagram @yama.yield
 # ── reel (all settings in ai_reel.py; background = bg_videos.txt via Pexels) ──
 REEL_ON      = _env("REEL", "1") == "1"                 # REEL=0 turns the reel off
 REEL_W, REEL_H = 1080, 1920
-REEL_SECS    = 6.8
+REEL_SECS    = 7.0                                      # must match ai_reel.SECS
 REEL_WORDS   = 4                                        # hook line: max 4 words
 CLIP_HISTORY = 20                                       # recently used background videos remembered
 
@@ -1307,7 +1314,8 @@ def pick_points(t, pool, rot):
     return sorted(best, key=lambda k: (k not in need, k not in prefer, keys.index(k)))
 
 def slide3_text(h, l, hooks, facts, e, rot):
-    """All slide 3 wording: {'template', 'headline', 'points', 'kinds', 'lines'}."""
+    """All slide 3 wording: {'template', 'headline', 'points', 'kinds', 'lines', 'pool'}.
+    pool = every fact available (DeepSeek may write its bullets from these)."""
     f = facts or {}
     pool = {k: v for k, v in (f.get("points") or {}).items() if k in POINT_KINDS and v}
     for k, v in own_points(l, hooks, e).items():
@@ -1341,7 +1349,8 @@ def slide3_text(h, l, hooks, facts, e, rot):
               f"check with the city before posting")
 
     return {"template": t, "headline": headline, "kinds": list(kinds),
-            "points": [pool[k] for k in kinds], "lines": [line1, line2]}
+            "points": [pool[k] for k in kinds], "lines": [line1, line2],
+            "pool": dict(pool)}
 
 
 # ─── slides ──────────────────────────────────────────────────────────
@@ -1521,6 +1530,13 @@ MATH_FILL = (255, 255, 255, 230)      # white at 90% opacity
 MATH_TOP  = 1019                      # first math line (was 1085) -> 25% more room below it
 MATH_GAP  = 42                        # space between math lines
 DIVIDER_Y = 965                       # thin line above the math (was 1000)
+MATH_MAX_ROWS = 5                     # DeepSeek wording is used only if it fits in 5 rows
+
+# slide 2 math lines as templates. DeepSeek (ai_copy.py) may reword them, but numbers are
+# ONLY {placeholders}; the values always come from math_values() below.
+S2_TEMPLATES = {"a_real": "{yield} • {all_in} all-in {breakdown}",
+                "a":      "{all_in} all-in {breakdown}",
+                "b":      "{place} • {adr} × {occ} × {nights} • After {mgmt}: {net}"}
 
 def payback_text(e):
     """Slide 2 hero wording: (big, label, sub, real, fees_on)."""
@@ -1672,8 +1688,31 @@ def wrap_math(d, s, f, maxw):
         out.append(cur)
     return out
 
-def area_slide(pic, h, l, e, usd=None):
-    """Slide 2: daytime photo + THE PAYBACK (numbers from yield_calc.estimate)."""
+def fill_ph(t, values):
+    """'{adr} × {occ}' -> '$120/nt × 80%'. Unknown placeholders stay as they are."""
+    return re.sub(r"\{(\w+)\}", lambda m: str(values.get(m.group(1), m.group(0))), t)
+
+def math_values(h, e, usd=None):
+    """The ONLY numbers slide 2's math lines may show: ({placeholder: text}, real).
+    Same values the template lines always used."""
+    real, fees_on = payback_text(e)[3:]
+    mg = _num(e, "mgmt_pct", "management_pct", "mgmt_rate", "mgmt", "management")
+    mg = 30 if mg is None else (mg * 100 if mg <= 1 else mg)
+    v = {"all_in": fmt_k1(e["all_in"]),
+         "breakdown": cost_breakdown(e, usd),
+         "place": hook_label(h),
+         "adr": f"${e['adr']:,}/nt",
+         "occ": f"{e['occ'] * 100:.0f}%",
+         "nights": f"{e['nights']} days",
+         "mgmt": f"{mg:.0f}% mgmt{' & fees' if fees_on else ''}",
+         "net": f"{fmt_k1(e['net'])}/yr"}
+    if real:
+        v["yield"] = f"{e['roi'] * 100:.0f}% net yield"
+    return v, real
+
+def area_slide(pic, h, l, e, usd=None, copy=None):
+    """Slide 2: daytime photo + THE PAYBACK (numbers from yield_calc.estimate).
+    copy = DeepSeek wording (s2_line_a / s2_line_b with {placeholders}), else template."""
     img = area_bg(pic)
     d = ImageDraw.Draw(img)
     cx = W // 2
@@ -1695,15 +1734,23 @@ def area_slide(pic, h, l, e, usd=None):
     d.line([(cx - 100, DIVIDER_Y), (cx + 100, DIVIDER_Y)], fill=w30, width=1)
 
     # small math: Inter Regular 28px (never smaller), white 90%, wraps instead of shrinking
-    all_in = f"{fmt_k1(e['all_in'])} all-in {cost_breakdown(e, usd)}"
-    line_a = f"{e['roi'] * 100:.0f}% net yield • {all_in}" if real else all_in
-    mg = _num(e, "mgmt_pct", "management_pct", "mgmt_rate", "mgmt", "management")
-    mg = 30 if mg is None else (mg * 100 if mg <= 1 else mg)
-    line_b = (f"{hook_label(h)} • ${e['adr']:,}/nt × {e['occ'] * 100:.0f}% × "
-              f"{e['nights']} days • After {mg:.0f}% mgmt{' & fees' if fees_on else ''}: "
-              f"{fmt_k1(e['net'])}/yr")
+    v, real = math_values(h, e, usd)
     mf = cfont("sans", MATH_PX, 400)
-    rows = wrap_math(d, line_a, mf, W - 120) + wrap_math(d, line_b, mf, W - 120)
+    tpl = [S2_TEMPLATES["a_real" if real else "a"], S2_TEMPLATES["b"]]
+
+    def rows_for(lines):
+        return [r for t in lines for r in wrap_math(d, fill_ph(t, v), mf, W - 120)]
+
+    rows = rows_for(tpl)
+    c = copy or {}
+    ai = [c.get("s2_line_a") or tpl[0], c.get("s2_line_b") or tpl[1]]
+    if ai != tpl:
+        ai_rows = rows_for(ai)
+        if len(ai_rows) <= max(MATH_MAX_ROWS, len(rows)):
+            rows = ai_rows
+            print(f"  slide 2: DeepSeek math wording | {' / '.join(ai_rows)}")
+        else:
+            print(f"  slide 2: DeepSeek math wording needs {len(ai_rows)} rows – template used")
 
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))     # separate layer = real 90% opacity
     ld = ImageDraw.Draw(layer)
@@ -1756,7 +1803,7 @@ def facts_slide(pic, h, l, hooks, facts, e, s3):
     return img
 
 
-# ─── reel (7 s vertical video, one centred line, no zoom) ────────────
+# ─── reel helpers (font + ffmpeg, used by ai_reel.py) ────────────────
 REEL_FONT_FILES = [FONT_DIR / "Arimo-Bold.ttf",
                    FONT_DIR / "Reel-Bold.ttf",
                    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
@@ -1809,7 +1856,8 @@ def build_slides(l, hooks, usd, e, rot=None):
     """3 slides: cover, the payback (day), why this rents (dusk) + the reel.
     Returns (slide paths, area photo credits, slide 3 wording,
     (reel path, reel line, reel caption, clip used or None)),
-    or (None, None, None, None) if no photo at all."""
+    or (None, None, None, None) if no photo at all.
+    The DeepSeek wording that passed its checks is in s3['copy'] ({} = template only)."""
     OUT.mkdir(exist_ok=True)
     for old in (list(OUT.glob("slide_*.jpg")) + list(OUT.glob("reel*"))
                 + list(OUT.glob("cover.html"))):
@@ -1848,6 +1896,19 @@ def build_slides(l, hooks, usd, e, rot=None):
         print(f"!! town facts error: {ex!r}")
 
     s3 = slide3_text(h0, l, hooks, facts, e, rot or {})
+
+    # DeepSeek wording (ai_copy.py). Anything that fails a check keeps the template text.
+    copy = {}
+    if ai_copy:
+        try:
+            copy = ai_copy.write(sys.modules[__name__], h0, l, hooks, usd, e, facts, s3,
+                                 rot or {})
+            s3 = ai_copy.apply_s3(s3, copy)
+        except Exception as ex:
+            print(f"!! AI copy error: {ex!r} – template text")
+            copy = {}
+    s3["copy"] = copy
+
     print(f"Slide 3: template {s3['template']} | {s3['headline']} | "
           f"{' / '.join(s3['points'])} | {' / '.join(s3['lines'])}")
 
@@ -1857,7 +1918,7 @@ def build_slides(l, hooks, usd, e, rot=None):
           f"{'found' if facts else 'fallback'}")
 
     slides = [cover_slide(cover["img"], l, hooks, usd, e),
-              area_slide(day, h0, l, e, usd),
+              area_slide(day, h0, l, e, usd, copy),
               facts_slide(dusk, h0, l, hooks, facts, e, s3)]
     paths = []
     for i, s in enumerate(slides, 1):
@@ -1876,7 +1937,8 @@ def build_slides(l, hooks, usd, e, rot=None):
     reel = (None, None, None, None)
     if REEL_ON and ai_reel:
         try:
-            got = ai_reel.make(sys.modules[__name__], h0, l, usd, e, facts, rot or {})
+            got = ai_reel.make(sys.modules[__name__], h0, l, usd, e, facts, rot or {},
+                               copy=copy)
             if got:
                 reel = tuple(got)
         except Exception as ex:
@@ -1895,7 +1957,10 @@ def build_slides(l, hooks, usd, e, rot=None):
 
 
 # ─── caption ─────────────────────────────────────────────────────────
-def build_caption(l, hooks, usd, e, fees_yen, fees_usd, area_credits=()):
+def build_caption(l, hooks, usd, e, fees_yen, fees_usd, area_credits=(), copy=None):
+    """copy = DeepSeek fields that passed ai_copy's checks (caption_hook, caption_seo,
+    hashtags). The price, facts, disclaimer and link lines are always our own."""
+    c = copy or {}
     h0 = hooks[0]
     pref = PREF_EN.get(l["pref"], l["pref"])
     price_line = ("💴 Price: FREE 🎉" if l["price_yen"] == 0
@@ -1903,10 +1968,11 @@ def build_caption(l, hooks, usd, e, fees_yen, fees_usd, area_credits=()):
     headline = (f"{KINDS[h0['kind']]['emoji']} {fmt_usd(usd)} house, "
                 f"{fmt_trip(h0, l)} to {hook_label(h0)}.")
     roi_block = caption_text(e, headline)
-    lines = [roi_block or headline,
-             "",
-             price_line,
-             f"📍 {l['location']} ({pref})"]
+    lines = [c["caption_hook"], ""] if c.get("caption_hook") else []
+    lines += [roi_block or headline,
+              "",
+              price_line,
+              f"📍 {l['location']} ({pref})"]
     if len(hooks) > 1:
         also = ", ".join(f"{KINDS[h['kind']]['emoji']} {hook_label(h)} ({fmt_trip(h, l)})"
                          for h in hooks[1:4])
@@ -1919,6 +1985,8 @@ def build_caption(l, hooks, usd, e, fees_yen, fees_usd, area_credits=()):
         lines.append(f"📐 Floor area: {l['area_m2']:.0f} m²")
     if fees_yen:
         lines.append(f"🧾 Yearly fees: {fmt_yen(fees_yen)} (≈ {fmt_usd(fees_usd)})")
+    if c.get("caption_seo"):
+        lines += ["", c["caption_seo"]]
     place = "town" if l.get("geo_level") == "town" else "district"
     src = time_source(hooks)
     credit = " (© OpenStreetMap contributors)" if src == "OpenStreetMap routing" else ""
@@ -1929,12 +1997,14 @@ def build_caption(l, hooks, usd, e, fees_yen, fees_usd, area_credits=()):
               f"Drive times: {src}{credit}, from the {place} centre.",
               f"Source & house photos: {site_info(l)[0]}"]
     if area_credits:
-        lines.append("Area photos: " + "; ".join(c.replace("Photo: ", "", 1)
-                                                 for c in area_credits))
+        lines.append("Area photos: " + "; ".join(c2.replace("Photo: ", "", 1)
+                                                 for c2 in area_credits))
+    tags = (" ".join(c["hashtags"]) if c.get("hashtags") else
+            f"#akiya #japanhouse #cheaphouse {kind_tags} #moveto{pref.lower()}"
+            " #japanrealestate #空き家 #古民家")
     lines += [f"🔗 {l['url']}",
               "",
-              f"#akiya #japanhouse #cheaphouse {kind_tags} #moveto{pref.lower()}"
-              " #japanrealestate #空き家 #古民家"]
+              tags]
     return "\n".join(lines)
 
 
@@ -2081,9 +2151,12 @@ def main():
           f"{'found' if COVER_TEMPLATE.exists() else 'none'}")
     print(f"Reel: {'on' if REEL_ON else 'OFF'} | "
           f"{'ai_reel.py loaded' if ai_reel else 'ai_reel.py MISSING'} | "
+          f"{f'{ai_reel.SECS}s, overlay {ai_reel.OV_ALPHA:.0%} | ' if ai_reel else ''}"
           f"background: bg_videos.txt via Pexels ({'key found' if PEXELS_KEY else 'NO KEY'}) | "
           f"font {reel_font_file() or 'MISSING (fallback)'} | "
           f"ffmpeg {'found' if ffmpeg_exe() else 'MISSING'}")
+    print(f"AI copy: "
+          f"{'ai_copy.py MISSING' if not ai_copy else (f'on ({ai_copy.MODEL})' if ai_copy.ON else 'OFF (no DEEPSEEK_API_KEY or AI_COPY=0)')}")
     fx = get_fx()
     max_yen = MAX_PRICE_USD / fx
     listings = gather()
@@ -2149,7 +2222,8 @@ def main():
         tg_text(f"No post today ({today}) – couldn't find any photo for the slides. "
                 f"Will retry next run.")
         return
-    caption = build_caption(l, hooks, usd, e, fees_yen, fees_usd, area_credits)
+    copy = s3.get("copy") or {}
+    caption = build_caption(l, hooks, usd, e, fees_yen, fees_usd, area_credits, copy)
     (OUT / "caption.txt").write_text(caption, encoding="utf-8")
     reel_path, reel_text, reel_cap, reel_clip = (tuple(reel or ()) + (None,) * 4)[:4]
 
@@ -2181,6 +2255,12 @@ def main():
                                                 if c != reel_clip])[:CLIP_HISTORY]
         save_json(ROTATION_FILE, rot)
         print("Saved to state/posted.json + state/rotation.json")
+        if ai_copy and copy:
+            try:
+                ai_copy.log_post(today, l, copy)          # matched with Insights later
+                print("Saved wording to state/copy_log.json")
+            except Exception as ex:
+                print(f"!! copy log error: {ex!r}")
     elif not ok:
         print("Telegram failed – not marking as posted, will retry next run")
     if handed is False:
