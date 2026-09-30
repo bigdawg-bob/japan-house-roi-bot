@@ -40,5 +40,42 @@
    "#oita",
    "#japanproperty"
   ]
+ },
+ "2026-09-30|https://akiya.sumai.biz/30648|v3": {
+  "angle": "D",
+  "reel_hook": "YUFUIN $19K",
+  "reel_sub": "5BR near bath • 20 min drive • 18% net",
+  "s2_line_a": "For {yield} you need {all_in} all-in {breakdown}.",
+  "s2_line_b": "{place}: {adr} × {occ} × {nights}; after {mgmt} your net is {net}.",
+  "s3_headline": "Kurokawa-style Yufuin onsen house $19K",
+  "s3_points": [
+   {
+    "from": [
+     "built"
+    ],
+    "text": "Built 1983: post-1981 quake code"
+   },
+   {
+    "from": [
+     "price"
+    ],
+    "text": "House price $19K (¥3.0M)"
+   },
+   {
+    "from": [
+     "minpaku"
+    ],
+    "text": "Minpaku national cap: 180 nights per year"
+   },
+   {
+    "from": [
+     "bedrooms",
+     "known_for"
+    ],
+    "text": "no"
+   }
+  ],
+  "s3_seo1": "Yufuin akiya for sale near onsen house",
+  "s3_seo2": "Yufuin Ski Resort Akiya rentals Japan cheapest view of rooms to earn on Airbnb pool overnight rates based spaces remaining fine specific bed  also place names Japan property "
  }
 }
