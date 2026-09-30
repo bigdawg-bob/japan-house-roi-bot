@@ -30,18 +30,16 @@ jobs:
 
     env:
       # ── secrets (Settings → Secrets and variables → Actions) ──
-      BOT_TOKEN:       ${{ secrets.BOT_TOKEN }}
-      CHAT_ID:         ${{ secrets.CHAT_ID }}
-      AIRROI_API_KEY:  ${{ secrets.AIRROI_API_KEY }}
-      AIRROI_KEY:      ${{ secrets.AIRROI_API_KEY }}   # same secret, old name some code may still read
-      GROK_API_KEY:    ${{ secrets.GROK_API_KEY }}
-      PEXELS_KEY:      ${{ secrets.PEXELS_KEY }}
-      GOOGLE_MAPS_KEY: ${{ secrets.GOOGLE_MAPS_KEY || vars.GOOGLE_MAPS_KEY }}
-      SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
-      N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
-      N8N_TOKEN:       ${{ secrets.N8N_TOKEN }}
-      N8N_SECRET:      ${{ secrets.N8N_TOKEN }}        # n8n_handoff.py reads N8N_SECRET
-      GH_TOKEN:        ${{ github.token }}
+      BOT_TOKEN:        ${{ secrets.BOT_TOKEN }}
+      CHAT_ID:          ${{ secrets.CHAT_ID }}
+      AIRROI_API_KEY:   ${{ secrets.AIRROI_API_KEY }}
+      AIRROI_KEY:       ${{ secrets.AIRROI_API_KEY }}   # same secret, old name some code may still read
+      GROK_API_KEY:     ${{ secrets.GROK_API_KEY }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }} # AI copy (caption, reel, slide 2)
+      PEXELS_KEY:       ${{ secrets.PEXELS_KEY }}
+      GOOGLE_MAPS_KEY:  ${{ secrets.GOOGLE_MAPS_KEY || vars.GOOGLE_MAPS_KEY }}
+      SCRAPER_API_KEY:  ${{ secrets.SCRAPER_API_KEY }}
+      GH_TOKEN:         ${{ github.token }}
 
       # ── your settings ──
       MAX_PRICE_USD:    "100000"
@@ -77,6 +75,9 @@ jobs:
       AREA_OVERLAY:     "0.75"
       LIBRARY_MAX:      "60"
 
+      # ── reel ──
+      REEL_OVERLAY:     "0.70"
+
       DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
 
     steps:
@@ -100,7 +101,7 @@ jobs:
               f.write(f"skip={'true' if skip else 'false'}\n")
           EOF
 
-      - name: Check Google key
+      - name: Check keys
         if: steps.guard.outputs.skip != 'true'
         run: |
           if [ -z "$GOOGLE_MAPS_KEY" ]; then
@@ -108,14 +109,15 @@ jobs:
             exit 1
           fi
           echo "Google key present (${#GOOGLE_MAPS_KEY} characters)"
-
-      - name: Check n8n token
-        if: steps.guard.outputs.skip != 'true'
-        run: |
-          if [ -n "$N8N_WEBHOOK_URL" ] && [ -z "$N8N_SECRET" ]; then
-            echo "::warning::N8N_TOKEN secret is empty – n8n will reject the post with 403."
+          if [ -z "$DEEPSEEK_API_KEY" ]; then
+            echo "::warning::DEEPSEEK_API_KEY is empty – AI copy is off, template text will be used."
           else
-            echo "n8n token present (${#N8N_SECRET} characters)"
+            echo "DeepSeek key present (${#DEEPSEEK_API_KEY} characters)"
+          fi
+          if [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
+            echo "::warning::BOT_TOKEN or CHAT_ID is empty – Telegram will be skipped."
+          else
+            echo "Telegram secrets present"
           fi
 
       - name: Refresh road times (only when ticked)
@@ -152,7 +154,7 @@ jobs:
           # Empty = no proxy. Only this step uses it; APIs below always connect directly.
           HTTPS_PROXY: ${{ secrets.JP_PROXY }}
           HTTP_PROXY:  ${{ secrets.JP_PROXY }}
-          NO_PROXY: "googleapis.com,api.x.ai,pexels.com,api.telegram.org,airroi.com,project-osrm.org,github.com,localhost"
+          NO_PROXY: "googleapis.com,api.x.ai,api.deepseek.com,pexels.com,api.telegram.org,airroi.com,project-osrm.org,github.com,localhost"
 
       - name: Upload slides (for checking)
         if: always() && steps.guard.outputs.skip != 'true'
