@@ -215,14 +215,6 @@
   "lng": 136.261383,
   "geo_level": "district"
  },
- "https://akiya.sumai.biz/121514": {
-  "id": "https://akiya.sumai.biz/121514",
-  "url": "https://akiya.sumai.biz/121514",
-  "title": "(受付停止)空き家バンク【売買】80万円 栃木県那須郡那須町大字寺子乙 駅徒歩圏内 庭・ベランダ・駐車場2台付き6DK2階建 広縁・続き間有",
-  "ok": false,
-  "why": "not available",
-  "lastmod": "2026-09-22T00:32:34+00:00"
- },
  "https://akiya.sumai.biz/1830": {
   "id": "https://akiya.sumai.biz/1830",
   "url": "https://akiya.sumai.biz/1830",
@@ -4985,29 +4977,11 @@
  "https://akiya.sumai.biz/126825": {
   "id": "https://akiya.sumai.biz/126825",
   "url": "https://akiya.sumai.biz/126825",
-  "title": "空き家バンク【売買】300万円 栃木県那須郡那珂川町薬利  庭・物置・ウッドデッキ付き2LDK和風平屋 井戸・水洗トイレ",
-  "ok": true,
+  "title": "(交渉中) 空き家バンク【売買】300万円 栃木県那須郡那珂川町薬利  庭・物置・ウッドデッキ付き2LDK和風平屋 井戸・水洗トイレ",
+  "ok": false,
   "pv": 2,
-  "price_yen": 3000000.0,
-  "pref": "栃木県",
-  "location": "栃木県那須郡那珂川町薬利",
-  "bedrooms": 2,
-  "year_built": 1985,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/52ng-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/52ng-2.png",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/52ng-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/52ng-4.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/52ng-5.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/52ng-6.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/52ng-7.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/52ng-8.jpg"
-  ],
-  "lastmod": "2026-09-05T23:31:02+00:00",
-  "lat": 36.774151,
-  "lng": 140.094589,
-  "geo_level": "district"
+  "why": "not available",
+  "lastmod": "2026-09-29T19:02:36+00:00"
  },
  "https://akiya.sumai.biz/126731": {
   "id": "https://akiya.sumai.biz/126731",
@@ -11549,33 +11523,6 @@
   "why": "no sale price",
   "lastmod": "2026-08-08T22:16:39+00:00"
  },
- "https://akiya.sumai.biz/124105": {
-  "id": "https://akiya.sumai.biz/124105",
-  "url": "https://akiya.sumai.biz/124105",
-  "title": "空き家バンク【売買】280万円 栃木県佐野市石塚町 バルコニー・物置・駐車場数台付き4SLDK軽量鉄骨2階建 水洗トイレ",
-  "ok": true,
-  "pv": 2,
-  "price_yen": 2800000.0,
-  "pref": "栃木県",
-  "location": "栃木県佐野市石塚町",
-  "bedrooms": 4,
-  "year_built": 1981,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/8-11sano-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/8-11sano-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/8-11sano-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/8-11sano-4.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/8-11sano-5.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/8-11sano-6.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/8-11sano-7.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/8-11sano-8.jpg"
-  ],
-  "lastmod": "2026-08-08T22:15:29+00:00",
-  "lat": 36.352222,
-  "lng": 139.55806,
-  "geo_level": "district"
- },
  "https://akiya.sumai.biz/122581": {
   "id": "https://akiya.sumai.biz/122581",
   "url": "https://akiya.sumai.biz/122581",
@@ -12586,32 +12533,6 @@
   "lastmod": "2026-08-04T22:36:13+00:00",
   "lat": 35.438549,
   "lng": 139.045639,
-  "geo_level": "district"
- },
- "https://akiya.sumai.biz/123695": {
-  "id": "https://akiya.sumai.biz/123695",
-  "url": "https://akiya.sumai.biz/123695",
-  "title": "空き家バンク【売買】650万円 千葉県安房郡鋸南町保田 平成5年築・駅徒歩圏内 玄関天窓・掘りごたつ有 庭・物置・駐車場付き2Kコンパクト平屋 水洗トイレ",
-  "ok": true,
-  "price_yen": 6500000.0,
-  "pref": "千葉県",
-  "location": "千葉県安房郡鋸南町保田",
-  "bedrooms": 2,
-  "year_built": 1993,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/70kn-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/70kn-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/70kn-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/70kn-4.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/70kn-5.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/70kn-6.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/70kn-7.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/70kn-8.jpg"
-  ],
-  "lastmod": "2026-08-04T22:35:06+00:00",
-  "lat": 35.149078,
-  "lng": 139.857834,
   "geo_level": "district"
  },
  "https://akiya.sumai.biz/101399": {
@@ -16486,28 +16407,11 @@
  "https://akiya.sumai.biz/121265": {
   "id": "https://akiya.sumai.biz/121265",
   "url": "https://akiya.sumai.biz/121265",
-  "title": "空き家バンク【売買】450万円 栃木県那須塩原市関谷 平成11年築・広い敷地 庭付き5LDK軽量鉄骨2階建 水洗トイレ",
-  "ok": true,
-  "price_yen": 4500000.0,
-  "pref": "栃木県",
-  "location": "栃木県那須塩原市関谷",
-  "bedrooms": 5,
-  "year_built": 1999,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/R8-1-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/R8-1-2.png",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/R8-1-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/R8-1-5.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/R8-1-4.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/R8-1-6.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/R8-1-7.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/07/R8-1-8.jpg"
-  ],
-  "lastmod": "2026-07-14T22:00:21+00:00",
-  "lat": 36.962605,
-  "lng": 139.900925,
-  "geo_level": "district"
+  "title": "(交渉中) 空き家バンク【売買】450万円 栃木県那須塩原市関谷 平成11年築・広い敷地 庭付き5LDK軽量鉄骨2階建 水洗トイレ",
+  "ok": false,
+  "pv": 2,
+  "why": "not available",
+  "lastmod": "2026-09-29T18:49:45+00:00"
  },
  "https://akiya.sumai.biz/115959": {
   "id": "https://akiya.sumai.biz/115959",
@@ -24995,24 +24899,11 @@
  "https://akiya.sumai.biz/115589": {
   "id": "https://akiya.sumai.biz/115589",
   "url": "https://akiya.sumai.biz/115589",
-  "title": "空き家バンク【売買】200万円 新潟県村上市飯野一丁目 買物便利・家庭菜園可 ベランダ・物置・ビルトインガレージ付き11DK2階建 水洗トイレ・都市ガス",
-  "ok": true,
+  "title": "(交渉中) 空き家バンク【売買】200万円 新潟県村上市飯野一丁目 買物便利・家庭菜園可 ベランダ・物置・ビルトインガレージ付き11DK2階建 水洗トイレ・都市ガス",
+  "ok": false,
   "pv": 2,
-  "price_yen": 2000000.0,
-  "pref": "新潟県",
-  "location": "新潟県村上市飯野一丁目",
-  "bedrooms": 11,
-  "year_built": null,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/05/218mk-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/05/218mk-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/05/218mk-3.jpg"
-  ],
-  "lastmod": "2026-05-25T22:19:41+00:00",
-  "lat": 38.220245,
-  "lng": 139.47551,
-  "geo_level": "district"
+  "why": "not available",
+  "lastmod": "2026-09-29T21:35:45+00:00"
  },
  "https://akiya.sumai.biz/115653": {
   "id": "https://akiya.sumai.biz/115653",
@@ -46815,10 +46706,10 @@
  "https://akiya.sumai.biz/91915": {
   "id": "https://akiya.sumai.biz/91915",
   "url": "https://akiya.sumai.biz/91915",
-  "title": "空き家バンク【売買】350万円 新潟県村上市福田 作業場・車庫・駐車場2台付き6DK2階建",
+  "title": "(価格変更)空き家バンク【売買】350万円→300万円 新潟県村上市福田 作業場・車庫・駐車場2台付き6DK2階建",
   "ok": true,
   "pv": 2,
-  "price_yen": 3500000.0,
+  "price_yen": 3000000.0,
   "pref": "新潟県",
   "location": "新潟県村上市福田",
   "bedrooms": 6,
@@ -46829,7 +46720,7 @@
    "https://akiya.sumai.biz/wp-content/uploads/2025/11/210murakami-3.jpg",
    "https://akiya.sumai.biz/wp-content/uploads/2025/11/210murakami-2.jpg"
   ],
-  "lastmod": "2025-11-12T22:07:16+00:00",
+  "lastmod": "2026-09-29T21:36:38+00:00",
   "lat": 38.153568,
   "lng": 139.428421,
   "geo_level": "district"
@@ -52112,29 +52003,6 @@
   "lastmod": "2025-08-27T23:57:34+00:00",
   "lat": 37.301598,
   "lng": 139.327744,
-  "geo_level": "district"
- },
- "https://akiya.sumai.biz/42827": {
-  "id": "https://akiya.sumai.biz/42827",
-  "url": "https://akiya.sumai.biz/42827",
-  "title": "(価格変更)空き家バンク【売買】200万円→100万円 群馬県渋川市赤城町長井小川田 自然豊かな場所 駐車場付き5K2階建 上下水道 縁側・外階段有",
-  "ok": true,
-  "pv": 2,
-  "price_yen": 1000000.0,
-  "pref": "群馬県",
-  "location": "群馬県渋川市赤城町長井小川田",
-  "bedrooms": 5,
-  "year_built": 1968,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2024/10/124shibukawa-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2024/10/124shibukawa-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2024/10/124shibukawa-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2024/10/124shibukawa-4.jpg"
-  ],
-  "lastmod": "2025-08-27T23:49:58+00:00",
-  "lat": 36.561066,
-  "lng": 139.066483,
   "geo_level": "district"
  },
  "https://akiya.sumai.biz/54683": {
@@ -73215,6 +73083,191 @@
   "lastmod": "2026-09-29T07:21:58+00:00",
   "lat": 36.482018,
   "lng": 140.5168,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/129610": {
+  "id": "https://akiya.sumai.biz/129610",
+  "url": "https://akiya.sumai.biz/129610",
+  "title": "空き家バンク【売買】80万円 新潟県三島郡出雲崎町大字石井町 間近の海を望む・吹抜け有 各階物置・駐車場2台付き6K2階建古民家 上下水道",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 800000.0,
+  "pref": "新潟県",
+  "location": "新潟県三島郡出雲崎町大字石井町",
+  "bedrooms": 6,
+  "year_built": 1926,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/127iz-1.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/127iz-3.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/127iz-2.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/127iz-10.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/127iz-4.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/127iz-5.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/127iz-6.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/127iz-7.png"
+  ],
+  "lastmod": "2026-09-29T22:13:48+00:00",
+  "lat": 37.543877,
+  "lng": 138.68866,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/129423": {
+  "id": "https://akiya.sumai.biz/129423",
+  "url": "https://akiya.sumai.biz/129423",
+  "title": "空き家バンク【売買】120万円 熊本県玉名市岱明町鍋 テラス・物置・倉庫・駐車場3台付き8DK2階建古民家 上下水道",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 1200000.0,
+  "pref": "熊本県",
+  "location": "熊本県玉名市岱明町鍋",
+  "bedrooms": 8,
+  "year_built": 1955,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/55tn-1.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/55tn-2.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/55tn-3.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/55tn-4.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/55tn-5.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/55tn-21.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/55tn-7.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/55tn-8.jpg"
+  ],
+  "lastmod": "2026-09-29T22:12:20+00:00",
+  "lat": 32.904045,
+  "lng": 130.495285,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/129492": {
+  "id": "https://akiya.sumai.biz/129492",
+  "url": "https://akiya.sumai.biz/129492",
+  "title": "空き家バンク【売買】70万円 秋田県にかほ市象潟町字二丁目塩越 海まですぐ・温泉近い・駅徒歩圏内 2階建小屋・作業場・駐車場2台付き7LDK2階建 水洗トイレ",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 700000.0,
+  "pref": "秋田県",
+  "location": "秋田県にかほ市象潟町字二丁目塩越",
+  "bedrooms": 7,
+  "year_built": 1960,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/R08-12-1.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/R08-12-3.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/R08-12-2.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/R08-12-4.jpg"
+  ],
+  "lastmod": "2026-09-29T22:11:14+00:00",
+  "lat": 39.210026,
+  "lng": 139.894165,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/129564": {
+  "id": "https://akiya.sumai.biz/129564",
+  "url": "https://akiya.sumai.biz/129564",
+  "title": "空き家バンク【売買】200万円 群馬県安中市松井田町人見 日当り・眺望良好 広い敷地・明治36年築 畜舎・駐車場付き4K2階建古民家 水洗トイレ 土間・縁側・2階大広間有",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 2000000.0,
+  "pref": "群馬県",
+  "location": "群馬県安中市松井田町人見",
+  "bedrooms": 4,
+  "year_built": 1903,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/214an-1.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/214an-2.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/214an-3.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/214an-4.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/214an-6.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/214an-5.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/214an-7.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/214an-8.jpg"
+  ],
+  "lastmod": "2026-09-29T22:09:25+00:00",
+  "lat": 36.294594,
+  "lng": 138.82756,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/129540": {
+  "id": "https://akiya.sumai.biz/129540",
+  "url": "https://akiya.sumai.biz/129540",
+  "title": "空き家バンク【売買】450万円 栃木県芳賀郡市貝町大字続谷 里山と田園風景を望む・平成7年築 ベランダ付き5LDK2階建",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 4500000.0,
+  "pref": "栃木県",
+  "location": "栃木県芳賀郡市貝町大字続谷",
+  "bedrooms": 5,
+  "year_built": 1995,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/23ik-1.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/23ik-2.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/23ik-3.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/23ik-4.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/23ik-5.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/23ik-6.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/23ik-7.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/23ik-8.png"
+  ],
+  "lastmod": "2026-09-29T22:08:32+00:00",
+  "lat": 36.595856,
+  "lng": 140.123276,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/128921": {
+  "id": "https://akiya.sumai.biz/128921",
+  "url": "https://akiya.sumai.biz/128921",
+  "title": "空き家バンク【売買】300万円 佐賀県伊万里市瀬戸町 海に程近い・自然豊かな場所 畑・山林・雑種地・庭・広いバルコニー・物置・車庫・駐車場3台付き6DK2階建",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 3000000.0,
+  "pref": "佐賀県",
+  "location": "佐賀県伊万里市瀬戸町",
+  "bedrooms": 6,
+  "year_built": 1974,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/403imari-1.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/403imari-2.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/403imari-3.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/403imari-4.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/403imari-5.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/403imari-6.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/403imari-7.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/403imari-8.png"
+  ],
+  "lastmod": "2026-09-29T22:05:58+00:00",
+  "lat": 33.308941,
+  "lng": 129.844788,
+  "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/129035": {
+  "id": "https://akiya.sumai.biz/129035",
+  "url": "https://akiya.sumai.biz/129035",
+  "title": "空き家バンク【売買】300万円 北海道夕張郡栗山町桜丘2丁目 郊外の山裾・広い敷地 裏庭・倉庫・小屋裏収納・駐車場付き3LDK2階建",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 3000000.0,
+  "pref": "北海道",
+  "location": "北海道夕張郡栗山町桜丘2丁目",
+  "bedrooms": 3,
+  "year_built": 1969,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/IMG_1443-1-1200x675_Fq2c.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/dbaa94cb477d67d9f9d5d4998e777f0d-e1789517564165_Fq2c.png",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/DSCN0594-1200x900_Fq2c.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/DSCN0593-1200x900_Fq2c.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/DSCN0614-1200x900_Fq2c.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/DSCN0596-1200x900_Fq2c.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/DSCN0601-1200x900_Fq2c.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/09/DSCN0604-e1789617989810-900x1200_Fq2c.jpg"
+  ],
+  "lastmod": "2026-09-29T22:04:13+00:00",
+  "lat": 43.06731,
+  "lng": 141.777802,
   "geo_level": "district"
  }
 }

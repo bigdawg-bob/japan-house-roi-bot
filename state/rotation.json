@@ -1,6 +1,6 @@
 {
  "last_source": "sumai",
- "date": "2026-09-29",
+ "date": "2026-09-30",
  "recent_hooks": [
   "Misasa Onsen",
   "Nozawa Onsen",
@@ -9,6 +9,7 @@
   "Kotohikihama"
  ],
  "s3_templates": [
+  "C",
   "A",
   "D",
   "E",
@@ -27,6 +28,11 @@
   "A"
  ],
  "s3_points": [
+  [
+   "ryokan",
+   "occ",
+   "plan_b"
+  ],
   [
    "ryokan",
    "access",
@@ -109,6 +115,7 @@
   ]
  ],
  "reel_clips": [
+  "pexels:31176378",
   "pexels:30271511",
   "pexels:19680303",
   "pexels:35383884",
