@@ -12,19 +12,22 @@ bg_videos.txt, one video per line:
     1234567  crop=0                <- don't cut the bottom (default cuts 10%)
     # lines starting with # are ignored
 
-Text:
-  line 1 (hook)  '$25K AMINO'                           bold, up to 190 px
-  line 2         '4BR • 7 min drive to beach • 18% net' 46 px, 85% opacity
-                 SIZE • DISTANCE • MONEY. The distance is always shown when known
-                 ('drive' is added for car trips). If the line is too long, the size
+Text (wording by DeepSeek via ai_copy.py when it passes the checks, else the template):
+  line 1 (hook)  '$25K AMINO'                           bold, up to 190 px, max 3 words
+  line 2         '4BR • 7 min drive to beach • 18% net' 46 px, 85% opacity, max 8 words
+                 Template: SIZE • DISTANCE • MONEY. The distance is always shown when
+                 known ('drive' is added for car trips). If the line is too long, the size
                  gets shorter first, then is dropped. The distance is kept.
+                 DeepSeek may word both lines freely, but the hook must name the town or
+                 show a number from our data, and line 2 must keep the drive time.
+                 Same font, size, spacing and safe zone for AI and template text.
 
-Reel: 1080x1920, 30 fps, 6.8 s seamless loop, H.264, < 8 MB, no sound.
+Reel: 1080x1920, 30 fps, 7.0 s seamless loop, H.264, < 8 MB, no sound, 70% overlay.
   0.0-0.3 s  video only (no overlay, no text)
-  0.3-0.5 s  black overlay 0% -> 55%
+  0.3-0.5 s  black overlay 0% -> 70%
   0.3 s      line 1 (hook) pops: scale 0.9 -> 1.05 -> 1.0, opacity 0 -> 100% in 0.15 s
   1.5 s      line 2 rises 20 px, opacity 0 -> 85% in 0.2 s
-  6.5-6.8 s  overlay + both lines fade to 0%, so the last frame matches the first
+  6.5-7.0 s  overlay + both lines fade to 0%, so the last frame matches the first
 """
 import os, random, re, subprocess
 from pathlib import Path
@@ -41,16 +44,16 @@ PEXELS_KEY = os.getenv("PEXELS_KEY") or os.getenv("PEXELS_API_KEY")
 TRIES      = 3                          # videos to try before giving up for today
 
 W, H, FPS  = 1080, 1920, 30
-SECS       = 6.8
-FRAMES     = round(SECS * FPS)          # 204 frames
+SECS       = 7.0
+FRAMES     = round(SECS * FPS)          # 210 frames
 LAST       = (FRAMES - 1) / FPS         # time of the final frame
 XF         = 0.2                        # loop crossfade (end blends into the start)
-WIN        = SECS + XF                  # 7.0 s of footage used
+WIN        = SECS + XF                  # 7.2 s of footage used
 SKIP_START = 3.0                        # avoid the first 3 s of the source if possible
 CROP_DEFAULT = 0.10                     # cut the bottom 10% (nets / branding)
 STABILIZE  = _env("REEL_STABILIZE", "0") == "1"   # 1 = ffmpeg deshake (shaky clips only)
 
-OV_ALPHA   = min(0.9, max(0.0, float(_env("REEL_OVERLAY", "0.55"))))
+OV_ALPHA   = min(0.9, max(0.0, float(_env("REEL_OVERLAY", "0.70"))))
 OV_ON, OV_IN = 0.3, 0.2                 # overlay fades in 0.3 -> 0.5 s
 FADE_OUT   = 6.5                        # overlay + text fade out 6.5 s -> last frame
 
@@ -168,7 +171,7 @@ def fetch(entry):
         print(f"  reel bg: Pexels error for {vid}: {ex}")
         return None
     if (v.get("duration") or 99) < WIN:
-        print(f"  reel bg: video {vid} is only {v.get('duration')}s, need {WIN:.0f}s")
+        print(f"  reel bg: video {vid} is only {v.get('duration')}s, need {WIN:.1f}s")
         return None
     files = [f for f in v.get("video_files") or []
              if f.get("file_type") == "video/mp4" and f.get("link")
@@ -212,9 +215,29 @@ def main_word(name):
     keep = [w for w in words if w.lower() not in STOP]
     return (keep or words)[0]
 
-def hook_line(h, l, usd):
-    """Line 1: '$PRICE LOCATION', max 3 words, bold, 190 px, shrinks to fit.
-    Width leaves room for the 1.05 pop, so it never crosses the 80 px margins."""
+def fit_hook(s, floor):
+    """Biggest size from 190 px down to floor where s fits (room left for the 1.05 pop)."""
+    maxw = (W - 2 * MARGIN) / 1.05
+    size = HOOK_PX
+    while size >= floor:
+        f = M.rfont(size)
+        if f.getlength(s) <= maxw:
+            return s, f, size
+        size -= 2
+    return None
+
+def hook_line(h, l, usd, text=None):
+    """Line 1, max 3 words, bold, 190 px, shrinks to fit. text = DeepSeek's hook
+    (already checked by ai_copy); used if it fits at 90 px or more, else the template
+    '$PRICE LOCATION'. Width leaves room for the 1.05 pop, so it never crosses the margins."""
+    if text:
+        s = " ".join(str(text).upper().split())
+        if len(s.split()) <= HOOK_WORDS:
+            got = fit_hook(s, HOOK_MIN_PX)
+            if got:
+                print(f"  reel line 1: DeepSeek wording")
+                return got
+        print(f"  reel line 1: DeepSeek hook {s!r} too long/wide – template used")
     price = "FREE" if l["price_yen"] == 0 else M.fmt_usd(usd)
     town = M.short_name(h["name"]).upper()
     if len(town.split()) > HOOK_WORDS - 1:
@@ -222,15 +245,11 @@ def hook_line(h, l, usd):
     options = [f"{price} {town}"]
     if " " in town:
         options.append(f"{price} {main_word(town)}")    # shorter = bigger text
-    maxw = (W - 2 * MARGIN) / 1.05
     for i, s in enumerate(options):
         floor = HOOK_MIN_PX if i < len(options) - 1 else 60
-        size = HOOK_PX
-        while size >= floor:
-            f = M.rfont(size)
-            if f.getlength(s) <= maxw:
-                return s, f, size
-            size -= 2
+        got = fit_hook(s, floor)
+        if got:
+            return got
     return None
 
 def sub_font(px):
@@ -325,16 +344,24 @@ def money_text(e, long=False):
         return f"{e['roi'] * 100:.0f}% net" + (" yield" if long else "")
     return f"${round(e['monthly']):,}/mo net"
 
-def sub_line(h, l, e):
-    """Line 2: SIZE • EDGE • MONEY, e.g. '4BR • 7 min drive to beach • 18% net'.
-    Returns (text, font) or None if nothing fits."""
+def sub_line(h, l, e, text=None):
+    """Line 2, 46 px, max 8 words. text = DeepSeek's line (already checked by ai_copy);
+    used if it fits the width, else the template SIZE • EDGE • MONEY,
+    e.g. '4BR • 7 min drive to beach • 18% net'. Returns (text, font) or None."""
+    f = sub_font(SUB_PX)
+    if text:
+        s = " ".join(str(text).split())
+        words = len([w for w in s.split() if w not in ("•", "/")])
+        if words <= SUB_WORDS and f.getlength(s) <= W - 2 * MARGIN:
+            print("  reel line 2: DeepSeek wording")
+            return s, f
+        print(f"  reel line 2: DeepSeek line {s!r} too long/wide – template used")
     money = money_text(e)
     ed = edge(h, l)
     sizes = size_options(l)
     _, mode = M.trip_parts(h, l)
     print(f"  reel line 2: size {sizes}, edge {ed or 'none (no trip time, no feature in listing)'}"
           f" | trip mode {mode!r}")
-    f = sub_font(SUB_PX)
     tries = ([[s, ed, money] for s in sizes]           # full line, shorter size if too wide
              + ([[ed, money]] if ed else [])           # keep the edge over the size
              + [[s, money] for s in sizes] + [[money]])
@@ -449,7 +476,7 @@ def analyse(exe, path, crop=0.0):
     return sorted((t, v.get("YAVG", 0.0), v.get("YDIF", 0.0)) for t, v in rows.items())
 
 def best_start(samples, dur):
-    """Start of the best 7 s: steady exposure, no dark flicker, continuous motion,
+    """Start of the best WIN seconds: steady exposure, no dark flicker, continuous motion,
     and the end looks like the start (loop). Skips the first 3 s when possible."""
     latest = dur - WIN - 0.05
     lo = max(0.0, min(SKIP_START, latest))
@@ -472,7 +499,7 @@ def best_start(samples, dur):
                 best = (score, s, std, dip, loop, still)
         s += 0.25
     if best:
-        print(f"  reel: best 7 s starts at {best[1]:.2f}s (exposure spread {best[2]:.1%}, "
+        print(f"  reel: best {WIN:.1f} s starts at {best[1]:.2f}s (exposure spread {best[2]:.1%}, "
               f"dark dip {best[3]:.1%}, start/end diff {best[4]:.1%}, frozen {best[5]:.0%})")
         return best[1]
     return lo
@@ -515,7 +542,7 @@ def encode(exe, src, start, fc, rate, L, out):
     return True
 
 def build(exe, src, crop, L):
-    """One background -> out/reel.mp4 (6.8 s loop). Returns the path or None."""
+    """One background -> out/reel.mp4 (7.0 s loop). Returns the path or None."""
     out = M.OUT / "reel.mp4"
     dur = duration(exe, src)
     if dur < WIN + 0.05:
@@ -562,7 +589,7 @@ def build(exe, src, crop, L):
     return out
 
 
-# ─── caption + hashtags (all from our own data) ──────────────────────
+# ─── caption + hashtags (template from our own data, DeepSeek wording if it passed) ──
 def tag(s):
     return "#" + slug(s)
 
@@ -587,40 +614,48 @@ def fallback_dream(h, l):
         return f"{start}right from your own front door." if start else ""
     return f"{start}{mins} min{' drive' if drive else ''} from your own front door."
 
-def reel_caption(m, h, l, usd, e, dream=None, credit=""):
+def reel_caption(m, h, l, usd, e, dream=None, credit="", copy=None):
+    """copy = DeepSeek fields that passed ai_copy's checks (reel_line1, reel_dream,
+    hashtags). Anything missing uses the template."""
     global M
     M = m
+    c = copy or {}
     price = "FREE" if l["price_yen"] == 0 else M.fmt_usd(usd)
     pref = M.PREF_EN.get(l["pref"], l["pref"])
-    lines = [f"{M.short_name(h['name'])} Akiya ROI: {price} house → {money_text(e, long=True)}",
-             dream or fallback_dream(h, l),
+    line1 = c.get("reel_line1") or (f"{M.short_name(h['name'])} Akiya ROI: {price} house → "
+                                    f"{money_text(e, long=True)}")
+    lines = [line1,
+             c.get("reel_dream") or dream or fallback_dream(h, l),
              CTA.format(pref=pref)]
     if credit:
         lines.append(f"🎥 {credit}")
-    return "\n".join([x for x in lines if x] + ["", " ".join(hashtags(h, l))])
+    tags = c.get("hashtags") or hashtags(h, l)
+    return "\n".join([x for x in lines if x] + ["", " ".join(tags)])
 
 
 # ─── entry point used by main.build_slides() ─────────────────────────
-def make(m, h, l, usd, e, facts=None, rot=None, video=None):
+def make(m, h, l, usd, e, facts=None, rot=None, video=None, copy=None):
     """Returns (reel path, hook line, caption, 'pexels:ID') or None.
-    video = a local mp4 instead of Pexels (only for preview.py)."""
+    video = a local mp4 instead of Pexels (only for preview.py).
+    copy = DeepSeek wording from ai_copy.write() (only fields that passed its checks)."""
     global M
     M = m
+    c = copy or {}
     exe = M.ffmpeg_exe()
     if not exe:
         print("Reel: ffmpeg not found – no reel today")
         return None
-    hook = hook_line(h, l, usd)
+    hook = hook_line(h, l, usd, c.get("reel_hook"))
     if not hook:
         print("Reel: hook line doesn't fit – no reel today")
         return None
-    sub = sub_line(h, l, e)
+    sub = sub_line(h, l, e, c.get("reel_sub"))
     print(f"Reel text: {hook[0]} ({hook[2]}px) / {sub[0] if sub else '-'} ({SUB_PX}px)")
     L = layout(hook, sub)
 
     if video:
         out = build(exe, Path(video), CROP_DEFAULT, L)
-        return (out, hook[0], reel_caption(m, h, l, usd, e), None) if out else None
+        return (out, hook[0], reel_caption(m, h, l, usd, e, copy=c), None) if out else None
 
     order = candidates(h, rot or {})
     if not order:
@@ -645,7 +680,7 @@ def make(m, h, l, usd, e, facts=None, rot=None, video=None):
             src.unlink(missing_ok=True)                 # don't keep the big source file
         if out:
             print(f"Reel: pexels {entry['id']} -> {out}")
-            return (out, hook[0], reel_caption(m, h, l, usd, e, credit=credit),
+            return (out, hook[0], reel_caption(m, h, l, usd, e, credit=credit, copy=c),
                     f"pexels:{entry['id']}")
     print(f"Reel: {tries} video(s) built and failed, {len(order)} in list – "
           f"no reel today (post still goes out)")
