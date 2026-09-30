@@ -64,7 +64,7 @@ TEMP      = float(_env("AI_COPY_TEMP", "0.8"))  # 1.3 made it lose the thread mi
 FIX_TEMP  = 0.5                                  # repair + editor round: stricter
 ON        = _env("AI_COPY", "1") == "1" and bool(KEY)
 EDIT      = _env("AI_EDIT", "0") == "1"          # v5: optional editor pass
-VERSION   = "v5"                     # part of the cache key: new rules = new answer
+VERSION   = "v6"                     # part of the cache key: new rules = new answer
 N_OPTIONS = 3                        # options per short line, longest -> shortest
 
 STATE      = Path(__file__).parent / "state"
@@ -121,7 +121,12 @@ TEMPLATE_OF = {"s3_headline": "s3_headline", "s3_seo1": "s3_seo", "s3_seo2": "s3
 
 POINT_CHARS   = 34                   # slide 3 bullet (same limit as the template bullets)
 POINT_WORDS   = 7                    # v5: was 5 – too tight for natural English
-POINT_EXAMPLE = "Legal to rent 180 nights a year"
+POINT_EXAMPLE = "Guests pay about $181 a night"
+# v6: facts that are legal limits, not reasons to buy – never a bullet source
+NOT_A_BULLET = {"minpaku", "open_nights"}
+# v6: wording that turns a bullet into a downside ("cap", "limit", "just 6%")
+DOWNSIDE = re.compile(r"\bcap(?:s|ped)?\b|\blimit(?:s|ed)?\b|\bno more than\b|\bat most\b|"
+                      r"\b(?:just|only)\s+(?:about\s+)?~?\d[\d.,]*\s*%", re.I)
 MAX_TAGS      = 5                    # Instagram hard cap since Dec 2025
 
 # slide 2: the 2 small lines under the big payback number, {placeholders} only
@@ -648,6 +653,8 @@ def bullet_problem(t, base, ctx):
     err = clumsy(t)
     if err:
         return err
+    if DOWNSIDE.search(t):
+        return "sounds like a downside (cap / limit / 'just 6%') – say why it's good for a buyer"
     extra, frac = fraction_hits(t, base)                 # '1 in 3' for a 33% fact
     got = set(nums(t)) - extra
     if ctx["sub"] and got & set(nums(ctx["sub"])):
@@ -676,6 +683,8 @@ def check_point(p, src, ctx):
     keys = [k for k in (keys or []) if isinstance(k, str)]
     if not keys or len(keys) > 2 or any(k not in src for k in keys):
         return None, None, f"'from' must be 1-2 keys of DATA.facts (got {p.get('from')})"
+    if any(k in NOT_A_BULLET for k in keys):
+        return None, None, f"{keys} is a legal limit, not a reason to buy – pick another fact"
     sub = ctx["sub"]
     if sub:
         sub_n = set(nums(sub))
@@ -836,11 +845,19 @@ def slot_rule(k):
 
 def point_rule():
     return {"bullets": 3, "max_words_each": POINT_WORDS, "max_chars_each": POINT_CHARS,
-            "from": "1-2 keys of DATA.facts the bullet is based on",
+            "job": "each bullet is ONE reason to buy THIS house, from the buyer's side: "
+                   "cheaper, more bookings, more money, or a place people want to visit. "
+                   "Together the 3 bullets pay off the headline.",
+            "from": "1-2 keys of DATA.facts the bullet is based on. Never use "
+                    + ", ".join(sorted(NOT_A_BULLET)) + " (legal limits, not reasons to buy)",
             "text": f"list of {N_OPTIONS} options, longest to shortest",
             "example": POINT_EXAMPLE, "example_chars": len(POINT_EXAMPLE),
+            "bad": ["Foreign visitors are just 6%", "Rentals cap at 180 nights a year"],
+            "why_bad": "a number that means nothing to the buyer, or a limit / downside",
             "tip": "say the fact the way a person would say it out loud – a short, "
-                   "complete phrase, not a label. A percentage may become '1 in 3' / 'a third'."}
+                   "complete phrase, not a label. Every number must show why it's good for "
+                   "the buyer. A small share (like 6% foreign visitors) is not a selling "
+                   "point – pick another fact. A percentage may become '1 in 3' / 'a third'."}
 
 def math_rule(n):
     r = MATH[n]
