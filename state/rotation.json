@@ -2,13 +2,14 @@
  "last_source": "sumai",
  "date": "2026-09-30",
  "recent_hooks": [
+  "Yufuin",
   "Misasa Onsen",
   "Nozawa Onsen",
   "Chirihama",
-  "Myoko Akakura",
-  "Kotohikihama"
+  "Myoko Akakura"
  ],
  "s3_templates": [
+  "D",
   "C",
   "A",
   "D",
@@ -28,6 +29,11 @@
   "A"
  ],
  "s3_points": [
+  [
+   "foreign",
+   "competition",
+   "access"
+  ],
   [
    "ryokan",
    "occ",
@@ -115,6 +121,7 @@
   ]
  ],
  "reel_clips": [
+  "pexels:27739943",
   "pexels:31176378",
   "pexels:30271511",
   "pexels:19680303",

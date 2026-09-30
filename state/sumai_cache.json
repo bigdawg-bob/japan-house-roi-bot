@@ -73232,5 +73232,28 @@
   "pv": 2,
   "why": "not available",
   "lastmod": "2026-09-30T03:13:29+00:00"
+ },
+ "https://akiya.sumai.biz/83812": {
+  "id": "https://akiya.sumai.biz/83812",
+  "url": "https://akiya.sumai.biz/83812",
+  "title": "空き家バンク【売買】20万円 長野県木曽郡木曽町福島 駅徒歩圏内・木曽川を望む 車庫・屋根裏部屋付き4部屋2階建古民家",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 200000.0,
+  "pref": "長野県",
+  "location": "長野県木曽郡木曽町福島",
+  "bedrooms": 4,
+  "year_built": 1968,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2025/08/271kiso-1.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2025/08/271kiso-4.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2025/08/271kiso-2.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2025/08/271kiso-3.jpg"
+  ],
+  "lastmod": "2026-09-30T05:41:02+00:00",
+  "lat": 35.824894,
+  "lng": 137.716949,
+  "geo_level": "district"
  }
 }
