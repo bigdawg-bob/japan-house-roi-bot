@@ -113,6 +113,7 @@ GROK_MODEL     = _env("GROK_MODEL", "grok-4.6")
 GROK_URL       = _env("GROK_URL", "https://api.x.ai/v1/responses")
 PEXELS_KEY     = os.getenv("PEXELS_KEY") or os.getenv("PEXELS_API_KEY")
 PHOTO_CHECKS   = int(_env("PHOTO_CHECKS", "6"))           # Grok checks per slide (place photos)
+MIN_PHOTO_SCORE = float(_env("MIN_PHOTO_SCORE", "7"))   # 0-10 beauty score a photo needs
 GENERIC_CHECKS = int(_env("GENERIC_CHECKS", "4"))         # extra Grok checks for the generic fallback
 MIN_PHOTO_W    = 1080                                     # original photo size needed (checked photos)
 MIN_PHOTO_H    = 1350
@@ -833,12 +834,25 @@ def place_name(h):
     """'Lake Kawaguchiko (Fuji)' -> 'Lake Kawaguchiko', 'Hayama / Zushi' -> 'Hayama'"""
     return re.split(r"\s*[(/]", h["name"])[0].strip()
 
+def town_ja(l):
+    """'長野県北安曇郡白馬村北城...' -> '白馬村' (the house's own town, in Japanese)."""
+    loc = re.sub(r"\s", "", l.get("location") or "")
+    loc = loc.removeprefix(l.get("pref") or "")
+    m = re.match(r"(?:.+?郡)?(.+?(?:市|町|村))", loc)
+    return m.group(1) if m else ""
+
 def photo_queries(h, l, mood):
+    """Famous attraction first (more beautiful photos), then the house's exact town."""
     name, pref = place_name(h), PREF_EN.get(l["pref"], l["pref"])
     kind = KINDS[h["kind"]]["label"]
+    town = town_ja(l)
     if mood == "dusk":
-        return [f"{name} night", f"{name} Japan dusk", f"{pref} Japan {kind} night"]
-    return [name, f"{name} Japan", f"{pref} Japan {kind}"]
+        q = [f"{name} night", f"{name} Japan dusk"]
+        q += [f"{town} 夜景", f"{town} 夜"] if town else []
+        return q + [f"{pref} Japan {kind} night"]
+    q = [name, f"{name} Japan"]
+    q += [f"{town} 風景", town] if town else []
+    return q + [f"{pref} Japan {kind}"]
 
 def generic_queries(h, mood):
     g = GENERIC[mood]
@@ -944,11 +958,22 @@ def check_photo(img, h, l, mood, target):
         + where +
         "landmark: shows a famous place a viewer could name (e.g. Mt Fuji, a well-known "
         "temple, shrine gate, castle, tower or city skyline). "
-        f"light_ok: {LIGHT[mood]}. score: how good it is as a calm background for white text.")
+        f"light_ok: {LIGHT[mood]}. "
+        "score: how beautiful and tempting it is as a travel photo on Instagram, "
+        "as strict as a professional photo editor. 9-10 = stunning (great light, rich colour, "
+        "a scene that makes people want to go). 7-8 = attractive. 0-6 = ordinary or dull: "
+        "grey sky, blurry, messy, car parks, power lines or concrete taking over, a plain road "
+        "or building, a random snapshot. It should still work behind white text.")
     v = json_from(grok([{"type": "input_image", "image_url": f"data:image/jpeg;base64,{b64}",
                          "detail": "high"},
                         {"type": "input_text", "text": prompt}], timeout=120))
     return v if isinstance(v, dict) else None
+
+def photo_score(v):
+    try:
+        return float(v.get("score") or 0)
+    except (TypeError, ValueError):
+        return 0.0
 
 def hard_ok(v, target):
     if not yes(v.get("japan")):
@@ -956,17 +981,18 @@ def hard_ok(v, target):
     if any(yes(v.get(k)) for k in ("people", "watermark_or_text", "interior")):
         return False
     if target == "generic" and yes(v.get("landmark")):
-        return False                                   # generic must not show a nameable place
-    return True
+        return False
+    return photo_score(v) >= MIN_PHOTO_SCORE           # must be beautiful, not just "ok"
 
 def scan_photos(queries, h, l, mood, target, used, checks, limit):
-    """Best photo from these searches: right light first, else best-scoring backup."""
-    backup, n = None, 0
+    """Checks up to `limit` new photos and returns the MOST BEAUTIFUL one that passes.
+    Right light (day / dusk) gets +1. Photos already checked are free."""
+    best, n = None, 0
     for c in photo_candidates(queries, used):
-        key = f"{c['id']}|{mood}|{target}"
+        key = f"{c['id']}|{mood}|{target}|v2"          # v2 = beauty score
         v = checks.get(key)
         if v is not None and not hard_ok(v, target):
-            continue                                   # known bad, skip for free
+            continue
         if v is None and n >= limit:
             break
         img = fetch_photo(c["url"])
@@ -982,16 +1008,12 @@ def scan_photos(queries, h, l, mood, target, used, checks, limit):
                   f"light={v.get('light_ok')} score={v.get('score')} ({v.get('why')})")
         if not hard_ok(v, target):
             continue
-        pic = {**c, "img": img, "generic": target == "generic"}
-        if yes(v.get("light_ok")):
-            return pic
-        try:
-            s = float(v.get("score") or 0)
-        except (TypeError, ValueError):
-            s = 0
-        if backup is None or s > backup[0]:
-            backup = (s, pic)                          # right content, wrong light
-    return backup[1] if backup else None
+        s = photo_score(v) + (1 if yes(v.get("light_ok")) else 0)
+        if best is None or s > best[0]:
+            best = (s, {**c, "img": img, "generic": target == "generic"})
+            if s >= 10:
+                break                                  # stunning + right light: stop looking
+    return best[1] if best else None
 
 def checked_photo(h, l, mood, target, used):
     """Grok-checked photo of the place ('place') or of generic Japan ('generic').
@@ -1055,8 +1077,8 @@ def library_pick(h, mood, used):
         return (v.get("role") != "area", v.get("mood") != mood,
                 v.get("kind") != h["kind"], v.get("last", ""))
     for k, v in sorted(lib.items(), key=rank):
-        if v.get("id") in used:
-            continue
+        if v.get("id") in used or v.get("role") == "house":
+            continue                                   # never another house's photo on an area slide
         try:
             img = Image.open(LIBRARY_DIR / f"{k}.jpg").convert("RGB")
         except OSError:
@@ -1094,9 +1116,10 @@ def find_photo(h, l, mood, used, house_pics):
                   ("checked generic Japan photo", True,
                    lambda u: checked_photo(h, l, mood, "generic", u))]
     steps += [("photo library", False, lambda u: library_pick(h, mood, u)),
+              ("fallback_photos folder", False, lambda u: folder_photo(u)),
               ("unchecked stock photo", False, lambda u: unchecked_stock(h, l, mood, u)),
               ("house photo", False,
-               lambda u: next((p for p in house_pics if p["id"] not in u), None)),
+               lambda u: next((p for p in house_pics if p["id"] not in u), None))]
               ("fallback_photos folder", False, lambda u: folder_photo(u))]
     passes = [set(used), set()] if used else [set()]
     for n, u in enumerate(passes):
