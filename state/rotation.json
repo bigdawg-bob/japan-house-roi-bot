@@ -2,13 +2,14 @@
  "last_source": "sumai",
  "date": "2026-09-30",
  "recent_hooks": [
+  "Ginzan Onsen",
   "Yufuin",
   "Misasa Onsen",
   "Nozawa Onsen",
-  "Chirihama",
-  "Myoko Akakura"
+  "Chirihama"
  ],
  "s3_templates": [
+  "B",
   "D",
   "C",
   "A",
@@ -29,6 +30,12 @@
   "A"
  ],
  "s3_points": [
+  [
+   "price",
+   "trip",
+   "rate",
+   "booked"
+  ],
   [
    "foreign",
    "competition",
@@ -121,6 +128,7 @@
   ]
  ],
  "reel_clips": [
+  "pexels:30733039",
   "pexels:27739943",
   "pexels:31176378",
   "pexels:30271511",

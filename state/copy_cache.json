@@ -241,5 +241,92 @@
    "#onsen",
    "#JapanProperty"
   ]
+ },
+ "2026-09-30|https://akiya.sumai.biz/82487|v5": {
+  "angle": "B",
+  "reel_hook": [
+   "GINZAN $10K",
+   "$10K GINZAN",
+   "$10K ONSEN"
+  ],
+  "reel_sub": [
+   "3BR • 20 min drive to Ginzan Onsen",
+   "3BR • 20 min to Ginzan Onsen",
+   "20 min drive to Ginzan Onsen"
+  ],
+  "s2_line_a": [
+   "{all_in} covers the house, the renovation and the fees",
+   "{all_in} gets the house fixed up and paid for",
+   "{all_in} buys the house, fixed up"
+  ],
+  "s2_line_b": [
+   "Guests book some nights, and it nets {net_year} a year",
+   "It books up and nets {net_year} a year",
+   "That nets {net_year} a year"
+  ],
+  "s3_headline": [
+   "A $10K house near Ginzan Onsen",
+   "$10K house near Ginzan Onsen",
+   "$10K near Ginzan Onsen"
+  ],
+  "s3_points": [
+   {
+    "from": [
+     "price"
+    ],
+    "text": [
+     "The house costs $10K",
+     "It costs $10K",
+     "$10K for the house"
+    ]
+   },
+   {
+    "from": [
+     "trip"
+    ],
+    "text": [
+     "20 min drive to Ginzan Onsen",
+     "20 min drive to the onsen",
+     "20 min to the onsen"
+    ]
+   },
+   {
+    "from": [
+     "rate",
+     "booked"
+    ],
+    "text": [
+     "Guests pay $151 for about 77 nights",
+     "$151 a night, 77 nights booked",
+     "$151 a night"
+    ]
+   }
+  ],
+  "s3_seo1": [
+   "Ginzan akiya, 20 min drive to the onsen",
+   "Ginzan akiya, 20 min to the onsen",
+   "Ginzan akiya, 20 min to onsen"
+  ],
+  "s3_seo2": [
+   "A $10K house to Airbnb near Ginzan Onsen",
+   "A $10K Airbnb house in Ginzan",
+   "$10K Airbnb house in Ginzan"
+  ],
+  "s3_cta": [
+   "See the full numbers for this Ginzan house in bio",
+   "Want the Ginzan house numbers? Link in bio",
+   "Ginzan house numbers in bio"
+  ],
+  "caption_hook": "Ginzan akiya for $10K, 20 min from the onsen town 307k people visit a year.",
+  "caption_seo": "This $10K akiya in Ginzan, Yamagata sits 20 minutes from Ginzan Onsen, the Taisho-era onsen town drawing 307k visitors a year, and it works as an Airbnb rental.",
+  "reel_line1": "Ginzan akiya for $10K, 20 min from the onsen.",
+  "reel_dream": "Steam off the river at dusk, wooden ryokan lit up, and this is your drive home.",
+  "hashtags": [
+   "#akiya",
+   "#ginzan",
+   "#yamagata",
+   "#onsen",
+   "#japanproperty"
+  ]
  }
 }

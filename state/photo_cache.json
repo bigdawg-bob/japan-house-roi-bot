@@ -699,6 +699,16 @@
    "light_ok": true,
    "score": 7,
    "why": "Dark empty night road for text"
+  },
+  "pexels:31415727|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Busy lanterns, person, snowy night path"
   }
  }
 }
