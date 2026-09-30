@@ -10,10 +10,11 @@ Goal of every line: stop the scroll (hook) and/or be found in search (SEO), idea
 
 What DeepSeek writes (free wording, always checked):
   reel      line 1 (hook) + line 2          same font, size, spacing and timing as before
-  slide 2   the 2 small math lines          numbers ONLY as {placeholders}; main.py puts in
-                                            its own numbers, so they can't be wrong
+  slide 2   the 2 small lines under the big number: plain English, max 3 numbers each,
+            numbers ONLY as {placeholders}; this file fills them in (so they can't be wrong)
+            and returns finished text
   slide 3   headline, 3 bullets, 2 SEO lines, CTA button
-                                            each bullet names the DATA fact it comes from
+            each bullet names the DATA fact it comes from
   captions  carousel line 1 + SEO sentence, reel line 1 + dream line, hashtags
 Never written by DeepSeek: the big hero numbers on slides 1 + 2, the price and link lines.
 
@@ -29,8 +30,21 @@ v3 checks (kept): no repeat of the slide 3 subtitle, headline must name the riva
 famous rival"), headline must be a hook (name or number), only places that are in DATA,
 never "near <rival>" unless DATA says so, one SEO line keeps the drive time, STR -> Airbnb.
 
+v5 changes:
+  - CTA: no template example in the prompt; a copy of the template CTA (or any
+    "Full breakdown ...") is rejected
+  - headline / search lines / bullets: a copy of the template text is rejected, and the
+    template text is no longer sent to the model (it copied it)
+  - nights: DATA tells open nights (legal cap) and booked nights (open × occupancy) apart
+  - slide 2: plain lines, max 3 numbers, no × / = formulas, new clear placeholders
+  - English: native-copywriter rules with bad/good examples, bullets up to 7 words,
+    a percentage may be said as '1 in 3' / 'a third', clumsy patterns rejected,
+    facts written as sentences
+  - optional editor pass (AI_EDIT=1): one extra call smooths the English; an edited
+    field is used only if it still passes every check
+
 Env: DEEPSEEK_API_KEY (required), DEEPSEEK_MODEL (default deepseek-flash),
-     AI_COPY=0 turns it off, AI_COPY_TEMP (default 0.8).
+     AI_COPY=0 turns it off, AI_COPY_TEMP (default 0.8), AI_EDIT=1 turns on the editor pass.
 Evidence loop: state/performance.json, filled from Instagram Insights:
      {"2026-10-01": {"reach": 5400, "shares": 41, "saves": 88, "follows": 23}}
 """
@@ -47,9 +61,10 @@ KEY       = os.getenv("DEEPSEEK_API_KEY")
 URL       = _env("DEEPSEEK_URL", "https://api.deepseek.com/chat/completions")
 MODEL     = _env("DEEPSEEK_MODEL", "deepseek-flash")
 TEMP      = float(_env("AI_COPY_TEMP", "0.8"))  # 1.3 made it lose the thread mid-answer
-FIX_TEMP  = 0.5                                  # repair round: stricter
+FIX_TEMP  = 0.5                                  # repair + editor round: stricter
 ON        = _env("AI_COPY", "1") == "1" and bool(KEY)
-VERSION   = "v4"                     # part of the cache key: new rules = new answer
+EDIT      = _env("AI_EDIT", "0") == "1"          # v5: optional editor pass
+VERSION   = "v5"                     # part of the cache key: new rules = new answer
 N_OPTIONS = 3                        # options per short line, longest -> shortest
 
 STATE      = Path(__file__).parent / "state"
@@ -57,7 +72,7 @@ LOG_FILE   = STATE / "copy_log.json"
 PERF_FILE  = STATE / "performance.json"
 CACHE_FILE = STATE / "copy_cache.json"
 
-CTA_DEFAULT = "Full breakdown + agent contact → newsletter link in bio"
+CTA_DEFAULT = "Full breakdown + agent contact → newsletter link in bio"   # template only
 
 # slot -> (max characters, max words, what goes there, example or None)
 # Word limits are the ones the model can follow: ~6 characters per word incl. the space.
@@ -77,16 +92,19 @@ SLOTS = {
                      "Niseko views, Kutchan price"),
     "s3_seo1":      (46, 8, "Slide 3 search line 1: the town + a search word people type "
                             "(akiya, Airbnb, rental, investment, minpaku, onsen/ski/beach "
-                            "house). At least ONE of s3_seo1/s3_seo2 keeps the drive minutes "
-                            "from DATA.trip.",
-                     "Amino akiya: 7 min drive to the beach"),
+                            "house), written as a natural phrase – never 'label: number' "
+                            "(bad: 'Yufuin Airbnb investment: 180 nights'). At least ONE of "
+                            "s3_seo1/s3_seo2 keeps the drive minutes from DATA.trip.",
+                     "Amino akiya, 7 min drive to the beach"),
     "s3_seo2":      (46, 8, "Slide 3 search line 2. Same rules as s3_seo1, but a different "
                             "search and a different fact.",
-                     "Kyoto beach house Airbnb for $25K"),
-    "s3_cta":       (56, 10, "Button text at the bottom of slide 3. Makes people want the full "
-                             "breakdown and sends them to the newsletter link in bio. Must "
-                             "contain the word 'bio'. No numbers, no links, no hashtags.",
-                     CTA_DEFAULT),
+                     "A Kyoto beach house to Airbnb for $25K"),
+    "s3_cta":       (56, 10, "Button text at the bottom of slide 3. Give ONE reason to tap "
+                             "that fits THIS house (meet its agent, see the full numbers, the "
+                             "renovation plan...) and send people to the newsletter link in "
+                             "bio. Must contain the word 'bio'. No numbers, no links, no "
+                             "hashtags. Never write 'Full breakdown + agent contact'.",
+                     "Want the agent for this Amino house? Link in bio"),
     "caption_hook": (125, 22, "Caption line 1 (only ~125 chars show before 'more'). Town + "
                               "akiya/house keyword + one hard number, early.", None),
     "caption_seo":  (220, 40, "One natural sentence with the words people search: town, "
@@ -97,33 +115,37 @@ SLOTS = {
 }
 # short lines on the image: 3 options each (captions have room, one string is enough)
 OPTION_SLOTS = {"reel_hook", "reel_sub", "s3_headline", "s3_seo1", "s3_seo2", "s3_cta"}
+# v5: slot -> which template text it must not copy
+TEMPLATE_OF = {"s3_headline": "s3_headline", "s3_seo1": "s3_seo", "s3_seo2": "s3_seo",
+               "s3_cta": "s3_cta"}
 
 POINT_CHARS   = 34                   # slide 3 bullet (same limit as the template bullets)
-POINT_WORDS   = 5
-POINT_EXAMPLE = "Minpaku cap: 180 nights/yr"
+POINT_WORDS   = 7                    # v5: was 5 – too tight for natural English
+POINT_EXAMPLE = "Legal to rent 180 nights a year"
 MAX_TAGS      = 5                    # Instagram hard cap since Dec 2025
 
-# slide 2: the 2 small math lines, written with {placeholders} only
+# slide 2: the 2 small lines under the big payback number, {placeholders} only
+MAX_S2_NUMS = 3
 MATH = {
-    "s2_line_a": {"max_chars": 110, "need": ["all_in", "breakdown"], "need_if_real": ["yield"],
-                  "place": False,
-                  "job": "Slide 2 math line 1: the cost side – what it costs all-in and its "
-                         "parts, plus the yield if {yield} is in DATA.slide2."},
-    "s2_line_b": {"max_chars": 140, "need": ["adr", "occ", "nights", "mgmt", "net"],
-                  "place": True,
-                  "job": "Slide 2 math line 2: the income side – nightly rate × occupancy × "
-                         "nights, after management = net per year, with {place} for search."},
+    "s2_line_a": {"max_chars": 64, "need": ["all_in"],
+                  "job": "Slide 2 small line 1, the cost side: what {all_in} pays for, in "
+                         "plain words (house, renovation, fees). A phrase, not a formula."},
+    "s2_line_b": {"max_chars": 64, "need": ["net_year"],
+                  "job": "Slide 2 small line 2, the income side: how the rent turns into "
+                         "{net_year} a year. A phrase, not a formula."},
 }
 MATH_MEANS = {
-    "yield":     "net yield per year (already says 'net yield')",
-    "all_in":    "total cost: house + renovation + buying fees",
-    "breakdown": "the parts of the all-in cost, already in brackets",
-    "place":     "the attraction name (search keyword)",
-    "adr":       "nightly rate (already says '/nt')",
-    "occ":       "occupancy = share of nights booked",
-    "nights":    "nights rented per year (already says 'days')",
-    "mgmt":      "what is taken off before net (already says 'mgmt', and '& fees' if any)",
-    "net":       "net income per year (already says '/yr')",
+    "all_in":        "total cost: house + renovation + buying fees",
+    "house":         "house price only",
+    "rate":          "nightly rate (just the money – add 'a night' yourself)",
+    "occ":           "occupancy = share of the open nights that get booked",
+    "open_nights":   "nights a year the house MAY be rented (legal cap) – NOT nights booked",
+    "booked_nights": "nights actually booked a year = open_nights × occupancy",
+    "mgmt":          "management fee share taken off the rent",
+    "net_year":      "net income per year after management",
+    "net_month":     "net income per month after management",
+    "yield":         "net yield per year",
+    "place":         "the attraction name (search keyword)",
 }
 PH = re.compile(r"\{(\w+)\}")
 
@@ -147,7 +169,21 @@ NEAR_WORDS = (r"(?:near|nearby|close to|next to|beside|steps from|around the cor
 # capitalised words that are never a (made-up) place
 COMMON_CAPS = {"airbnb", "airbnbs", "japan", "japanese", "akiya", "akiyas", "minpaku",
                "onsen", "ryokan", "ski", "beach", "english", "instagram", "google", "maps",
-               "bio", "newsletter", "link", "dm", "mt", "mount", "lake", "i"}
+               "bio", "newsletter", "link", "dm", "mt", "mount", "lake", "i", "want", "see",
+               "get", "meet", "tap", "read"}
+
+# v5: English patterns we know are broken
+CLUMSY = [
+    (re.compile(r"^[A-Za-z]+\s+\d[\d.,]*%\s+of\b"),
+     "number crammed into a noun phrase – write e.g. '33% of visitors come from abroad'"),
+    (re.compile(r":\s*~?\d[\d.,]*\s+nights?\s*$", re.I),
+     "'…: 180 nights' says nothing – say what the nights are (open to rent / booked)"),
+    (re.compile(r"\b(the|a|an)\s+(the|a|an)\b", re.I), "double article"),
+]
+# v5: a bullet may say a percentage from its fact in words
+FRACTIONS = [("1 in 2", 50), ("half", 50), ("1 in 3", 33), ("a third", 33),
+             ("one third", 33), ("2 in 3", 67), ("two thirds", 67), ("1 in 4", 25),
+             ("a quarter", 25), ("1 in 5", 20), ("1 in 10", 10)]
 
 SYSTEM = """You write Instagram copy for @yama.yield: cheap Japanese houses (akiya) near ski
 resorts, onsen towns, sights, beaches and nature, with short-term rental numbers.
@@ -163,13 +199,26 @@ How Instagram works (use it):
 - Shares and saves carry posts furthest: write what someone would send to a friend
   planning a Japan house or ski/onsen trip.
 - Max 5 hashtags, specific beats generic.
+How to write (most important):
+- Write like a native English Instagram copywriter. Every line must read as natural
+  spoken English – something a person would say out loud. Short is fine; broken is not.
+- DATA gives you FACTS, not wording. Some fact texts are rough notes: never paste them,
+  rewrite them as natural English.
+- Never drop a number into a noun phrase, never write 'label: number' fragments.
+  Bad: "Foreign 33% of visitors"          Good: "33% of visitors come from abroad"
+  Bad: "Yufuin Airbnb investment: 180 nights"  Good: "Yufuin Airbnb, open 180 nights a year"
+  Bad: "{place} • {rate} × {occ} × {open_nights} • {mgmt}: {net_year}"
+  Good: "~{booked_nights} booked nights a year → {net_year} after management"
+- Nights: open nights (the nights it may legally be rented) are NOT booked nights.
+  Booked nights = open nights × occupancy. Never call open nights 'booked' or 'rented'.
 You are free to choose the angle and the wording. The limits are:
 - Every number you write must be copied EXACTLY from DATA (same digits). Never invent,
   round, convert, add up or estimate numbers. If unsure, write the line without a number.
+  One exception: in a slide 3 bullet, a percentage from its fact may be said as
+  "1 in 3", "a third", "half", "a quarter".
 - Slide 2 lines (s2_line_a, s2_line_b): never type a digit. Write every number as a
-  {placeholder} from DATA.slide2; the code puts in the real value.
-- Slide 3 bullets say only what their DATA.facts source says – shortened in your own
-  words, never pasted.
+  {placeholder} from DATA.slide2; the code puts in the real value. Max 3 per line.
+- Slide 3 bullets say only what their DATA.facts source says – in your own words.
 - Places: only name places that appear in DATA. Only say the house is near / close to a
   place if DATA.trip or DATA.also_near says so. famous_rival_town is a COMPARISON
   ("instead of Kurokawa", "Kurokawa-style onsen for less"), never a neighbour.
@@ -177,15 +226,15 @@ You are free to choose the angle and the wording. The limits are:
 - Say "Airbnbs" or "short-term rentals", never "STR" / "STRs" (the audience doesn't know it).
 - Sentence case: capitals only at the start and for names.
 - No hype, no guarantees, no investment-advice wording.
-- Plain English. No emoji in slide or reel text.
+- No emoji in slide or reel text.
 - Short is the rule: stay inside every max_words. Where a list of options is asked, give
   them longest to shortest, each one a complete line that follows every rule.
 Answer ONLY with json."""
 
 EXAMPLE = {"angle": "A",
            "reel_hook": ["...", "...", "..."], "reel_sub": ["...", "...", "..."],
-           "s2_line_a": "... {all_in} ... {breakdown} ...",
-           "s2_line_b": "{place} ... {adr} ... {occ} ... {nights} ... {mgmt} ... {net}",
+           "s2_line_a": ["... {all_in} ...", "...", "..."],
+           "s2_line_b": ["... {net_year} ...", "...", "..."],
            "s3_headline": ["longest ...", "...", "short"],
            "s3_points": [{"from": ["ryokan"], "text": ["...", "...", "short"]},
                          {"from": ["..."], "text": ["...", "...", "short"]},
@@ -222,7 +271,7 @@ def options(v):
     return [clean(x) for x in vs if isinstance(x, (str, int, float)) and clean(x)]
 
 def fill(template, values):
-    """'{adr} × {occ}' + values -> '$120/nt × 80%' (unknown placeholders stay as they are)."""
+    """'{rate} a night' + values -> '$181 a night' (unknown placeholders stay as they are)."""
     return PH.sub(lambda m: str(values.get(m.group(1), m.group(0))), template)
 
 def no_str(s):
@@ -239,6 +288,35 @@ def no_str_all(v):
     if isinstance(v, dict):
         return {k: no_str_all(x) for k, x in v.items()}
     return v
+
+def norm(s):
+    return re.sub(r"\W+", " ", str(s or "")).strip().lower()
+
+def is_copy(s, templates):
+    """v5: same text as a template line (ignoring case and punctuation)."""
+    return any(norm(s) == norm(t) for t in templates or [] if t)
+
+def clumsy(s):
+    """v5: -> why, if the line matches a known broken-English pattern."""
+    for rx, why in CLUMSY:
+        if rx.search(s):
+            return why
+    return None
+
+def fraction_hits(t, base):
+    """v5: '1 in 3 visitors...' for a 33% fact -> ({'1', '3'}, True)"""
+    pcts = [float(x) for x in re.findall(r"(\d+(?:\.\d+)?)\s*%", str(base).replace(",", ""))]
+    extra, hit, low = set(), False, t.lower()
+    for phrase, v in FRACTIONS:
+        if any(abs(p - v) <= 2 for p in pcts) and re.search(
+                r"\b" + re.escape(phrase) + r"\b", low):
+            hit = True
+            extra |= set(nums(phrase))
+    return extra, hit
+
+def booked_nights(e):
+    """Open nights × occupancy, e.g. 180 × 45% -> 81."""
+    return round(e["nights"] * e["occ"])
 
 def names_of(name):
     """'Yufuin Onsen' -> {'yufuin onsen', 'yufuin'}"""
@@ -293,41 +371,74 @@ def place_problem(s, known, rival, rival_near):
                 return f"says the house is near {r.title()} (not in the facts)"
     return None
 
+def templates_of(s3):
+    """v5: the template text per slot – used only to reject copies, never sent to the model."""
+    return {"s3_headline": [no_str(s3.get("headline", ""))],
+            "s3_points": [no_str(p) for p in s3.get("points", []) if isinstance(p, str)],
+            "s3_seo": [no_str(x) for x in s3.get("lines", []) if isinstance(x, str)],
+            "s3_cta": [CTA_DEFAULT]}
+
 
 # ─── the facts the model may use ─────────────────────────────────────
 def fact_sources(M, h, l, e, f, s3, price_usd, price_yen):
-    """key -> fact text. Every slide 3 bullet must name 1-2 of these keys."""
+    """key -> fact text (full sentences). Every slide 3 bullet must name 1-2 of these keys."""
     src = {k: no_str(v) for k, v in (s3.get("pool") or {}).items() if v}
     mins, mode = M.trip_parts(h, l)
     on = M.show_yield(e)
     rival = M.rival_town(h)
+    occ = f"{e['occ'] * 100:.0f}%"
     own = {
-        "price":     f"House price {price_usd} ({price_yen})" if price_usd != "FREE" else "Free house",
-        "trip":      f"{mins} min {mode} to {M.hook_label(h)}",
-        "rate":      f"Nightly rate ${e['adr']:,}",
-        "nights":    f"{e['nights']} rented nights per year",
-        "minpaku":   "Minpaku national cap: 180 nights per year",
-        "net_month": f"Net ${e['monthly']:,} per month",
-        "all_in":    f"All-in cost {M.fmt_k1(e['all_in'])}",
-        "yield":     f"Net yield {e['roi'] * 100:.0f}%" if on else None,
-        "payback":   (f"Payback {M.fmt_years(e['breakeven_yrs'])}"
+        "price":     (f"The house costs {price_usd} ({price_yen})" if price_usd != "FREE"
+                      else "The house is free"),
+        "trip":      f"It is a {mins} min {mode} to {M.hook_label(h)}",
+        "rate":      f"Guests pay about ${e['adr']:,} a night",
+        "open_nights": f"It may be rented {e['nights']} nights a year",
+        "booked":    f"About {booked_nights(e)} nights a year get booked ({occ} occupancy)",
+        "minpaku":   "The national minpaku rule caps rentals at 180 nights a year",
+        "net_month": f"It nets ${e['monthly']:,} a month after management",
+        "all_in":    f"{M.fmt_k1(e['all_in'])} all-in pays for the house, renovation and fees",
+        "yield":     f"The net yield is {e['roi'] * 100:.0f}% a year" if on else None,
+        "payback":   (f"It pays for itself in {M.fmt_years(e['breakeven_yrs'])}"
                       if on and e.get("breakeven_yrs") else None),
         "known_for": f.get("known_for") or None,
         "visitors":  f.get("visitors") or None,
-        "bedrooms":  f"{l['bedrooms']} bedrooms" if l.get("bedrooms") else None,
-        "rival":     f"Famous rival town (comparison, not nearby): {rival}" if rival else None,
+        "bedrooms":  f"The house has {l['bedrooms']} bedrooms" if l.get("bedrooms") else None,
+        "rival":     (f"{rival} is the famous rival town (a comparison, not nearby)"
+                      if rival else None),
     }
     for k, v in own.items():
         if v:
             src.setdefault(k, no_str(v))
     return src
 
+def s2_values(M, h, e, usd, price_usd):
+    """v5: plain values for the slide 2 placeholders. Only the place name and the yearly
+    net come from main.py's math values, so they match the slide exactly."""
+    vals, real = M.math_values(h, e, usd)
+    m = re.search(r"\$[\d.,]+[KkMm]?", str(vals.get("net", "")))
+    net_year = m.group(0) if m else M.fmt_k1(e["monthly"] * 12)
+    mg = re.search(r"(\d+(?:\.\d+)?)\s*%", str(vals.get("mgmt", "")))
+    v = {
+        "all_in":        M.fmt_k1(e["all_in"]),
+        "house":         price_usd if price_usd != "FREE" else None,
+        "rate":          f"${e['adr']:,}",
+        "occ":           f"{e['occ'] * 100:.0f}%",
+        "open_nights":   str(e["nights"]),
+        "booked_nights": str(booked_nights(e)),
+        "mgmt":          f"{mg.group(1)}%" if mg else None,
+        "net_year":      net_year,
+        "net_month":     f"${e['monthly']:,}",
+        "yield":         f"{e['roi'] * 100:.0f}%" if real else None,
+        "place":         vals.get("place") or M.hook_label(h),
+    }
+    return {k: x for k, x in v.items() if x}
+
 def data_for(M, h, l, hooks, usd, e, facts, s3):
     f = facts or {}
     mins, mode = M.trip_parts(h, l)
     price_usd = "FREE" if l["price_yen"] == 0 else M.fmt_usd(usd)
     price_yen = M.fmt_yen(l["price_yen"])
-    vals, real = M.math_values(h, e, usd)
+    s2 = s2_values(M, h, e, usd, price_usd)
     d = {
         "town": M.short_name(h["name"]),
         "attraction": M.hook_label(h),
@@ -340,7 +451,10 @@ def data_for(M, h, l, hooks, usd, e, facts, s3):
         "year_built": l.get("year_built"),
         "nightly_rate": f"${e['adr']:,}",
         "occupancy": f"{e['occ'] * 100:.0f}%",
-        "rented_nights_per_year": e["nights"],
+        "open_nights_per_year": e["nights"],                 # v5: was 'rented_nights'
+        "booked_nights_per_year": booked_nights(e),          # v5
+        "nights_note": ("open nights = nights it may legally be rented; booked nights = "
+                        "open nights × occupancy. Never call open nights 'booked'."),
         "minpaku_rule": "national cap: 180 nights per year",
         "net_per_month": f"${e['monthly']:,}",
         "all_in_cost": M.fmt_k1(e["all_in"]),
@@ -353,14 +467,8 @@ def data_for(M, h, l, hooks, usd, e, facts, s3):
         "famous_rival_town": M.rival_town(h),
         "slide3_subtitle": no_str(subtitle_of(s3, f)),
         "facts": fact_sources(M, h, l, e, f, s3, price_usd, price_yen),
-        "slide2": {k: {"value": v, "means": MATH_MEANS.get(k, "")} for k, v in vals.items()},
-        "template_version": {
-            "s3_headline": no_str(s3["headline"]),
-            "s3_points": [no_str(p) for p in s3["points"]],
-            "s3_seo": [no_str(x) for x in s3["lines"]],
-            "s3_cta": CTA_DEFAULT,
-            "s2_line_a": M.S2_TEMPLATES["a_real" if real else "a"],
-            "s2_line_b": M.S2_TEMPLATES["b"]},
+        "slide2": {k: {"value": v, "means": MATH_MEANS.get(k, "")} for k, v in s2.items()},
+        # v5: no 'template_version' – the model copied it word for word
     }
     return {k: v for k, v in d.items() if v not in (None, "", [], {})}
 
@@ -446,6 +554,11 @@ def check_slot(name, s, ctx):
             return None, "no town and no number"
         return s, None
 
+    if name in TEMPLATE_OF and is_copy(s, ctx["tmpl"].get(TEMPLATE_OF[name])):
+        return None, "copied the template text – write your own line"       # v5
+    err = clumsy(s)                                                          # v5
+    if err:
+        return None, err
     err = place_problem(s, ctx["known"], ctx["rival"], ctx["rival_near"])
     if err:
         return None, err
@@ -456,8 +569,11 @@ def check_slot(name, s, ctx):
             return None, "no name and no number (not a hook)"
         if ctx["angle"] == "D" and not has_name(s, ctx["rival"]):
             return None, f"angle D but {ctx['rival_name']} isn't named"
-    if name == "s3_cta" and ("bio" not in s.lower() or re.search(r"\d|[#@]|https?://", s)):
-        return None, "must point to the bio, no numbers / links / hashtags"
+    if name == "s3_cta":
+        if "bio" not in s.lower() or re.search(r"\d|[#@]|https?://", s):
+            return None, "must point to the bio, no numbers / links / hashtags"
+        if re.search(r"full breakdown", s, re.I):                          # v5
+            return None, "reuses the old template wording – give a reason about THIS house"
     if name in ("s3_seo1", "s3_seo2", "caption_seo") and not (
             has_name(s, ctx["names"]) and SEARCH.search(s)):
         return None, "needs the town + a search word"
@@ -479,8 +595,8 @@ def passing(name, v, ctx):
             errs.append(f"#{i} {err}: {o!r}" if len(opts) > 1 else f"{err}: {o!r}")
     return ok, (" | ".join(errs) or "empty")
 
-def check_math(name, t, values, real):
-    """Slide 2 line: placeholders only, all needed ones used once, fits after filling."""
+def check_math(name, t, values):
+    """Slide 2 line: placeholders only, the needed one used, max 3 numbers, fits."""
     t = clean(t)
     rule = MATH[name]
     if not t:
@@ -489,10 +605,7 @@ def check_math(name, t, values, real):
     unknown = sorted(set(used) - set(values))
     if unknown:
         return None, f"unknown placeholder {unknown}"
-    need = set(rule["need"]) | (set(rule.get("need_if_real", [])) if real else set())
-    if rule.get("place"):
-        need.add("place")                                # SEO: the place name is in the line
-    missing = sorted(need - set(used))
+    missing = sorted(set(rule["need"]) - set(used))
     if missing:
         return None, f"missing {missing}"
     if len(used) != len(set(used)):
@@ -502,11 +615,18 @@ def check_math(name, t, values, real):
         return None, "typed a number (numbers must be placeholders)"
     if "{" in bare or "}" in bare:
         return None, "broken placeholder"
+    if re.search(r"[×=]", bare):
+        return None, "a formula – write it as a plain phrase"
     if BANNED.search(bare):
         return None, "hype word"
     s = fill(t, values)
     if len(s) > rule["max_chars"]:
         return None, f"{len(s)} chars > {rule['max_chars']} after filling"
+    if len(nums(s)) > MAX_S2_NUMS:
+        return None, f"{len(nums(s))} numbers > {MAX_S2_NUMS} – keep it simple"
+    err = clumsy(s)
+    if err:
+        return None, err
     return t, None
 
 def bullet_problem(t, base, ctx):
@@ -518,15 +638,22 @@ def bullet_problem(t, base, ctx):
         return f"{n} words > {POINT_WORDS}"
     if BANNED.search(t):
         return "hype word"
-    if ctx["sub"] and set(nums(t)) & set(nums(ctx["sub"])):
+    if is_copy(t, ctx["tmpl"].get("s3_points")):
+        return "copied a template bullet – write your own"
+    err = clumsy(t)
+    if err:
+        return err
+    extra, frac = fraction_hits(t, base)                 # '1 in 3' for a 33% fact
+    got = set(nums(t)) - extra
+    if ctx["sub"] and got & set(nums(ctx["sub"])):
         return "repeats a number of the subtitle"
     err = place_problem(t, ctx["known"], ctx["rival"], ctx["rival_near"])
     if err:
         return err
-    have, got = set(nums(base)), set(nums(t))
+    have = set(nums(base))
     if got - have:
         return f"numbers {sorted(got - have)} not in its source"
-    if have and not got:
+    if have and not got and not frac:
         return "dropped the number of its source"
     if not have:                                         # no number: must share a real word
         w = lambda s: set(re.findall(r"[a-z]{4,}", s.lower()))
@@ -561,7 +688,7 @@ def check_point(p, src, ctx):
         errs.append(f"#{i} {err}: {t!r}" if len(opts) > 1 else f"{err}: {t!r}")
     return None, None, " | ".join(errs)
 
-def validate(raw, data, rot):
+def validate(raw, data, rot, tmpl=None):
     """-> (out, why, notes)
     out   = fields that passed (what main.py uses)
     why   = field -> why it failed (template used; also sent to the repair round)
@@ -586,6 +713,7 @@ def validate(raw, data, rot):
         "sub":        data.get("slide3_subtitle", ""),
         "trip_min":   (nums(data.get("trip", "")) or [None])[0],
         "angle":      angle,
+        "tmpl":       tmpl or {},
     }
     out, why, notes = {}, {}, []
 
@@ -628,17 +756,16 @@ def validate(raw, data, rot):
                         else "")
                 why[n] = e + hint
 
-    # slide 2: the 2 math lines (placeholders only)
+    # slide 2: the 2 small lines – filled in HERE, main.py gets finished text
     values = {k: v["value"] for k, v in (data.get("slide2") or {}).items()}
-    real = "yield" in values
     for name in MATH:
         errs = []
         for o in options(raw.get(name))[:N_OPTIONS]:
-            ok, err = check_math(name, o, values, real)
+            ok, err = check_math(name, o, values)
             if ok:
-                out[name] = ok
+                out[name] = fill(ok, values)
                 break
-            errs.append(err)
+            errs.append(f"{err}: {o!r}")
         else:
             why[name] = " | ".join(errs) or "empty"
 
@@ -701,50 +828,53 @@ def point_rule():
             "from": "1-2 keys of DATA.facts the bullet is based on",
             "text": f"list of {N_OPTIONS} options, longest to shortest",
             "example": POINT_EXAMPLE, "example_chars": len(POINT_EXAMPLE),
-            "tip": "shorten the fact in your own words, don't paste it"}
+            "tip": "say the fact the way a person would say it out loud – a short, "
+                   "complete phrase, not a label. A percentage may become '1 in 3' / 'a third'."}
 
-def math_rule(n, real):
+def math_rule(n):
     r = MATH[n]
-    return {"must_use": r["need"] + (r["need_if_real"] if real and r.get("need_if_real")
-                                     else []) + (["place"] if r.get("place") else []),
+    return {"must_use": r["need"], "max_numbers": MAX_S2_NUMS,
             "max_chars_after_filling": r["max_chars"], "job": r["job"],
-            "answer": "one string, numbers only as {placeholders}"}
+            "answer": f"list of {N_OPTIONS} options, numbers only as {{placeholders}}"}
 
 
 # ─── prompt ──────────────────────────────────────────────────────────
 def prompt(data, rot):
     last = (rot.get("s3_templates") or [None])[0]
     recent = [c for c in (rot.get("s3_points") or [])[:10] if isinstance(c, list)]
-    real = "yield" in (data.get("slide2") or {})
     return (
         "HOW TO HIT THE LENGTH (characters are hard to count, so do this):\n"
         "- max_words is the rule to follow. A line within max_words fits max_chars if the "
-        "words are short: prefer 'min', 'nights/yr', '$19K', drop 'the/a/very'.\n"
+        "words are short: prefer 'min', 'a year', '$19K', drop 'very'. But keep the words "
+        "that make it proper English.\n"
         f"- Fields marked 'list of {N_OPTIONS} options': {N_OPTIONS} complete versions, "
-        "longest to shortest; the last one clearly short (about half of max_words). We use "
-        "the first one that passes, so EVERY option must follow all rules.\n"
+        "longest to shortest; the last one clearly short. We use the first one that passes, "
+        "so EVERY option must follow all rules and read as natural English.\n"
         "- 'example' + 'example_chars' show what fits. They are from other houses: learn the "
-        "length, don't copy the words.\n\n"
+        "length and the tone, don't copy the words.\n\n"
         "SLOTS:\n"
         + json.dumps({k: slot_rule(k) for k in SLOTS}, ensure_ascii=False, indent=1)
-        + "\n\nSLIDE 2 (s2_line_a, s2_line_b): rewrite the 2 small math lines in your own "
-          "words. NEVER type a digit: write every number as a {placeholder} from DATA.slide2 "
-          "(each at most once per line); the code puts in the real value. Only use "
-          "placeholders listed in DATA.slide2. Separate parts with ' • ' – the slide breaks "
-          "lines there (28 px text, both lines together max 5 rows). SEO: plain words people "
-          "search (all-in cost, renovation, nightly rate, occupancy, Airbnb, rental income, "
-          "net yield). Current wording: DATA.template_version.\n"
-        + json.dumps({n: math_rule(n, real) for n in MATH}, ensure_ascii=False, indent=1)
+        + "\n\nSLIDE 2 (s2_line_a, s2_line_b): above these 2 small lines the slide already "
+          "shows the payback years and the net per month in big type. The 2 lines explain "
+          "it in plain English: line a what the money buys, line b how the rent becomes a "
+          "yearly net. Write phrases a person would say – NOT the calculation (no ×, no =, "
+          "no list of every number; the full math is in the newsletter). NEVER type a digit: "
+          "every number is a {placeholder} from DATA.slide2 (its value and meaning are shown "
+          "there), each at most once, max 3 per line. Good shapes (other house, don't copy): "
+          "'{house} for the house, {all_in} once it's fixed up' / 'Books ~{booked_nights} "
+          "nights a year, {net_month} a month net'.\n"
+        + json.dumps({n: math_rule(n) for n in MATH}, ensure_ascii=False, indent=1)
         + "\n\nSLIDE 3: the title (town name) and subtitle (DATA.slide3_subtitle) are fixed "
           "and already shown. Under them: headline (the hook), 3 bullets (s3_points), 2 search "
-          "lines (s3_seo1, s3_seo2) and the button (s3_cta), your own wording. Bullets say "
-          "only what their DATA.facts say and copy their numbers exactly (if the fact has a "
-          "number, use it). Never base a bullet on a fact that is already in "
-          "DATA.slide3_subtitle. The bullets must pay off the headline. Don't use exactly "
+          "lines (s3_seo1, s3_seo2) and the button (s3_cta), all in your own words. Bullets say "
+          "only what their DATA.facts say and keep their number (copied exactly, or a "
+          "percentage as '1 in 3' / 'a third'). Never base a bullet on a fact that is already "
+          "in DATA.slide3_subtitle. The bullets must pay off the headline. Don't use exactly "
           f"these sets of 'from' keys (recent posts): {json.dumps(recent)}. Search lines: the "
-          "town + a search word people type, natural language, no stuffing, the two lines on "
-          "different searches, and at least one keeps the drive minutes from DATA.trip. "
-          "Only name places that are in DATA; the rival town is a comparison, never 'near'.\n"
+          "town + a search word people type, as a natural phrase, no stuffing, the two lines "
+          "on different searches, and at least one keeps the drive minutes from DATA.trip. "
+          "Only name places that are in DATA; the rival town is a comparison, never 'near'. "
+          "The button gives one reason to tap that fits THIS house.\n"
           "BULLETS:\n" + json.dumps(point_rule(), ensure_ascii=False, indent=1)
         + "\n\nangle: one of " + json.dumps(ANGLES)
         + f" – not '{last}' (used last post). D only if famous_rival_town exists, and then "
@@ -765,20 +895,20 @@ def repair(user, raw, why, data):
     bad = {k: v for k, v in why.items() if k in FIXABLE}
     if not bad:
         return None
-    real = "yield" in (data.get("slide2") or {})
     rules = {}
     for k in bad:
         if k in SLOTS:
             rules[k] = slot_rule(k)
         elif k in MATH:
-            rules[k] = math_rule(k, real)
+            rules[k] = math_rule(k)
         elif k == "s3_points":
             rules[k] = point_rule()
         else:
             rules[k] = {"count": f"3-{MAX_TAGS}",
                         "include": "#akiya, one town/area tag, one attraction-kind tag"}
     ask = ("Our checker rejected these fields of your answer. Rewrite ONLY them, same DATA "
-           "and rules. Stay under max_words; in lists make the last option clearly short.\n"
+           "and rules, in natural native English. Stay under max_words; in lists make the "
+           "last option clearly short.\n"
            "WHY REJECTED:\n" + json.dumps(bad, ensure_ascii=False, indent=1)
            + "\n\nRULES:\n" + json.dumps(rules, ensure_ascii=False, indent=1)
            + ("\n\nWith a new s3_headline you may also give a new 'angle'."
@@ -795,6 +925,43 @@ def repair(user, raw, why, data):
     return {**raw, **{k: v for k, v in new.items() if k in keep}}
 
 
+# ─── v5: editor pass (AI_EDIT=1) ─────────────────────────────────────
+def polish(user, raw, data, rot, tmpl):
+    """One extra call: DeepSeek re-reads its answer as a native English editor.
+    An edited field is used only if it still passes every check; else the old one stays."""
+    ask = ("Now act as a native English Instagram editor. Read every line of your answer "
+           "out loud. Rewrite any line that doesn't sound like natural spoken English "
+           "(odd word order, missing little words, numbers crammed into noun phrases, "
+           "'label: number' fragments). Keep lines that already read well exactly as they "
+           "are. Keep every number, {placeholder}, place name and 'from' key exactly, and "
+           "stay within the same limits. Return the SAME json shape with the same keys.")
+    new = call([{"role": "system", "content": SYSTEM},
+                {"role": "user", "content": user},
+                {"role": "assistant", "content": json.dumps(raw, ensure_ascii=False)},
+                {"role": "user", "content": ask}], temp=FIX_TEMP)
+    if not new:
+        print("  AI copy: editor pass got no answer – kept the first version")
+        return raw
+    new = {**raw, **{k: v for k, v in new.items() if k in raw}}
+    out2, _, _ = validate(new, data, rot, tmpl)
+    merged, changed = dict(raw), []
+    for k in out2:
+        if k in ("s3_kinds", "s3_seo1", "s3_seo2", "angle"):
+            continue
+        if k in new and new[k] != raw.get(k):
+            merged[k] = new[k]
+            changed.append(k)
+    if "s3_headline" in changed:
+        merged["angle"] = new.get("angle", raw.get("angle"))
+    if "s3_seo1" in out2 and "s3_seo2" in out2:          # both pass = a valid pair
+        for k in ("s3_seo1", "s3_seo2"):
+            if new.get(k) != raw.get(k):
+                merged[k] = new[k]
+                changed.append(k)
+    print(f"  AI copy: editor pass changed {sorted(set(changed)) or 'nothing'}")
+    return merged
+
+
 # ─── entry point ─────────────────────────────────────────────────────
 def write(M, h, l, hooks, usd, e, facts, s3, rot):
     """Returns {slot: text} with only the fields that passed every check."""
@@ -806,10 +973,11 @@ def write(M, h, l, hooks, usd, e, facts, s3, rot):
     cache = load(CACHE_FILE)
     ck = f"{day}|{l['url']}|{VERSION}"
     data = data_for(M, h, l, hooks, usd, e, facts, s3)
+    tmpl = templates_of(s3)
     if ck in cache:
         raw = cache[ck]                                  # re-run today: no new call
         print("  AI copy: cached answer from today (no new call)")
-        out, why, notes = validate(raw, data, rot)
+        out, why, notes = validate(raw, data, rot, tmpl)
     else:
         user = prompt(data, rot)
         raw = call([{"role": "system", "content": SYSTEM},
@@ -817,16 +985,19 @@ def write(M, h, l, hooks, usd, e, facts, s3, rot):
         if raw is None:
             print("AI copy: no answer – template text")
             return {}
-        out, why, notes = validate(raw, data, rot)
+        out, why, notes = validate(raw, data, rot, tmpl)
         bad = sorted(k for k in why if k in FIXABLE)
         if bad:
             print(f"  AI copy: 1st answer failed {bad} – asking DeepSeek to fix them")
             fixed = repair(user, raw, why, data)
             if fixed:
                 raw = fixed
-                out, why, notes = validate(raw, data, rot)
+                out, why, notes = validate(raw, data, rot, tmpl)
+        if EDIT:
+            raw = polish(user, raw, data, rot, tmpl)
+            out, why, notes = validate(raw, data, rot, tmpl)
         cache = {k: v for k, v in cache.items() if k.startswith(day)}
-        cache[ck] = raw                                  # the repaired answer is cached
+        cache[ck] = raw                                  # the final answer is cached
         save(CACHE_FILE, cache)
 
     for n in notes:
@@ -839,6 +1010,12 @@ def write(M, h, l, hooks, usd, e, facts, s3, rot):
           f"headline={'AI' if 's3_headline' in out else 'template'} | "
           f"bullets={'AI' if 's3_points' in out else 'template'} | search lines={seo} | "
           f"button={'AI' if 's3_cta' in out else 'template'}")
+    print("  slide 2 source: "
+          f"line a={'AI' if 's2_line_a' in out else 'template'} | "
+          f"line b={'AI' if 's2_line_b' in out else 'template'}")
+    for k in ("s2_line_a", "s2_line_b", "s3_cta"):
+        if k in out:
+            print(f"    {k}: {out[k]}")
     return out
 
 def apply_s3(s3, c):
