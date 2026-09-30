@@ -72711,10 +72711,10 @@
  "https://akiya.sumai.biz/128709": {
   "id": "https://akiya.sumai.biz/128709",
   "url": "https://akiya.sumai.biz/128709",
-  "title": "空き家バンク【売買】180万円 石川県加賀市津波倉町ロ 車庫・駐車場付き6K2階建古民家 水洗トイレ",
+  "title": "(価格変更)空き家バンク【売買】180万円→150万円 石川県加賀市津波倉町ロ 車庫・駐車場付き6K2階建古民家 水洗トイレ",
   "ok": true,
   "pv": 2,
-  "price_yen": 1800000.0,
+  "price_yen": 1500000.0,
   "pref": "石川県",
   "location": "石川県加賀市津波倉町ロ",
   "bedrooms": 6,
@@ -72725,7 +72725,7 @@
    "https://akiya.sumai.biz/wp-content/uploads/2026/09/616kaga-2.png",
    "https://akiya.sumai.biz/wp-content/uploads/2026/09/616kaga-3.png"
   ],
-  "lastmod": "2026-09-27T22:13:30+00:00",
+  "lastmod": "2026-09-30T07:05:08+00:00",
   "lat": 36.310619,
   "lng": 136.379333,
   "geo_level": "district"
@@ -73230,5 +73230,14 @@
   "lat": 35.824894,
   "lng": 137.716949,
   "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/129680": {
+  "id": "https://akiya.sumai.biz/129680",
+  "url": "https://akiya.sumai.biz/129680",
+  "title": "空き家バンク【売買】0円 石川県羽咋市鹿島路町 田園風景を望む・駅徒歩圏内 平成13年築納屋・車庫付き土地",
+  "ok": false,
+  "pv": 2,
+  "why": "no sale price",
+  "lastmod": "2026-09-30T07:20:12+00:00"
  }
 }

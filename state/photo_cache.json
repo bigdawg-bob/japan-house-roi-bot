@@ -1069,6 +1069,126 @@
    "light_ok": true,
    "score": 5,
    "why": "Urban night street lanterns not rural Japan"
+  },
+  "pexels:31046945|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": false,
+   "score": 8,
+   "why": "Iconic snowy Ginzan street, evening glow"
+  },
+  "pexels:17727740|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": true,
+   "score": 8,
+   "why": "Atmospheric snowy Ginzan Onsen town scene"
+  },
+  "pexels:30933038|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "grey overcast muted ordinary town scene"
+  },
+  "pexels:31211118|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Snowy wooden facade, grey sky, ordinary crop"
+  },
+  "pexels:30933028|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Pretty street but grey muted overcast"
+  },
+  "pexels:31415727|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 8,
+   "why": "Pretty night lanterns over snow tempting"
+  },
+  "pexels:31416860|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Pretty snowy stream not iconic town"
+  },
+  "pexels:30159590|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Grey sky, muted snowy street scene"
+  },
+  "pexels:30933038|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 5,
+   "why": "grey overcast sky, muted dull snapshot"
+  },
+  "pexels:30933028|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 6,
+   "why": "Grey overcast sky, atmospheric but ordinary"
+  },
+  "pexels:31415727|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Magical glowing lanterns over snowy night path"
+  },
+  "pexels:28969414|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": true,
+   "light_ok": true,
+   "score": 7,
+   "why": "Kyoto Ninenzaka night, not Ginzan"
   }
  },
  "exterior": {

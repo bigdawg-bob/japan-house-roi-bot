@@ -436,7 +436,40 @@
   "kind": "onsen",
   "generic": false,
   "added": "2026-09-30T15:15:14+09:00",
+  "uses": 2,
+  "last": "2026-09-30T16:32:35+09:00"
+ },
+ "4a96531564ec97cd": {
+  "id": "pexels:17727740",
+  "credit": "Photo: Sristi Saha / Pexels",
+  "role": "area",
+  "mood": "day",
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-30T16:32:35+09:00",
   "uses": 1,
-  "last": "2026-09-30T15:15:14+09:00"
+  "last": "2026-09-30T16:32:35+09:00"
+ },
+ "e2963a9cf53a500a": {
+  "id": "pexels:31046945",
+  "credit": "Photo: 家豪 陳 / Pexels",
+  "role": "area",
+  "mood": "day",
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-30T16:32:35+09:00",
+  "uses": 1,
+  "last": "2026-09-30T16:32:35+09:00"
+ },
+ "7a252d6e652b5d90": {
+  "id": "pexels:31415727",
+  "credit": "Photo: Saya Azeem / Pexels",
+  "role": "area",
+  "mood": "dusk",
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-30T16:32:35+09:00",
+  "uses": 1,
+  "last": "2026-09-30T16:32:35+09:00"
  }
 }
