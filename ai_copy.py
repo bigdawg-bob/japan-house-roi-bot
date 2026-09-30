@@ -43,7 +43,7 @@ CACHE_FILE = STATE / "copy_cache.json"
 
 # slot -> (max characters, max words, what goes there)
 SLOTS = {
-    "reel_hook":    (18, 3, "Reel line 1, huge bold caps, read in under 1 second. Any wording, "
+    "reel_hook":    (18, 4, "Reel line 1, huge bold caps, read in under 1 second. Any wording, "
                             "but it must name the town OR show a number from DATA (price, drive "
                             "time, yield...). Example: '$25K AMINO'."),
     "reel_sub":     (44, 8, "Reel line 2 under the hook. Any wording and order, but it must keep "
