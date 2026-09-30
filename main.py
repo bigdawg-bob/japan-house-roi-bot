@@ -54,7 +54,6 @@ from PIL import features as pil_features
 import scraper
 import scraper_athome
 import scraper_homes
-import n8n_handoff
 from yield_calc import (estimate, caption_text, is_renovated, show_yield, fmt_k)
 
 try:
@@ -2227,45 +2226,42 @@ def main():
     (OUT / "caption.txt").write_text(caption, encoding="utf-8")
     reel_path, reel_text, reel_cap, reel_clip = (tuple(reel or ()) + (None,) * 4)[:4]
 
-    # 1) post package -> n8n (AI agent + your approval). None = handoff not configured.
-    try:
-        pkg = n8n_handoff.build_package(sys.modules[__name__], l, hooks, usd, e, fees_yen,
-                                        caption, s3, reel_path, reel_text, reel_cap, reel_clip)
-        handed = n8n_handoff.send(pkg, paths, reel_path)
-    except Exception as ex:
-        print(f"!! n8n handoff error: {ex!r}")
-        handed = False
+    # Telegram is the only delivery now. Without the secrets nothing would be sent,
+    # so stop here instead of marking the house as posted.
+    if not DRY_RUN and not (BOT_TOKEN and CHAT_ID):
+        print("!! BOT_TOKEN or CHAT_ID is missing – nothing was sent, not marked as posted")
+        sys.exit(1)                                   # red X so you notice
 
-    # 2) Telegram copy (as before)
     ok = tg_album(paths, caption) and tg_text(caption)
     if ok and reel_path:
         tg_video(reel_path, reel_cap or f"🎬 Reel: {reel_text}")   # a failed reel doesn't block the post
-    if ok and handed is not False and not DRY_RUN:
-        for u in l.get("all_urls", [l["url"]]):
-            posted[u] = today
-        posted["fp:" + l["fp"]] = today
-        save_json(POSTED_FILE, posted)
-        recent = ([h0["name"]] + [h for h in recent if h != h0["name"]])[:RECENT_HOOKS]
-        rot.update({"last_source": l.get("source"), "date": today,
-                    "recent_hooks": recent,
-                    "s3_templates": ([s3["template"]] + (rot.get("s3_templates") or []))[:SLIDE3_HISTORY],
-                    "s3_points": ([s3["kinds"]] + (rot.get("s3_points") or []))[:SLIDE3_HISTORY]})
-        if reel_clip:
-            rot["reel_clips"] = ([reel_clip] + [c for c in (rot.get("reel_clips") or [])
-                                                if c != reel_clip])[:CLIP_HISTORY]
-        save_json(ROTATION_FILE, rot)
-        print("Saved to state/posted.json + state/rotation.json")
-        if ai_copy and copy:
-            try:
-                ai_copy.log_post(today, l, copy)          # matched with Insights later
-                print("Saved wording to state/copy_log.json")
-            except Exception as ex:
-                print(f"!! copy log error: {ex!r}")
-    elif not ok:
-        print("Telegram failed – not marking as posted, will retry next run")
-    if handed is False:
-        print("!! n8n did NOT get the post package – not marked as posted, will retry next run")
-        sys.exit(1)                                   # red X in GitHub instead of a false green
+    if not ok:
+        print("!! Telegram failed – not marking as posted, will retry next run")
+        sys.exit(1)                                   # red X; the 07:40 backup run tries again
+    if DRY_RUN:
+        print("Test run – slides made, not marked as posted")
+        return
+
+    for u in l.get("all_urls", [l["url"]]):
+        posted[u] = today
+    posted["fp:" + l["fp"]] = today
+    save_json(POSTED_FILE, posted)
+    recent = ([h0["name"]] + [h for h in recent if h != h0["name"]])[:RECENT_HOOKS]
+    rot.update({"last_source": l.get("source"), "date": today,
+                "recent_hooks": recent,
+                "s3_templates": ([s3["template"]] + (rot.get("s3_templates") or []))[:SLIDE3_HISTORY],
+                "s3_points": ([s3["kinds"]] + (rot.get("s3_points") or []))[:SLIDE3_HISTORY]})
+    if reel_clip:
+        rot["reel_clips"] = ([reel_clip] + [c for c in (rot.get("reel_clips") or [])
+                                            if c != reel_clip])[:CLIP_HISTORY]
+    save_json(ROTATION_FILE, rot)
+    print("Saved to state/posted.json + state/rotation.json")
+    if ai_copy and copy:
+        try:
+            ai_copy.log_post(today, l, copy)          # matched with Insights later
+            print("Saved wording to state/copy_log.json")
+        except Exception as ex:
+            print(f"!! copy log error: {ex!r}")
 
 
 if __name__ == "__main__":
