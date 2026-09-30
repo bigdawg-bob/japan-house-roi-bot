@@ -114,6 +114,8 @@ GROK_URL       = _env("GROK_URL", "https://api.x.ai/v1/responses")
 PEXELS_KEY     = os.getenv("PEXELS_KEY") or os.getenv("PEXELS_API_KEY")
 PHOTO_CHECKS   = int(_env("PHOTO_CHECKS", "6"))           # Grok checks per slide (place photos)
 MIN_PHOTO_SCORE = float(_env("MIN_PHOTO_SCORE", "7"))   # 0-10 beauty score a photo needs
+MAX_GROK_CHECKS = 12         # max Grok photo checks per run
+grok_checks = 0
 GENERIC_CHECKS = int(_env("GENERIC_CHECKS", "4"))         # extra Grok checks for the generic fallback
 MIN_PHOTO_W    = 1080                                     # original photo size needed (checked photos)
 MIN_PHOTO_H    = 1350
@@ -988,6 +990,8 @@ def hard_ok(v, target):
 def scan_photos(queries, h, l, mood, target, used, checks, limit):
     """Checks up to `limit` new photos and returns the MOST BEAUTIFUL one that passes.
     Right light (day / dusk) gets +1. Photos already checked are free."""
+    global grok_checks                    # NEW
+    limit = min(limit, 4)                 # NEW: at most 4 new photos per search
     best, n = None, 0
     for c in photo_candidates(queries, used):
         key = f"{c['id']}|{mood}|{target}|v3"          # v3 = people up to 1/3
@@ -1000,10 +1004,9 @@ def scan_photos(queries, h, l, mood, target, used, checks, limit):
         if img is None:
             continue
         if v is None:
-            global grok_checks
-            if grok_checks >= MAX_GROK_CHECKS:
-                break
-            grok_checks += 1
+            if grok_checks >= MAX_GROK_CHECKS:    # NEW
+                break                             # NEW
+            grok_checks += 1                      # NEW
             n += 1
             v = check_photo(img, h, l, mood, target)
             if v is None:
