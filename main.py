@@ -81,7 +81,8 @@ MAX_WALK_MIN     = float(_env("MAX_WALK_MIN", "15"))
 FEE_LIMIT        = float(_env("FEE_LIMIT_PCT", "15")) / 100   # yearly fees vs price
 MAX_AIRROI_CALLS = int(_env("MAX_AIRROI_CALLS", "1"))         # paid calls per run (1 = only the chosen house)
 CACHE_DAYS       = 90                                          # re-ask AirROI after this
-HOUSE_PHOTOS     = 3                                           # listing photos to download
+HOUSE_PHOTOS     = 6                                           # listing photos to download (more = better chance of an outside shot)
+EXTERIOR_CHECKS  = int(_env("EXTERIOR_CHECKS", "4"))           # Grok checks to find the outside of the house
 W, H             = 1080, 1350
 FX_FALLBACK      = 0.0067
 DRY_RUN          = os.getenv("DRY_RUN") == "1"
@@ -1815,6 +1816,63 @@ def facts_slide(pic, h, l, hooks, facts, e, s3):
     put(d, (X + bw / 2, 1142), cta, cf, white, "mm", 0, 0)
     return img
 
+# ── slide 4: the outside of the house (listing photo) ──
+def check_exterior(img):
+    """Grok: does this listing photo show the OUTSIDE of the house?"""
+    small = img.copy()
+    small.thumbnail((1024, 1024))
+    buf = io.BytesIO()
+    small.save(buf, "JPEG", quality=85)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    prompt = ("This photo is from a Japanese house-for-sale listing. Answer ONLY with JSON:\n"
+              '{"exterior": true/false, "score": 0-10, "why": "max 10 words"}\n'
+              "exterior: true only if it shows the OUTSIDE of the house (the building seen "
+              "from outside: front, roof, entrance, or the house with its garden). false for "
+              "rooms, kitchen, bathroom, floor plans, maps, empty land or close-ups. "
+              "score: how well it shows the whole house.")
+    v = json_from(grok([{"type": "input_image", "image_url": f"data:image/jpeg;base64,{b64}",
+                         "detail": "high"},
+                        {"type": "input_text", "text": prompt}], timeout=120))
+    return v if isinstance(v, dict) else None
+
+def pick_exterior(house_pics):
+    """Best outside-of-the-house photo among the listing photos.
+    Grok answers are cached per photo (never paid twice).
+    No Grok / nothing found -> first listing photo. No photos -> None."""
+    if not house_pics:
+        return None
+    cache = load_json(PHOTO_CACHE)
+    checks = cache.setdefault("exterior", {})
+    best = None
+    try:
+        for p in house_pics[:EXTERIOR_CHECKS]:
+            v = checks.get(p["id"])
+            if v is None:
+                if not GROK_KEY:
+                    break
+                v = check_exterior(p["img"])
+                if v is None:
+                    continue
+                checks[p["id"]] = v
+                print(f"  exterior check {p['id']}: {v.get('exterior')} "
+                      f"score={v.get('score')} ({v.get('why')})")
+            if yes(v.get("exterior")):
+                try:
+                    s = float(v.get("score") or 0)
+                except (TypeError, ValueError):
+                    s = 0
+                if best is None or s > best[0]:
+                    best = (s, p)
+    finally:
+        save_json(PHOTO_CACHE, cache)
+    if best:
+        return best[1]
+    print("  no outside photo found – slide 4 uses the first listing photo")
+    return house_pics[0]
+
+def house_slide(pic, l=None, hooks=None, usd=None):
+    """Slide 4: the house from outside, photo only (no text, no credit, no shading)."""
+    return ImageOps.fit(pic["img"], (W, H), Image.LANCZOS)
 
 # ─── reel helpers (font + ffmpeg, used by ai_reel.py) ────────────────
 REEL_FONT_FILES = [FONT_DIR / "Arimo-Bold.ttf",
@@ -1888,16 +1946,16 @@ def build_slides(l, hooks, usd, e, rot=None):
                                "credit": f"Photo: {site_info(l)[1]}"})
     print(f"House photos downloaded: {len(house_pics)}")
 
-    cover = house_pics[0] if house_pics else None
-    used = {cover["id"]} if cover else set()
+    # slide 4 = outside of the house; slides 1-3 = three different area photos
+    exterior = pick_exterior(house_pics)
+    used = {exterior["id"]} if exterior else set()
+    cover = find_photo(h0, l, "day", used, house_pics)
+    if cover:
+        used.add(cover["id"])
     day = find_photo(h0, l, "day", used, house_pics)
     if day:
         used.add(day["id"])
     dusk = find_photo(h0, l, "dusk", used, house_pics)
-    if cover is None:
-        cover = day or dusk
-        if cover:
-            print("  no listing photo – the cover uses the area photo")
     if not (cover and day and dusk):
         print("!! no photo found anywhere – not posting today")
         return None, None, None, None
@@ -1927,12 +1985,17 @@ def build_slides(l, hooks, usd, e, rot=None):
 
     def tag(p):
         return f"{p['id']}{' (generic)' if p.get('generic') else ''}"
-    print(f"Slide photos: cover={tag(cover)} day={tag(day)} dusk={tag(dusk)} | facts: "
+    print(f"Slide photos: cover={tag(cover)} day={tag(day)} dusk={tag(dusk)} "
+          f"house={tag(exterior) if exterior else 'none'} | facts: "
           f"{'found' if facts else 'fallback'}")
 
     slides = [cover_slide(cover["img"], l, hooks, usd, e),
               area_slide(day, h0, l, e, usd, copy),
               facts_slide(dusk, h0, l, hooks, facts, e, s3)]
+    if exterior:
+        slides.append(house_slide(exterior, l, hooks, usd))
+    else:
+        print("  no listing photo – posting 3 slides (no slide 4)")
     paths = []
     for i, s in enumerate(slides, 1):
         p = OUT / f"slide_{i}.jpg"
@@ -1959,7 +2022,9 @@ def build_slides(l, hooks, usd, e, rot=None):
 
     # remember every photo used, so later posts can reuse it
     try:
-        for pic, mood in ((cover, None), (day, "day"), (dusk, "dusk")):
+        for pic, mood in ((cover, "day"), (day, "day"), (dusk, "dusk"), (exterior, None)):
+            if not pic:
+                continue
             role = "house" if pic["id"].startswith("house:") else "area"
             library_add(pic, role, mood if role == "area" else None, h0["kind"])
     except Exception as ex:
