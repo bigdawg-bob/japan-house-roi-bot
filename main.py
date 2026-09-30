@@ -1333,16 +1333,15 @@ def slide3_text(h, l, hooks, facts, e, rot):
     }[t]
     kinds = pick_points(t, pool, rot)
 
-    # SEO line 1: "[Town] Onsen Airbnb = onsen access in 20 min"
+    # SEO line 1 (fallback): "[Town] Onsen Airbnb with onsen access, 20 min drive"
     tag = ACCESS_TAG.get(h["kind"], "easy access")
-    trip = f"in {mins} min" if mode == "drive" else f"{mins} min walk"
-    line1 = f"{seo_label(h)} Airbnb = {tag} {trip}" if mode == "drive" \
-        else f"{seo_label(h)} Airbnb = {tag}, {trip}"
-    # SEO line 2: "[Town] investment: 180 days = minpaku cap"
+    trip = f"{mins} min drive" if mode == "drive" else f"{mins} min walk"
+    line1 = f"{seo_label(h)} Airbnb with {tag}, {trip}"
+    # SEO line 2 (fallback): "[Town] Airbnb investment, legal 180 nights a year"
     nights = e.get("nights") or 180
     town = short_name(h["name"])
-    line2 = (f"{town} investment: {nights} days = minpaku cap" if nights >= 180
-             else f"{town} investment: {nights} days, cap is 180")
+    line2 = (f"{town} Airbnb investment, legal {nights} nights a year" if nights >= 180
+             else f"{town} Airbnb investment, {nights} nights a year (cap 180)")
     cap = f.get("minpaku_cap")
     if isinstance(cap, int) and cap < nights:
         print(f"!! {h['name']}: local minpaku cap may be {cap} days (< {nights} used) – "
