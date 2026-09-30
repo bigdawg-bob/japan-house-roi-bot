@@ -58,7 +58,7 @@ OV_ON, OV_IN = 0.3, 0.2                 # overlay fades in 0.3 -> 0.5 s
 FADE_OUT   = 6.5                        # overlay + text fade out 6.5 s -> last frame
 
 HOOK_ON, HOOK_POP = 0.3, 0.15
-HOOK_PX, HOOK_MIN_PX, HOOK_WORDS = 190, 90, 3
+HOOK_PX, HOOK_MIN_PX, HOOK_WORDS = 190, 90, 4
 SUB_ON, SUB_POP = 1.5, 0.2
 SUB_PX, SUB_ALPHA, SUB_GAP, SUB_RISE, SUB_WORDS = 46, 0.85, 60, 20, 8
 MARGIN     = 80
