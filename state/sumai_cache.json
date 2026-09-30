@@ -10449,9 +10449,10 @@
  "https://akiya.sumai.biz/106758": {
   "id": "https://akiya.sumai.biz/106758",
   "url": "https://akiya.sumai.biz/106758",
-  "title": "(価格変更)空き家バンク【売買】160万円→140万円 新潟県小千谷市日吉 融雪屋根 各階サンルーム・車庫付き6DK2階建 上下水道・都市ガス",
+  "title": "(価格変更)空き家バンク【売買】140万円→100万円 新潟県小千谷市日吉 融雪屋根 各階サンルーム・車庫付き6DK2階建 上下水道・都市ガス",
   "ok": true,
-  "price_yen": 1400000.0,
+  "pv": 2,
+  "price_yen": 1000000.0,
   "pref": "新潟県",
   "location": "新潟県小千谷市日吉",
   "bedrooms": 6,
@@ -10467,7 +10468,7 @@
    "https://akiya.sumai.biz/wp-content/uploads/2026/03/193ojiya-4.jpg",
    "https://akiya.sumai.biz/wp-content/uploads/2026/03/193ojiya-7.jpg"
   ],
-  "lastmod": "2026-08-15T01:21:36+00:00",
+  "lastmod": "2026-09-30T03:20:03+00:00",
   "lat": 37.30545,
   "lng": 138.797791,
   "geo_level": "district"
@@ -12224,23 +12225,11 @@
  "https://akiya.sumai.biz/123769": {
   "id": "https://akiya.sumai.biz/123769",
   "url": "https://akiya.sumai.biz/123769",
-  "title": "空き家バンク【売買】300万円 山梨県南巨摩郡身延町常葉 ベランダ・別棟・車庫・駐車場7台付き7DK2階建古民家 回り縁・続き間・掘りごたつ・檜風呂有",
-  "ok": true,
-  "price_yen": 3000000.0,
-  "pref": "山梨県",
-  "location": "山梨県南巨摩郡身延町常葉",
-  "bedrooms": 7,
-  "year_built": 1970,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/身延町常葉No.3-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/身延町常葉No.3-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/身延町常葉No.3-2.jpg"
-  ],
-  "lastmod": "2026-08-05T22:37:41+00:00",
-  "lat": 35.437622,
-  "lng": 138.491684,
-  "geo_level": "district"
+  "title": "(交渉中) 空き家バンク【売買】300万円 山梨県南巨摩郡身延町常葉 ベランダ・別棟・車庫・駐車場7台付き7DK2階建古民家 回り縁・続き間・掘りごたつ・檜風呂有",
+  "ok": false,
+  "pv": 2,
+  "why": "not available",
+  "lastmod": "2026-09-30T03:15:18+00:00"
  },
  "https://akiya.sumai.biz/123827": {
   "id": "https://akiya.sumai.biz/123827",
@@ -42802,7 +42791,7 @@
    "https://akiya.sumai.biz/wp-content/uploads/2026/01/215murakami-2.jpg",
    "https://akiya.sumai.biz/wp-content/uploads/2026/01/215murakami-4.jpg"
   ],
-  "lastmod": "2026-01-07T22:11:40+00:00",
+  "lastmod": "2026-09-30T03:19:15+00:00",
   "lat": 38.474056,
   "lng": 139.552429,
   "geo_level": "district"
@@ -44606,7 +44595,7 @@
    "https://akiya.sumai.biz/wp-content/uploads/2025/09/51si-4.jpg",
    "https://akiya.sumai.biz/wp-content/uploads/2025/09/51si-5.jpg"
   ],
-  "lastmod": "2025-12-16T01:51:44+00:00",
+  "lastmod": "2026-09-30T03:17:30+00:00",
   "lat": 39.585812,
   "lng": 140.921463,
   "geo_level": "district"
@@ -73269,5 +73258,14 @@
   "lat": 43.06731,
   "lng": 141.777802,
   "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/98241": {
+  "id": "https://akiya.sumai.biz/98241",
+  "url": "https://akiya.sumai.biz/98241",
+  "title": "(交渉中) 空き家バンク【賃貸】2万円 山梨県南巨摩郡富士川町平林 棚田を望む 庭・倉庫・駐車場2~3台付き8DK2階建 縁側・続き間有",
+  "ok": false,
+  "pv": 2,
+  "why": "not available",
+  "lastmod": "2026-09-30T03:13:29+00:00"
  }
 }

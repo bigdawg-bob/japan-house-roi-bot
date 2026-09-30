@@ -659,6 +659,46 @@
    "light_ok": true,
    "score": 7,
    "why": "Dark sky usable but busy warm lights"
+  },
+  "pexels:38047994|day|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 4,
+   "why": "Busy cluttered street with people signs"
+  },
+  "pexels:39396669|day|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": true,
+   "score": 8,
+   "why": "Calm river and Yufudake, dark water overlay"
+  },
+  "pexels:38047994|dusk|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 6,
+   "why": "Daytime street people signs empty road"
+  },
+  "pexels:18743007|dusk|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Dark empty night road for text"
   }
  }
 }

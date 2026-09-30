@@ -146,5 +146,21 @@
    }
   },
   "d": "2026-09-29T17:29:08+09:00"
+ },
+ "Yufuin": {
+  "v": {
+   "known_for": "Onsen town at Mt Yufu",
+   "visitors": "4.3M visitors/yr",
+   "minpaku_cap": null,
+   "points": {
+    "competition": "200 STRs in Yufu",
+    "foreign": "Foreign 33% of visitors",
+    "access": "1hr train from Oita",
+    "occupancy": "50% occupancy",
+    "trend": "Visitors up 6% in 2024",
+    "tattoo": "Some baths tattoo-friendly"
+   }
+  },
+  "d": "2026-09-30T13:07:57+09:00"
  }
 }

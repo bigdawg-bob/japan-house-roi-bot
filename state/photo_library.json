@@ -372,5 +372,38 @@
   "added": "2026-09-30T09:46:11+09:00",
   "uses": 1,
   "last": "2026-09-30T09:46:11+09:00"
+ },
+ "37fa2af0447877c1": {
+  "id": "house:https://akiya.sumai.biz/wp-content/uploads/2024/07/92kokonoe-1.jpg",
+  "credit": "Photo: akiya.sumai.biz",
+  "role": "house",
+  "mood": null,
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-30T13:08:10+09:00",
+  "uses": 1,
+  "last": "2026-09-30T13:08:10+09:00"
+ },
+ "9abfdfe5a09c3799": {
+  "id": "pexels:39396669",
+  "credit": "Photo: arnaud audoin / Pexels",
+  "role": "area",
+  "mood": "day",
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-30T13:08:10+09:00",
+  "uses": 1,
+  "last": "2026-09-30T13:08:10+09:00"
+ },
+ "26a217e5bbe02bcb": {
+  "id": "pexels:18743007",
+  "credit": "Photo: Huu Huynh / Pexels",
+  "role": "area",
+  "mood": "dusk",
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-30T13:08:10+09:00",
+  "uses": 1,
+  "last": "2026-09-30T13:08:10+09:00"
  }
 }
