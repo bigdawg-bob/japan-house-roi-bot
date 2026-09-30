@@ -436,8 +436,8 @@
   "kind": "onsen",
   "generic": false,
   "added": "2026-09-30T15:15:14+09:00",
-  "uses": 2,
-  "last": "2026-09-30T16:32:35+09:00"
+  "uses": 3,
+  "last": "2026-09-30T16:53:01+09:00"
  },
  "4a96531564ec97cd": {
   "id": "pexels:17727740",
@@ -447,8 +447,8 @@
   "kind": "onsen",
   "generic": false,
   "added": "2026-09-30T16:32:35+09:00",
-  "uses": 1,
-  "last": "2026-09-30T16:32:35+09:00"
+  "uses": 2,
+  "last": "2026-09-30T16:53:01+09:00"
  },
  "e2963a9cf53a500a": {
   "id": "pexels:31046945",
@@ -469,7 +469,18 @@
   "kind": "onsen",
   "generic": false,
   "added": "2026-09-30T16:32:35+09:00",
+  "uses": 2,
+  "last": "2026-09-30T16:53:01+09:00"
+ },
+ "1be3c3e95056fa5d": {
+  "id": "commons:195931151",
+  "credit": "Photo: lumoplank, CC0 / Wikimedia Commons",
+  "role": "area",
+  "mood": "day",
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-30T16:53:01+09:00",
   "uses": 1,
-  "last": "2026-09-30T16:32:35+09:00"
+  "last": "2026-09-30T16:53:01+09:00"
  }
 }

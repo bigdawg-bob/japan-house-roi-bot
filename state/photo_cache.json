@@ -1189,6 +1189,126 @@
    "light_ok": true,
    "score": 7,
    "why": "Kyoto Ninenzaka night, not Ginzan"
+  },
+  "pexels:31046943|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Atmospheric but cluttered dim wooden entrance"
+  },
+  "pexels:5976375|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 7,
+   "why": "Warm lanterns, moody traditional Japan night"
+  },
+  "commons:195400364|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": false,
+   "score": 8,
+   "why": "Iconic dusk lanterns reflecting on river"
+  },
+  "commons:195931151|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Iconic Ginzan street, autumn, inviting"
+  },
+  "pexels:31046939|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": true,
+   "score": 6,
+   "why": "Grey overcast dulls iconic snowy onsen street"
+  },
+  "pexels:31088570|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": true,
+   "score": 8,
+   "why": "Atmospheric snowy historic onsen street"
+  },
+  "pexels:31088572|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Pretty snowy ryokan but muted stock look"
+  },
+  "pexels:37537753|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 5,
+   "why": "Dark night ordinary shop messy snow"
+  },
+  "pexels:31046945|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": false,
+   "score": 7,
+   "why": "Iconic snowy Ginzan street, daylight"
+  },
+  "pexels:30367077|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Warm night glow on historic ryokans"
+  },
+  "pexels:5976375|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Warm lanterns create inviting onsen night mood"
+  },
+  "pexels:29241295|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": true,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Moody lantern close-up, artistic night glow"
   }
  },
  "exterior": {
