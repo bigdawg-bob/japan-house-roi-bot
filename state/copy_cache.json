@@ -328,5 +328,91 @@
    "#onsen",
    "#japanproperty"
   ]
+ },
+ "2026-09-30|https://akiya.sumai.biz/23408|v5": {
+  "angle": "D",
+  "reel_hook": [
+   "$13K GINZAN",
+   "$13K GINZAN",
+   "$13K GINZAN"
+  ],
+  "reel_sub": [
+   "8BR • 20 min drive to Ginzan Onsen",
+   "8BR • 20 min to Ginzan Onsen",
+   "8BR • 20 min to onsen"
+  ],
+  "s2_line_a": [
+   "{all_in} covers the house, the renovation and the fees",
+   "{all_in} pays for the house and renovation",
+   "{all_in} buys the house, fixed up"
+  ],
+  "s2_line_b": [
+   "It books {booked_nights} nights a year and nets {net_year}",
+   "{booked_nights} booked nights a year → {net_year} net",
+   "{booked_nights} nights booked → {net_year} net"
+  ],
+  "s3_headline": [
+   "Kusatsu-style onsen, $13K",
+   "Kusatsu-style for $13K",
+   "Kusatsu vibe, $13K"
+  ],
+  "s3_points": [
+   {
+    "from": [
+     "foreign"
+    ],
+    "text": [
+     "Foreign visitors are just 6%",
+     "Only 6% of visitors come from abroad",
+     "6% of visitors are foreign"
+    ]
+   },
+   {
+    "from": [
+     "ryokan"
+    ],
+    "text": [
+     "Ryokan rooms run ¥16.5k–36k a person",
+     "Ryokan rooms cost ¥16.5k–36k a person",
+     "Ryokan rooms start at ¥16.5k"
+    ]
+   },
+   {
+    "from": [
+     "minpaku"
+    ],
+    "text": [
+     "The national rule caps rentals at 180 nights",
+     "National rule caps rentals at 180 nights",
+     "Rentals cap at 180 nights a year"
+    ]
+   }
+  ],
+  "s3_seo1": [
+   "Ginzan akiya, 20 min drive to the onsen",
+   "Ginzan akiya, 20 min to the onsen",
+   "Ginzan akiya, 20 min to onsen"
+  ],
+  "s3_seo2": [
+   "A Ginzan house to Airbnb for $13K",
+   "Ginzan house to Airbnb for $13K",
+   "Ginzan Airbnb for $13K"
+  ],
+  "s3_cta": [
+   "Want the agent for this Ginzan house? Link in bio",
+   "See the full numbers for this Ginzan house in bio",
+   "Ginzan house agent? Link in bio"
+  ],
+  "caption_hook": "Ginzan akiya for $13K: 8 bedrooms, 20 min to Ginzan Onsen, and it nets $967 a month.",
+  "caption_seo": "This $13K akiya in Ginzan, Yamagata, is a 20 min drive from Ginzan Onsen and could run as an Airbnb in a Taisho-era onsen town.",
+  "reel_line1": "Ginzan akiya for $13K → $967 a month net.",
+  "reel_dream": "Onsen steam, wooden ryokan, snowy streets — all a 20 min drive from your door.",
+  "hashtags": [
+   "#akiya",
+   "#ginzanonsen",
+   "#yamagata",
+   "#japanproperty",
+   "#onsentown"
+  ]
  }
 }

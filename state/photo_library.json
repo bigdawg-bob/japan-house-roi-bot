@@ -51,8 +51,8 @@
   "kind": "onsen",
   "generic": false,
   "added": "2026-09-24T22:32:10+09:00",
-  "uses": 10,
-  "last": "2026-09-30T14:57:43+09:00"
+  "uses": 11,
+  "last": "2026-09-30T15:15:14+09:00"
  },
  "b359c5e760605040": {
   "id": "pexels:28969414",
@@ -62,8 +62,8 @@
   "kind": "onsen",
   "generic": false,
   "added": "2026-09-24T22:32:10+09:00",
-  "uses": 3,
-  "last": "2026-09-30T14:57:43+09:00"
+  "uses": 4,
+  "last": "2026-09-30T15:15:14+09:00"
  },
  "4c8fb638974dfafb": {
   "id": "pexels:33314894",
@@ -416,5 +416,27 @@
   "added": "2026-09-30T14:57:43+09:00",
   "uses": 1,
   "last": "2026-09-30T14:57:43+09:00"
+ },
+ "040bd2ef9593d90c": {
+  "id": "pexels:30933028",
+  "credit": "Photo: Julias  Torten und Törtchen / Pexels",
+  "role": "area",
+  "mood": "day",
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-30T15:15:14+09:00",
+  "uses": 1,
+  "last": "2026-09-30T15:15:14+09:00"
+ },
+ "49f42cfa73032604": {
+  "id": "house:https://akiya.sumai.biz/wp-content/uploads/2024/05/116obanazawa-3.jpg",
+  "credit": "Photo: akiya.sumai.biz",
+  "role": "house",
+  "mood": null,
+  "kind": "onsen",
+  "generic": false,
+  "added": "2026-09-30T15:15:14+09:00",
+  "uses": 1,
+  "last": "2026-09-30T15:15:14+09:00"
  }
 }

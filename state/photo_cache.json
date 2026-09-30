@@ -709,6 +709,48 @@
    "light_ok": true,
    "score": 6,
    "why": "Busy lanterns, person, snowy night path"
+  },
+  "pexels:17727740|day|place": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": true,
+   "score": 6,
+   "why": "Iconic snowy town, people, busy details"
+  },
+  "pexels:30933028|day|place": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Moody empty Ginzan street, soft overcast"
+  }
+ },
+ "exterior": {
+  "house:https://akiya.sumai.biz/wp-content/uploads/2024/05/116obanazawa-3.jpg": {
+   "exterior": true,
+   "score": 8,
+   "why": "Full street view of house front and side"
+  },
+  "house:https://akiya.sumai.biz/wp-content/uploads/2024/05/116obanazawa-1.jpg": {
+   "exterior": false,
+   "score": 0,
+   "why": "first floor interior plan diagram"
+  },
+  "house:https://akiya.sumai.biz/wp-content/uploads/2024/05/116obanazawa-2.jpg": {
+   "exterior": false,
+   "score": 0,
+   "why": "2nd floor plan not house exterior"
+  },
+  "house:https://akiya.sumai.biz/wp-content/uploads/2024/05/116obanazawa-4.jpg": {
+   "exterior": false,
+   "score": 0,
+   "why": "Interior living room not house exterior"
   }
  }
 }
