@@ -75,9 +75,6 @@ jobs:
       AREA_OVERLAY:     "0.75"
       LIBRARY_MAX:      "60"
 
-      # ── reel ──
-      REEL_OVERLAY:     "0.70"
-
       DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
 
     steps:
