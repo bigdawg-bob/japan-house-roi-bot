@@ -1115,12 +1115,6 @@ def find_photo(h, l, mood, used, house_pics):
                    lambda u: checked_photo(h, l, mood, "place", u)),
                   ("checked generic Japan photo", True,
                    lambda u: checked_photo(h, l, mood, "generic", u))]
-    steps += [("photo library", False, lambda u: library_pick(h, mood, u)),
-              ("fallback_photos folder", False, lambda u: folder_photo(u)),
-              ("unchecked stock photo", False, lambda u: unchecked_stock(h, l, mood, u)),
-              ("house photo", False,
-               lambda u: next((p for p in house_pics if p["id"] not in u), None))]
-              ("fallback_photos folder", False, lambda u: folder_photo(u))]
     passes = [set(used), set()] if used else [set()]
     for n, u in enumerate(passes):
         for label, paid, fn in steps:
