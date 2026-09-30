@@ -394,7 +394,9 @@ def fact_sources(M, h, l, e, f, s3, price_usd, price_yen):
         "rate":      f"Guests pay about ${e['adr']:,} a night",
         "open_nights": f"It may be rented {e['nights']} nights a year",
         "booked":    f"About {booked_nights(e)} nights a year get booked ({occ} occupancy)",
-        "minpaku":   "The national minpaku rule caps rentals at 180 nights a year",
+        "minpaku":   (f"This town caps rentals at {f['minpaku_cap']} nights a year"
+                      if isinstance(f.get("minpaku_cap"), int) and f["minpaku_cap"] < 180
+                      else "The national minpaku rule caps rentals at 180 nights a year"),
         "net_month": f"It nets ${e['monthly']:,} a month after management",
         "all_in":    f"{M.fmt_k1(e['all_in'])} all-in pays for the house, renovation and fees",
         "yield":     f"The net yield is {e['roi'] * 100:.0f}% a year" if on else None,
@@ -455,7 +457,10 @@ def data_for(M, h, l, hooks, usd, e, facts, s3):
         "booked_nights_per_year": booked_nights(e),          # v5
         "nights_note": ("open nights = nights it may legally be rented; booked nights = "
                         "open nights × occupancy. Never call open nights 'booked'."),
-        "minpaku_rule": "national cap: 180 nights per year",
+        "minpaku_rule": (f"this town's own cap: {f['minpaku_cap']} nights a year (national "
+                         f"cap 180) – never say 180 nights for this town"
+                         if isinstance(f.get("minpaku_cap"), int) and f["minpaku_cap"] < 180
+                         else "national cap: 180 nights per year"),
         "net_per_month": f"${e['monthly']:,}",
         "all_in_cost": M.fmt_k1(e["all_in"]),
         "net_yield": f"{e['roi'] * 100:.0f}%" if M.show_yield(e) else None,
@@ -747,14 +752,20 @@ def validate(raw, data, rot, tmpl=None):
                + (f" and one must keep '{t} min'" if t else ""))
         why["s3_seo1"] = why["s3_seo2"] = msg
     else:
-        for n, ok, e, other in (("s3_seo1", ok1, e1, ok2), ("s3_seo2", ok2, e2, ok1)):
-            if ok:
-                out[n] = ok[0][1]                        # shown only once both pass
+        # v5b: use one AI line next to the other template line, if the pair still works
+        tl = (list(ctx["tmpl"].get("s3_seo") or []) + ["", ""])[:2]
+        for idx, (n, ok, e) in enumerate((("s3_seo1", ok1, e1), ("s3_seo2", ok2, e2))):
+            other = tl[1 - idx]                              # the template line it sits with
+            pick = next(((i, s) for i, s in ok
+                         if s.lower() != other.lower() and (has_t(s) or has_t(other))), None)
+            if pick:
+                out[n] = pick[1]
+                notes.append(f"{n}: AI line used, the other search line is template")
+            elif ok:
+                why[n] = (f"no option works next to the template line {other!r}"
+                          + (f" – keep '{t} min'" if t and not has_t(other) else ""))
             else:
-                hint = (f" (the other line has no drive time, so this one must keep "
-                        f"'{t} min')" if t and other and not any(has_t(s) for _, s in other)
-                        else "")
-                why[n] = e + hint
+                why[n] = e
 
     # slide 2: the 2 small lines – filled in HERE, main.py gets finished text
     values = {k: v["value"] for k, v in (data.get("slide2") or {}).items()}
@@ -1005,7 +1016,7 @@ def write(M, h, l, hooks, usd, e, facts, s3, rot):
     for k, v in why.items():
         print(f"  AI copy: {k} dropped – template used ({v})")
     print(f"AI copy ({MODEL}): kept {sorted(out)}")
-    seo = "AI" if ("s3_seo1" in out and "s3_seo2" in out) else "template (needs both)"
+    seo = "/".join("AI" if k in out else "template" for k in ("s3_seo1", "s3_seo2"))
     print("  slide 3 source: "
           f"headline={'AI' if 's3_headline' in out else 'template'} | "
           f"bullets={'AI' if 's3_points' in out else 'template'} | search lines={seo} | "
@@ -1031,7 +1042,12 @@ def apply_s3(s3, c):
         s3["headline"] = c["s3_headline"]
     if c.get("s3_points"):
         s3["points"], s3["kinds"] = c["s3_points"], c["s3_kinds"]
-    if c.get("s3_seo1") and c.get("s3_seo2"):
-        s3["lines"] = [c["s3_seo1"], c["s3_seo2"]]
+    if c.get("s3_seo1") or c.get("s3_seo2"):
+        lines = (list(s3["lines"]) + ["", ""])[:2]
+        if c.get("s3_seo1"):
+            lines[0] = c["s3_seo1"]
+        if c.get("s3_seo2"):
+            lines[1] = c["s3_seo2"]
+        s3["lines"] = lines
     s3["copy"] = c                                       # main.py pick_cta reads c["s3_cta"]
     return s3
