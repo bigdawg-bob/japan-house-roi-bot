@@ -952,7 +952,8 @@ def check_photo(img, h, l, mood, target):
         '{"people": true/false, "watermark_or_text": true/false, "interior": true/false, '
         '"japan": true/false, "landmark": true/false, "light_ok": true/false, '
         '"score": 0-10, "why": "max 10 words"}\n'
-        "people: any person visible, even small. "
+        "people: true ONLY if people fill more than 1/3 of the photo, or a person is the main subject. "
+        "A few people in the scene, small or in the background, = false. "
         "watermark_or_text: a watermark, logo, or big text/graphics added on the photo "
         "(normal shop signs don't count). interior: indoors, food, or a close-up of an object. "
         + where +
@@ -965,7 +966,7 @@ def check_photo(img, h, l, mood, target):
         "grey sky, blurry, messy, car parks, power lines or concrete taking over, a plain road "
         "or building, a random snapshot. It should still work behind white text.")
     v = json_from(grok([{"type": "input_image", "image_url": f"data:image/jpeg;base64,{b64}",
-                         "detail": "high"},
+                         "detail": "low"},
                         {"type": "input_text", "text": prompt}], timeout=120))
     return v if isinstance(v, dict) else None
 
@@ -989,7 +990,7 @@ def scan_photos(queries, h, l, mood, target, used, checks, limit):
     Right light (day / dusk) gets +1. Photos already checked are free."""
     best, n = None, 0
     for c in photo_candidates(queries, used):
-        key = f"{c['id']}|{mood}|{target}|v2"          # v2 = beauty score
+        key = f"{c['id']}|{mood}|{target}|v3"          # v3 = people up to 1/3
         v = checks.get(key)
         if v is not None and not hard_ok(v, target):
             continue
@@ -999,6 +1000,10 @@ def scan_photos(queries, h, l, mood, target, used, checks, limit):
         if img is None:
             continue
         if v is None:
+            global grok_checks
+            if grok_checks >= MAX_GROK_CHECKS:
+                break
+            grok_checks += 1
             n += 1
             v = check_photo(img, h, l, mood, target)
             if v is None:
