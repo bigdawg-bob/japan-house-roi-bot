@@ -3865,14 +3865,6 @@
   "lng": 137.439255,
   "geo_level": "district"
  },
- "https://akiya.sumai.biz/122339": {
-  "id": "https://akiya.sumai.biz/122339",
-  "url": "https://akiya.sumai.biz/122339",
-  "title": "(交渉中) 空き家バンク【売買】550万円 富山県砺波市太田 平成10年築・補修不要・広い敷地 庭・蔵・納屋兼車庫・駐車場2台以上付き3DKコンパクト平屋",
-  "ok": false,
-  "why": "not available",
-  "lastmod": "2026-09-10T01:19:50+00:00"
- },
  "https://akiya.sumai.biz/125949": {
   "id": "https://akiya.sumai.biz/125949",
   "url": "https://akiya.sumai.biz/125949",
@@ -6637,28 +6629,11 @@
  "https://akiya.sumai.biz/125439": {
   "id": "https://akiya.sumai.biz/125439",
   "url": "https://akiya.sumai.biz/125439",
-  "title": "空き家バンク【売買】250万円 富山県南砺市法林寺 広い敷地 中庭・物置・納屋・車庫付き5DK2階建古民家 水洗トイレ",
-  "ok": true,
-  "price_yen": 2500000.0,
-  "pref": "富山県",
-  "location": "富山県南砺市法林寺",
-  "bedrooms": 5,
-  "year_built": 1956,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/645nanto-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/645nanto-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/645nanto-10.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/645nanto-5.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/645nanto-6.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/645nanto-8.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/645nanto-13.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/08/645nanto-12.jpg"
-  ],
-  "lastmod": "2026-08-31T22:19:25+00:00",
-  "lat": 36.569645,
-  "lng": 136.84314,
-  "geo_level": "district"
+  "title": "(交渉中) 空き家バンク【売買】250万円 富山県南砺市法林寺 広い敷地 中庭・物置・納屋・車庫付き5DK2階建古民家 水洗トイレ",
+  "ok": false,
+  "pv": 2,
+  "why": "not available",
+  "lastmod": "2026-09-30T06:32:57+00:00"
  },
  "https://akiya.sumai.biz/125878": {
   "id": "https://akiya.sumai.biz/125878",
