@@ -1,7 +1,7 @@
 """
 ai_copy.py – DeepSeek writes the WORDS, our data supplies the NUMBERS.
 
-The model gets every fact we already have + the rules for each line (characters, words,
+The model gets every fact we already have + the rules for each line (words, characters,
 what must be in it). Inside those rules it is free to choose the angle and the wording.
 Every field is checked: a field that breaks a rule is dropped and the template text is
 used for it. No key / API down / bad JSON -> {} -> the post goes out exactly as before.
@@ -17,12 +17,20 @@ What DeepSeek writes (free wording, always checked):
   captions  carousel line 1 + SEO sentence, reel line 1 + dream line, hashtags
 Never written by DeepSeek: the big hero numbers on slides 1 + 2, the price and link lines.
 
-v3 checks: no repeat of the slide 3 subtitle, headline must name the rival (no "the famous
-rival"), headline must be a hook (name or number), only places that are in DATA, never
-"near <rival>" unless DATA says so, one SEO line keeps the drive time, STR(s) -> Airbnb(s).
+How we hit the length (a model can't count characters – it reads word pieces, not letters):
+  - max_words is the rule it follows; the word limits are set so a line within max_words
+    normally fits max_chars
+  - every example is shown with its REAL length (measured by Python, not typed by hand)
+  - short on-image lines come as 3 options, longest -> shortest; the first that passes wins
+  - fields that still fail get ONE repair round: DeepSeek is told exactly why, rewrites
+    only those, at a lower temperature. Whatever still fails -> template.
+
+v3 checks (kept): no repeat of the slide 3 subtitle, headline must name the rival (no "the
+famous rival"), headline must be a hook (name or number), only places that are in DATA,
+never "near <rival>" unless DATA says so, one SEO line keeps the drive time, STR -> Airbnb.
 
 Env: DEEPSEEK_API_KEY (required), DEEPSEEK_MODEL (default deepseek-flash),
-     AI_COPY=0 turns it off, AI_COPY_TEMP (default 1.3).
+     AI_COPY=0 turns it off, AI_COPY_TEMP (default 0.8).
 Evidence loop: state/performance.json, filled from Instagram Insights:
      {"2026-10-01": {"reach": 5400, "shares": 41, "saves": 88, "follows": 23}}
 """
@@ -35,12 +43,14 @@ import requests
 def _env(n, d):
     return os.getenv(n) or d
 
-KEY     = os.getenv("DEEPSEEK_API_KEY")
-URL     = _env("DEEPSEEK_URL", "https://api.deepseek.com/chat/completions")
-MODEL   = _env("DEEPSEEK_MODEL", "deepseek-flash")
-TEMP    = float(_env("AI_COPY_TEMP", "1.3"))
-ON      = _env("AI_COPY", "1") == "1" and bool(KEY)
-VERSION = "v3"                       # part of the cache key: new rules = new answer
+KEY       = os.getenv("DEEPSEEK_API_KEY")
+URL       = _env("DEEPSEEK_URL", "https://api.deepseek.com/chat/completions")
+MODEL     = _env("DEEPSEEK_MODEL", "deepseek-flash")
+TEMP      = float(_env("AI_COPY_TEMP", "0.8"))  # 1.3 made it lose the thread mid-answer
+FIX_TEMP  = 0.5                                  # repair round: stricter
+ON        = _env("AI_COPY", "1") == "1" and bool(KEY)
+VERSION   = "v4"                     # part of the cache key: new rules = new answer
+N_OPTIONS = 3                        # options per short line, longest -> shortest
 
 STATE      = Path(__file__).parent / "state"
 LOG_FILE   = STATE / "copy_log.json"
@@ -49,39 +59,49 @@ CACHE_FILE = STATE / "copy_cache.json"
 
 CTA_DEFAULT = "Full breakdown + agent contact → newsletter link in bio"
 
-# slot -> (max characters, max words, what goes there)
+# slot -> (max characters, max words, what goes there, example or None)
+# Word limits are the ones the model can follow: ~6 characters per word incl. the space.
 SLOTS = {
-    "reel_hook":    (18, 4, "Reel line 1, huge bold caps, read in under 1 second. Any wording, "
-                            "but it must name the town OR show a number from DATA (price, drive "
-                            "time, yield...). Example: '$25K AMINO'."),
-    "reel_sub":     (44, 8, "Reel line 2 under the hook. Any wording and order, but it must keep "
-                            "the drive/walk minutes from DATA.trip. ' • ' may separate parts. "
-                            "Example: '4BR • 7 min drive to beach • 18% net'."),
-    "s3_headline":  (34, 7, "Slide 3 headline = the HOOK for your angle. Be specific: name the "
+    "reel_hook":    (18, 3, "Reel line 1, huge bold caps, read in under 1 second. It must "
+                            "name the town OR show a number from DATA (price, drive time, "
+                            "yield...).",
+                     "$25K AMINO"),
+    "reel_sub":     (44, 8, "Reel line 2 under the hook. Any wording and order, but it must "
+                            "keep the drive/walk minutes from DATA.trip. ' • ' may separate "
+                            "parts.",
+                     "4BR • 7 min drive to beach • 18% net"),
+    "s3_headline":  (34, 5, "Slide 3 headline = the HOOK for your angle. Be specific: name the "
                             "rival town, the attraction, or use a number from DATA. Never write "
                             "'the famous rival' / 'its rival' without the name. Don't repeat "
-                            "DATA.slide3_subtitle. The 3 bullets under it must pay it off. "
-                            "Example: 'Yufuin, not Kurokawa: 20 min to onsen'."),
-    "s3_seo1":      (46, 10, "Slide 3 search line 1. Free wording: the town + a search word people "
-                             "type (akiya, Airbnb, rental, investment, minpaku, onsen/ski/beach "
-                             "house). At least ONE of s3_seo1/s3_seo2 keeps the drive minutes "
-                             "from DATA.trip."),
-    "s3_seo2":      (46, 10, "Slide 3 search line 2. Same rules as s3_seo1, but a different search "
-                             "and a different fact."),
+                            "DATA.slide3_subtitle. The 3 bullets under it must pay it off.",
+                     "Niseko views, Kutchan price"),
+    "s3_seo1":      (46, 8, "Slide 3 search line 1: the town + a search word people type "
+                            "(akiya, Airbnb, rental, investment, minpaku, onsen/ski/beach "
+                            "house). At least ONE of s3_seo1/s3_seo2 keeps the drive minutes "
+                            "from DATA.trip.",
+                     "Amino akiya: 7 min drive to the beach"),
+    "s3_seo2":      (46, 8, "Slide 3 search line 2. Same rules as s3_seo1, but a different "
+                            "search and a different fact.",
+                     "Kyoto beach house Airbnb for $25K"),
     "s3_cta":       (56, 10, "Button text at the bottom of slide 3. Makes people want the full "
                              "breakdown and sends them to the newsletter link in bio. Must "
-                             "contain the word 'bio'. No numbers, no links, no hashtags. "
-                             "Example: 'Full breakdown + agent contact → newsletter link in bio'."),
+                             "contain the word 'bio'. No numbers, no links, no hashtags.",
+                     CTA_DEFAULT),
     "caption_hook": (125, 22, "Caption line 1 (only ~125 chars show before 'more'). Town + "
-                              "akiya/house keyword + one hard number, early."),
+                              "akiya/house keyword + one hard number, early.", None),
     "caption_seo":  (220, 40, "One natural sentence with the words people search: town, "
-                              "prefecture, akiya, Airbnb/rental, the attraction. No stuffing."),
-    "reel_line1":   (90, 16, "Reel caption line 1: '[Town] akiya' + price -> money result."),
-    "reel_dream":   (90, 16, "Reel caption line 2: one sensory line about being there."),
+                              "prefecture, akiya, Airbnb/rental, the attraction. No stuffing.",
+                     None),
+    "reel_line1":   (90, 16, "Reel caption line 1: '[Town] akiya' + price -> money result.", None),
+    "reel_dream":   (90, 16, "Reel caption line 2: one sensory line about being there.", None),
 }
-POINT_CHARS = 34                     # slide 3 bullet (same limit as the template bullets)
-POINT_WORDS = 7
-MAX_TAGS    = 5                      # Instagram hard cap since Dec 2025
+# short lines on the image: 3 options each (captions have room, one string is enough)
+OPTION_SLOTS = {"reel_hook", "reel_sub", "s3_headline", "s3_seo1", "s3_seo2", "s3_cta"}
+
+POINT_CHARS   = 34                   # slide 3 bullet (same limit as the template bullets)
+POINT_WORDS   = 5
+POINT_EXAMPLE = "Minpaku cap: 180 nights/yr"
+MAX_TAGS      = 5                    # Instagram hard cap since Dec 2025
 
 # slide 2: the 2 small math lines, written with {placeholders} only
 MATH = {
@@ -148,7 +168,8 @@ You are free to choose the angle and the wording. The limits are:
   round, convert, add up or estimate numbers. If unsure, write the line without a number.
 - Slide 2 lines (s2_line_a, s2_line_b): never type a digit. Write every number as a
   {placeholder} from DATA.slide2; the code puts in the real value.
-- Slide 3 bullets say only what their DATA.facts source says.
+- Slide 3 bullets say only what their DATA.facts source says – shortened in your own
+  words, never pasted.
 - Places: only name places that appear in DATA. Only say the house is near / close to a
   place if DATA.trip or DATA.also_near says so. famous_rival_town is a COMPARISON
   ("instead of Kurokawa", "Kurokawa-style onsen for less"), never a neighbour.
@@ -157,17 +178,20 @@ You are free to choose the angle and the wording. The limits are:
 - Sentence case: capitals only at the start and for names.
 - No hype, no guarantees, no investment-advice wording.
 - Plain English. No emoji in slide or reel text.
-- Stay inside every slot's character and word limit.
+- Short is the rule: stay inside every max_words. Where a list of options is asked, give
+  them longest to shortest, each one a complete line that follows every rule.
 Answer ONLY with json."""
 
-EXAMPLE = {"angle": "A", "reel_hook": "...", "reel_sub": "...",
+EXAMPLE = {"angle": "A",
+           "reel_hook": ["...", "...", "..."], "reel_sub": ["...", "...", "..."],
            "s2_line_a": "... {all_in} ... {breakdown} ...",
            "s2_line_b": "{place} ... {adr} ... {occ} ... {nights} ... {mgmt} ... {net}",
-           "s3_headline": "...",
-           "s3_points": [{"from": ["ryokan"], "text": "..."},
-                         {"from": ["..."], "text": "..."},
-                         {"from": ["...", "..."], "text": "..."}],
-           "s3_seo1": "...", "s3_seo2": "...", "s3_cta": "... bio",
+           "s3_headline": ["longest ...", "...", "short"],
+           "s3_points": [{"from": ["ryokan"], "text": ["...", "...", "short"]},
+                         {"from": ["..."], "text": ["...", "...", "short"]},
+                         {"from": ["...", "..."], "text": ["...", "...", "short"]}],
+           "s3_seo1": ["...", "...", "..."], "s3_seo2": ["...", "...", "..."],
+           "s3_cta": ["... bio", "... bio", "... bio"],
            "caption_hook": "...", "caption_seo": "...",
            "reel_line1": "...", "reel_dream": "...", "hashtags": ["#akiya", "..."]}
 
@@ -191,6 +215,11 @@ def clean(s):
 
 def word_count(s):
     return len([w for w in s.split() if w not in ("•", "/", "=", "→", "-", "+", "×")])
+
+def options(v):
+    """A field may be one string or a list of options -> list of non-empty options."""
+    vs = v if isinstance(v, list) else [v]
+    return [clean(x) for x in vs if isinstance(x, (str, int, float)) and clean(x)]
 
 def fill(template, values):
     """'{adr} × {occ}' + values -> '$120/nt × 80%' (unknown placeholders stay as they are)."""
@@ -361,12 +390,12 @@ def log_post(day, l, copy):
 
 
 # ─── DeepSeek call ───────────────────────────────────────────────────
-def call(user):
-    body = {"model": MODEL, "temperature": TEMP, "max_tokens": 2000,
+def call(messages, temp=None):
+    body = {"model": MODEL, "temperature": TEMP if temp is None else temp,
+            "max_tokens": 3000,                          # 3 options per line need room
             "response_format": {"type": "json_object"},
             "thinking": {"type": "disabled"},
-            "messages": [{"role": "system", "content": SYSTEM},
-                         {"role": "user", "content": user}]}
+            "messages": messages}
     for _ in range(3):
         try:
             r = requests.post(URL, json=body, timeout=90,
@@ -381,8 +410,11 @@ def call(user):
             print(f"  DeepSeek {r.status_code}: {r.text[:300]}")
             continue
         try:
-            txt = r.json()["choices"][0]["message"]["content"] or ""
-            v = json.loads(txt)
+            ch = r.json()["choices"][0]
+            if ch.get("finish_reason") == "length":
+                print("  DeepSeek: answer cut off (max_tokens) – retrying")
+                continue
+            v = json.loads(ch["message"]["content"] or "")
             if isinstance(v, dict):
                 return v
         except (ValueError, KeyError, IndexError, TypeError):
@@ -392,21 +424,60 @@ def call(user):
 
 
 # ─── checks ──────────────────────────────────────────────────────────
-def check(name, s, allowed):
-    s = clean(s)
-    chars, words, _ = SLOTS[name]
+def check_slot(name, s, ctx):
+    """One option of one slot -> (text, None) if it passes every rule, else (None, why)."""
+    chars, words, _, _ = SLOTS[name]
     if not s:
         return None, "empty"
     if len(s) > chars:
         return None, f"{len(s)} chars > {chars}"
-    if word_count(s) > words:
-        return None, f"more than {words} words"
+    n = word_count(s)
+    if n > words:
+        return None, f"{n} words > {words}"
     if BANNED.search(s):
         return None, "hype word"
-    bad = [n for n in nums(s) if n not in allowed]
+    bad = [x for x in nums(s) if x not in ctx["allowed"]]
     if bad:
         return None, f"numbers not in data {bad}"
+
+    if name == "reel_hook":                              # all caps: can't spot names
+        s = s.upper()
+        if not has_name(s, ctx["names"]) and not nums(s):
+            return None, "no town and no number"
+        return s, None
+
+    err = place_problem(s, ctx["known"], ctx["rival"], ctx["rival_near"])
+    if err:
+        return None, err
+    if name == "s3_headline":
+        if VAGUE.search(s) and not (ctx["rival"] and has_name(s, ctx["rival"])):
+            return None, f"vague rival – must name {ctx['rival_name'] or 'a real place'}"
+        if not (has_name(s, ctx["hook_names"]) or nums(s)):
+            return None, "no name and no number (not a hook)"
+        if ctx["angle"] == "D" and not has_name(s, ctx["rival"]):
+            return None, f"angle D but {ctx['rival_name']} isn't named"
+    if name == "s3_cta" and ("bio" not in s.lower() or re.search(r"\d|[#@]|https?://", s)):
+        return None, "must point to the bio, no numbers / links / hashtags"
+    if name in ("s3_seo1", "s3_seo2", "caption_seo") and not (
+            has_name(s, ctx["names"]) and SEARCH.search(s)):
+        return None, "needs the town + a search word"
+    if name in ("caption_hook", "reel_line1") and not has_name(s, ctx["names"]):
+        return None, "town keyword missing"
+    if name == "reel_sub" and ctx["trip_min"] and ctx["trip_min"] not in nums(s):
+        return None, f"drive time ({ctx['trip_min']} min) dropped"
     return s, None
+
+def passing(name, v, ctx):
+    """All options of a slot -> ([(option no., text) that pass], 'why the others failed')."""
+    opts = options(v)[:N_OPTIONS]
+    ok, errs = [], []
+    for i, o in enumerate(opts, 1):
+        s, err = check_slot(name, o, ctx)
+        if s:
+            ok.append((i, s))
+        else:
+            errs.append(f"#{i} {err}: {o!r}" if len(opts) > 1 else f"{err}: {o!r}")
+    return ok, (" | ".join(errs) or "empty")
 
 def check_math(name, t, values, real):
     """Slide 2 line: placeholders only, all needed ones used once, fits after filling."""
@@ -438,9 +509,34 @@ def check_math(name, t, values, real):
         return None, f"{len(s)} chars > {rule['max_chars']} after filling"
     return t, None
 
-def check_point(p, src, sub, known, rival, rival_near):
-    """Slide 3 bullet: free wording, but tied to 1-2 DATA.facts keys and their numbers,
-    not a repeat of the subtitle, no made-up places."""
+def bullet_problem(t, base, ctx):
+    """One text option of a bullet -> None if fine, else why."""
+    if len(t) > POINT_CHARS:
+        return f"{len(t)} chars > {POINT_CHARS}"
+    n = word_count(t)
+    if n > POINT_WORDS:
+        return f"{n} words > {POINT_WORDS}"
+    if BANNED.search(t):
+        return "hype word"
+    if ctx["sub"] and set(nums(t)) & set(nums(ctx["sub"])):
+        return "repeats a number of the subtitle"
+    err = place_problem(t, ctx["known"], ctx["rival"], ctx["rival_near"])
+    if err:
+        return err
+    have, got = set(nums(base)), set(nums(t))
+    if got - have:
+        return f"numbers {sorted(got - have)} not in its source"
+    if have and not got:
+        return "dropped the number of its source"
+    if not have:                                         # no number: must share a real word
+        w = lambda s: set(re.findall(r"[a-z]{4,}", s.lower()))
+        if not w(t) & w(base):
+            return "doesn't match its source"
+    return None
+
+def check_point(p, src, ctx):
+    """Slide 3 bullet: tied to 1-2 DATA.facts keys; the first text option that passes wins.
+    -> (text, keys, None) or (None, None, why)"""
     if not isinstance(p, dict):
         return None, None, "bullet is not an object"
     keys = p.get("from")
@@ -448,141 +544,171 @@ def check_point(p, src, sub, known, rival, rival_near):
     keys = [k for k in (keys or []) if isinstance(k, str)]
     if not keys or len(keys) > 2 or any(k not in src for k in keys):
         return None, None, f"'from' must be 1-2 keys of DATA.facts (got {p.get('from')})"
-    t = clean(p.get("text"))
-    if not t:
-        return None, None, "empty bullet"
-    if len(t) > POINT_CHARS:
-        return None, None, f"bullet {len(t)} chars > {POINT_CHARS}: {t!r}"
-    if word_count(t) > POINT_WORDS:
-        return None, None, f"bullet more than {POINT_WORDS} words: {t!r}"
-    if BANNED.search(t):
-        return None, None, f"hype word: {t!r}"
+    sub = ctx["sub"]
     if sub:
         sub_n = set(nums(sub))
-        if set(nums(t)) & sub_n or any(
-                clean(src[k]).lower() in sub.lower() or set(nums(src[k])) & sub_n for k in keys):
-            return None, None, f"repeats the subtitle: {t!r}"
-    err = place_problem(t, known, rival, rival_near)
-    if err:
-        return None, None, f"{err}: {t!r}"
+        if any(clean(src[k]).lower() in sub.lower() or set(nums(src[k])) & sub_n for k in keys):
+            return None, None, f"based on a fact already in the subtitle ({keys})"
     base = " ".join(src[k] for k in keys)
-    have, got = set(nums(base)), set(nums(t))
-    if got - have:
-        return None, None, f"bullet numbers {sorted(got - have)} not in its source: {t!r}"
-    if have and not got:
-        return None, None, f"bullet dropped the number of its source: {t!r}"
-    if not have:                                         # no number: must share a real word
-        w = lambda s: {x for x in re.findall(r"[a-z]{4,}", s.lower())}
-        if not w(t) & w(base):
-            return None, None, f"bullet doesn't match its source: {t!r}"
-    return t, keys, None
+    opts = options(p.get("text"))[:N_OPTIONS]
+    if not opts:
+        return None, None, "empty bullet"
+    errs = []
+    for i, t in enumerate(opts, 1):
+        err = bullet_problem(t, base, ctx)
+        if not err:
+            return t, keys, None
+        errs.append(f"#{i} {err}: {t!r}" if len(opts) > 1 else f"{err}: {t!r}")
+    return None, None, " | ".join(errs)
 
 def validate(raw, data, rot):
-    raw = no_str_all(raw)                                # STR(s) -> Airbnb(s) before any check
-    allowed = set(nums(json.dumps(data, ensure_ascii=False)))
-    names = town_names(data)
+    """-> (out, why, notes)
+    out   = fields that passed (what main.py uses)
+    why   = field -> why it failed (template used; also sent to the repair round)
+    notes = which option was used when it wasn't the 1st"""
+    raw = no_str_all(raw if isinstance(raw, dict) else {})   # STR -> Airbnb before checks
     rival = names_of(data.get("famous_rival_town"))
     near = [str(x).split(":")[0] for x in data.get("also_near") or []]
-    rival_near = bool(rival) and any(has_name(x, rival) for x in near)
-    hook_names = names | rival | names_of(data.get("attraction")) | \
-        set().union(*[names_of(x) for x in near])
-    known = known_words(data)
-    sub = data.get("slide3_subtitle", "")
-    trip_min = (nums(data.get("trip", "")) or [None])[0]
-    out, why = {}, {}
+    names = town_names(data)
+    last = (rot.get("s3_templates") or [None])[0]
+    a = str(raw.get("angle") or "").strip().upper()
+    angle = a if (a in ANGLES and a != last
+                  and (a != "D" or data.get("famous_rival_town"))) else None
+    ctx = {
+        "allowed":    set(nums(json.dumps(data, ensure_ascii=False))),
+        "names":      names,
+        "rival":      rival,
+        "rival_name": data.get("famous_rival_town"),
+        "rival_near": bool(rival) and any(has_name(x, rival) for x in near),
+        "hook_names": names | rival | names_of(data.get("attraction"))
+                      | set().union(*[names_of(x) for x in near]),
+        "known":      known_words(data),
+        "sub":        data.get("slide3_subtitle", ""),
+        "trip_min":   (nums(data.get("trip", "")) or [None])[0],
+        "angle":      angle,
+    }
+    out, why, notes = {}, {}, []
 
+    # single lines (first option that passes wins)
     for name in SLOTS:
-        s, err = check(name, raw.get(name), allowed)
-        if s and name != "reel_hook":                    # hook is all caps: can't spot names
-            perr = place_problem(s, known, rival, rival_near)
-            if perr:
-                s, err = None, perr
-        if s and name == "reel_hook":
-            s = s.upper()
-            if not has_name(s, names) and not nums(s):
-                s, err = None, "no town and no number"
-        if s and name == "s3_headline":
-            if VAGUE.search(s) and not (rival and has_name(s, rival)):
-                s, err = None, ("vague rival – must name "
-                                f"{data.get('famous_rival_town') or 'a real place'}")
-            elif not (has_name(s, hook_names) or nums(s)):
-                s, err = None, "no name and no number (not a hook)"
-        if s and name == "s3_cta" and ("bio" not in s.lower()
-                                       or re.search(r"\d|[#@]|https?://", s)):
-            s, err = None, "must point to the bio, no numbers / links / hashtags"
-        if s and name in ("s3_seo1", "s3_seo2", "caption_seo") and not (
-                has_name(s, names) and SEARCH.search(s)):
-            s, err = None, "needs the town + a search word"
-        if s and name in ("caption_hook", "reel_line1") and not has_name(s, names):
-            s, err = None, "town keyword missing"
-        if s and name == "reel_sub" and trip_min and trip_min not in nums(s):
-            s, err = None, "drive time dropped"
-        if s:
+        if name in ("s3_seo1", "s3_seo2"):
+            continue                                     # checked as a pair below
+        ok, errs = passing(name, raw.get(name), ctx)
+        if ok:
+            i, s = ok[0]
             out[name] = s
+            if i > 1:
+                notes.append(f"{name}: option {i} used")
         else:
-            why[name] = f"{err}: {clean(raw.get(name))!r}" if raw.get(name) else err
-    if out.get("s3_seo1") and out.get("s3_seo2") and \
-            out["s3_seo1"].lower() == out["s3_seo2"].lower():
-        out.pop("s3_seo2")
-        why["s3_seo2"] = "same as s3_seo1"
-    seo = [n for n in ("s3_seo1", "s3_seo2") if n in out]
-    if len(seo) == 2 and trip_min and not any(trip_min in nums(out[n]) for n in seo):
-        for n in seo:
-            why[n] = f"neither search line keeps the {trip_min} min drive: {out.pop(n)!r}"
+            why[name] = errs
+
+    # slide 3 search lines: a pair that differs and keeps the drive time once
+    t = ctx["trip_min"]
+    has_t = lambda s: not t or t in nums(s)
+    ok1, e1 = passing("s3_seo1", raw.get("s3_seo1"), ctx)
+    ok2, e2 = passing("s3_seo2", raw.get("s3_seo2"), ctx)
+    pair = next(((x, y) for x in ok1 for y in ok2
+                 if x[1].lower() != y[1].lower() and (has_t(x[1]) or has_t(y[1]))), None)
+    if pair:
+        for n, (i, s) in zip(("s3_seo1", "s3_seo2"), pair):
+            out[n] = s
+            if i > 1:
+                notes.append(f"{n}: option {i} used")
+    elif ok1 and ok2:
+        msg = ("no pair works: the 2 lines must differ"
+               + (f" and one must keep '{t} min'" if t else ""))
+        why["s3_seo1"] = why["s3_seo2"] = msg
+    else:
+        for n, ok, e, other in (("s3_seo1", ok1, e1, ok2), ("s3_seo2", ok2, e2, ok1)):
+            if ok:
+                out[n] = ok[0][1]                        # shown only once both pass
+            else:
+                hint = (f" (the other line has no drive time, so this one must keep "
+                        f"'{t} min')" if t and other and not any(has_t(s) for _, s in other)
+                        else "")
+                why[n] = e + hint
 
     # slide 2: the 2 math lines (placeholders only)
     values = {k: v["value"] for k, v in (data.get("slide2") or {}).items()}
     real = "yield" in values
     for name in MATH:
-        t, err = check_math(name, raw.get(name), values, real)
-        if t:
-            out[name] = t
+        errs = []
+        for o in options(raw.get(name))[:N_OPTIONS]:
+            ok, err = check_math(name, o, values, real)
+            if ok:
+                out[name] = ok
+                break
+            errs.append(err)
         else:
-            why[name] = err
+            why[name] = " | ".join(errs) or "empty"
 
-    # slide 3: 3 free bullets, each tied to its DATA.facts source (all 3 or none)
+    # slide 3: 3 bullets, each tied to its DATA.facts source (all 3 or none)
     src = data.get("facts") or {}
     pts, keys, perr = [], [], None
-    for p in (raw.get("s3_points") or [])[:3]:
-        t, k, err = check_point(p, src, sub, known, rival, rival_near)
+    raw_pts = raw.get("s3_points") if isinstance(raw.get("s3_points"), list) else []
+    for n, p in enumerate(raw_pts[:3], 1):
+        txt, k, err = check_point(p, src, ctx)
         if err:
-            perr = err
+            perr = f"bullet {n}: {err}"
             break
-        if t.lower() in (x.lower() for x in pts):
-            perr = f"same bullet twice: {t!r}"
+        if txt.lower() in (x.lower() for x in pts):
+            perr = f"bullet {n}: same bullet twice: {txt!r}"
             break
-        pts.append(t)
+        pts.append(txt)
         keys += [x for x in k if x not in keys]
     recent = [tuple(sorted(c)) for c in (rot.get("s3_points") or [])[:10] if isinstance(c, list)]
     if not perr and len(pts) < 3:
-        perr = "need 3 bullets"
+        perr = f"need 3 bullets (got {len(pts)})"
     if not perr and tuple(sorted(keys)) in recent:
-        perr = "same facts as a recent post"
+        perr = f"same facts as a recent post {sorted(keys)} – pick other 'from' keys"
     if perr:
         why["s3_points"] = perr
     else:
         out["s3_points"], out["s3_kinds"] = pts, keys
 
-    last = (rot.get("s3_templates") or [None])[0]
-    a = str(raw.get("angle") or "").upper()
-    if a in ANGLES and a != last and (a != "D" or data.get("famous_rival_town")):
-        out["angle"] = a
-    if out.get("angle") == "D" and out.get("s3_headline") and not has_name(out["s3_headline"], rival):
-        why["s3_headline"] = f"angle D but the rival isn't named: {out.pop('s3_headline')!r}"
-    if "s3_headline" not in out and out.pop("angle", None):
+    # angle only together with its headline
+    if angle and "s3_headline" in out:
+        out["angle"] = angle
+    elif angle:
         why["angle"] = "dropped together with the headline (template angle kept)"
+    elif a:
+        notes.append(f"angle {a!r} not allowed (used last post / no rival) – template angle")
 
     tags = []
-    for t in raw.get("hashtags") or []:
-        t = str(t).strip().lower()
-        if re.fullmatch(r"#\w{2,40}", t) and t not in tags:
-            tags.append(t)
+    for tg in raw.get("hashtags") or []:
+        tg = str(tg).strip().lower()
+        if re.fullmatch(r"#\w{2,40}", tg) and tg not in tags:
+            tags.append(tg)
     if len(tags) >= 3:
         out["hashtags"] = tags[:MAX_TAGS]
+    else:
+        why["hashtags"] = f"need 3-{MAX_TAGS} hashtags (got {len(tags)})"
+    return out, why, notes
 
-    for k, v in why.items():
-        print(f"  AI copy: {k} dropped – template used ({v})")
-    return out
+
+# ─── rules as the model sees them ────────────────────────────────────
+def slot_rule(k):
+    c, w, job, ex = SLOTS[k]
+    r = {"max_words": w, "max_chars": c, "job": job}
+    if ex:
+        r["example"], r["example_chars"] = ex, len(ex)   # real length, measured here
+    r["answer"] = (f"list of {N_OPTIONS} options, longest to shortest"
+                   if k in OPTION_SLOTS else "one string")
+    return r
+
+def point_rule():
+    return {"bullets": 3, "max_words_each": POINT_WORDS, "max_chars_each": POINT_CHARS,
+            "from": "1-2 keys of DATA.facts the bullet is based on",
+            "text": f"list of {N_OPTIONS} options, longest to shortest",
+            "example": POINT_EXAMPLE, "example_chars": len(POINT_EXAMPLE),
+            "tip": "shorten the fact in your own words, don't paste it"}
+
+def math_rule(n, real):
+    r = MATH[n]
+    return {"must_use": r["need"] + (r["need_if_real"] if real and r.get("need_if_real")
+                                     else []) + (["place"] if r.get("place") else []),
+            "max_chars_after_filling": r["max_chars"], "job": r["job"],
+            "answer": "one string, numbers only as {placeholders}"}
 
 
 # ─── prompt ──────────────────────────────────────────────────────────
@@ -590,14 +716,17 @@ def prompt(data, rot):
     last = (rot.get("s3_templates") or [None])[0]
     recent = [c for c in (rot.get("s3_points") or [])[:10] if isinstance(c, list)]
     real = "yield" in (data.get("slide2") or {})
-    math_rules = {n: {"must_use": r["need"] + (r["need_if_real"] if real and r.get("need_if_real")
-                                               else []) + (["place"] if r.get("place") else []),
-                      "max_chars_after_filling": r["max_chars"], "job": r["job"]}
-                  for n, r in MATH.items()}
     return (
-        "SLOTS (max characters, max words, what goes there):\n"
-        + json.dumps({k: {"max_chars": c, "max_words": w, "job": j}
-                      for k, (c, w, j) in SLOTS.items()}, indent=1)
+        "HOW TO HIT THE LENGTH (characters are hard to count, so do this):\n"
+        "- max_words is the rule to follow. A line within max_words fits max_chars if the "
+        "words are short: prefer 'min', 'nights/yr', '$19K', drop 'the/a/very'.\n"
+        f"- Fields marked 'list of {N_OPTIONS} options': {N_OPTIONS} complete versions, "
+        "longest to shortest; the last one clearly short (about half of max_words). We use "
+        "the first one that passes, so EVERY option must follow all rules.\n"
+        "- 'example' + 'example_chars' show what fits. They are from other houses: learn the "
+        "length, don't copy the words.\n\n"
+        "SLOTS:\n"
+        + json.dumps({k: slot_rule(k) for k in SLOTS}, ensure_ascii=False, indent=1)
         + "\n\nSLIDE 2 (s2_line_a, s2_line_b): rewrite the 2 small math lines in your own "
           "words. NEVER type a digit: write every number as a {placeholder} from DATA.slide2 "
           "(each at most once per line); the code puts in the real value. Only use "
@@ -605,18 +734,18 @@ def prompt(data, rot):
           "lines there (28 px text, both lines together max 5 rows). SEO: plain words people "
           "search (all-in cost, renovation, nightly rate, occupancy, Airbnb, rental income, "
           "net yield). Current wording: DATA.template_version.\n"
-        + json.dumps(math_rules, indent=1)
-        + f"\n\nSLIDE 3: the title (town name) and subtitle (DATA.slide3_subtitle) are fixed "
-          f"and already shown. Under them: headline (the hook), 3 bullets (s3_points), 2 search "
-          f"lines (s3_seo1, s3_seo2) and the button (s3_cta), your own wording. Bullet: max "
-          f"{POINT_CHARS} chars, max {POINT_WORDS} words; 'from' = 1-2 keys of DATA.facts it is "
-          "based on; say only what those facts say and copy their numbers exactly (if the fact "
-          "has a number, use it). Never base a bullet on a fact that is already in "
+        + json.dumps({n: math_rule(n, real) for n in MATH}, ensure_ascii=False, indent=1)
+        + "\n\nSLIDE 3: the title (town name) and subtitle (DATA.slide3_subtitle) are fixed "
+          "and already shown. Under them: headline (the hook), 3 bullets (s3_points), 2 search "
+          "lines (s3_seo1, s3_seo2) and the button (s3_cta), your own wording. Bullets say "
+          "only what their DATA.facts say and copy their numbers exactly (if the fact has a "
+          "number, use it). Never base a bullet on a fact that is already in "
           "DATA.slide3_subtitle. The bullets must pay off the headline. Don't use exactly "
           f"these sets of 'from' keys (recent posts): {json.dumps(recent)}. Search lines: the "
           "town + a search word people type, natural language, no stuffing, the two lines on "
           "different searches, and at least one keeps the drive minutes from DATA.trip. "
-          "Only name places that are in DATA; the rival town is a comparison, never 'near'."
+          "Only name places that are in DATA; the rival town is a comparison, never 'near'.\n"
+          "BULLETS:\n" + json.dumps(point_rule(), ensure_ascii=False, indent=1)
         + "\n\nangle: one of " + json.dumps(ANGLES)
         + f" – not '{last}' (used last post). D only if famous_rival_town exists, and then "
           "the headline must name it."
@@ -628,28 +757,88 @@ def prompt(data, rot):
         + "\n\nAnswer in this json shape:\n" + json.dumps(EXAMPLE, ensure_ascii=False))
 
 
+# ─── repair round ────────────────────────────────────────────────────
+FIXABLE = set(SLOTS) | set(MATH) | {"s3_points", "hashtags"}
+
+def repair(user, raw, why, data):
+    """2nd call: DeepSeek rewrites ONLY the fields that failed, told exactly why."""
+    bad = {k: v for k, v in why.items() if k in FIXABLE}
+    if not bad:
+        return None
+    real = "yield" in (data.get("slide2") or {})
+    rules = {}
+    for k in bad:
+        if k in SLOTS:
+            rules[k] = slot_rule(k)
+        elif k in MATH:
+            rules[k] = math_rule(k, real)
+        elif k == "s3_points":
+            rules[k] = point_rule()
+        else:
+            rules[k] = {"count": f"3-{MAX_TAGS}",
+                        "include": "#akiya, one town/area tag, one attraction-kind tag"}
+    ask = ("Our checker rejected these fields of your answer. Rewrite ONLY them, same DATA "
+           "and rules. Stay under max_words; in lists make the last option clearly short.\n"
+           "WHY REJECTED:\n" + json.dumps(bad, ensure_ascii=False, indent=1)
+           + "\n\nRULES:\n" + json.dumps(rules, ensure_ascii=False, indent=1)
+           + ("\n\nWith a new s3_headline you may also give a new 'angle'."
+              if "s3_headline" in bad else "")
+           + "\n\nAnswer ONLY json with these keys: " + json.dumps(sorted(bad)))
+    new = call([{"role": "system", "content": SYSTEM},
+                {"role": "user", "content": user},
+                {"role": "assistant", "content": json.dumps(raw, ensure_ascii=False)},
+                {"role": "user", "content": ask}], temp=min(TEMP, FIX_TEMP))
+    if not new:
+        print("  AI copy: repair round got no answer")
+        return None
+    keep = set(bad) | ({"angle"} if "s3_headline" in bad else set())
+    return {**raw, **{k: v for k, v in new.items() if k in keep}}
+
+
 # ─── entry point ─────────────────────────────────────────────────────
 def write(M, h, l, hooks, usd, e, facts, s3, rot):
     """Returns {slot: text} with only the fields that passed every check."""
     if not ON:
         print("AI copy: off (no DEEPSEEK_API_KEY or AI_COPY=0) – template text")
         return {}
+    rot = rot or {}
     day = datetime.now(M.JST).strftime("%Y-%m-%d")
     cache = load(CACHE_FILE)
     ck = f"{day}|{l['url']}|{VERSION}"
     data = data_for(M, h, l, hooks, usd, e, facts, s3)
     if ck in cache:
         raw = cache[ck]                                  # re-run today: no new call
+        print("  AI copy: cached answer from today (no new call)")
+        out, why, notes = validate(raw, data, rot)
     else:
-        raw = call(prompt(data, rot))
+        user = prompt(data, rot)
+        raw = call([{"role": "system", "content": SYSTEM},
+                    {"role": "user", "content": user}])
         if raw is None:
             print("AI copy: no answer – template text")
             return {}
+        out, why, notes = validate(raw, data, rot)
+        bad = sorted(k for k in why if k in FIXABLE)
+        if bad:
+            print(f"  AI copy: 1st answer failed {bad} – asking DeepSeek to fix them")
+            fixed = repair(user, raw, why, data)
+            if fixed:
+                raw = fixed
+                out, why, notes = validate(raw, data, rot)
         cache = {k: v for k, v in cache.items() if k.startswith(day)}
-        cache[ck] = raw
+        cache[ck] = raw                                  # the repaired answer is cached
         save(CACHE_FILE, cache)
-    out = validate(raw, data, rot)
+
+    for n in notes:
+        print(f"  AI copy: {n}")
+    for k, v in why.items():
+        print(f"  AI copy: {k} dropped – template used ({v})")
     print(f"AI copy ({MODEL}): kept {sorted(out)}")
+    seo = "AI" if ("s3_seo1" in out and "s3_seo2" in out) else "template (needs both)"
+    print("  slide 3 source: "
+          f"headline={'AI' if 's3_headline' in out else 'template'} | "
+          f"bullets={'AI' if 's3_points' in out else 'template'} | search lines={seo} | "
+          f"button={'AI' if 's3_cta' in out else 'template'}")
     return out
 
 def apply_s3(s3, c):
