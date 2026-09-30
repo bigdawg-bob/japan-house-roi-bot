@@ -1757,6 +1757,20 @@ def area_slide(pic, h, l, e, usd=None, copy=None):
         put(ld, (cx, MATH_TOP + i * MATH_GAP), s, mf, MATH_FILL, "mm", 0, 2)
     return Image.alpha_composite(img.convert("RGBA"), layer).convert("RGB")
 
+CTA_DEFAULT = "Full breakdown + agent contact → newsletter link in bio"
+
+def pick_cta(copy):
+    """DeepSeek's button text if it passes the checks, else the fixed text.
+    Must point to the bio, max 56 characters, no numbers / links / hashtags."""
+    t = re.sub(r"\s+", " ", str((copy or {}).get("s3_cta") or "")).strip()
+    if (12 <= len(t) <= 56 and "bio" in t.lower()
+            and not re.search(r"\d|[#@]|https?://", t)):
+        print(f"  slide 3 CTA: DeepSeek | {t}")
+        return t
+    if t:
+        print(f"  slide 3 CTA from DeepSeek failed the check – template used: {t!r}")
+    return CTA_DEFAULT
+      
 def facts_slide(pic, h, l, hooks, facts, e, s3):
     """Slide 3: dusk photo + WHY THIS RENTS. Same layout as before; wording from s3."""
     img = area_bg(pic)
@@ -1794,7 +1808,7 @@ def facts_slide(pic, h, l, hooks, facts, e, s3):
         y += 52
 
     # newsletter box
-    cta = "Full breakdown + agent contact → newsletter link in bio"
+    cta = pick_cta(s3.get("copy"))
     cf = fit_font(d, cta, 28, 700, 0, MAXW - 50)
     bw = text_width(d, cta, cf) + 50
     d.rounded_rectangle([X, 1100, X + bw, 1185], radius=6, outline=(235, 235, 235), width=2)
