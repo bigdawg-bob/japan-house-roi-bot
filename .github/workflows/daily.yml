@@ -152,7 +152,10 @@ jobs:
           HTTPS_PROXY: ${{ secrets.JP_PROXY }}
           HTTP_PROXY:  ${{ secrets.JP_PROXY }}
           NO_PROXY: "googleapis.com,api.x.ai,api.deepseek.com,pexels.com,api.telegram.org,airroi.com,project-osrm.org,github.com,localhost"
-
+          PHOTO_CHECKS: "10"      # more photos compared = better pick (costs more Grok)
+          MIN_PHOTO_SCORE: "7"    # try 8 if photos are still boring
+          AREA_OVERLAY: "0.6"     # was 0.75 – the photo shows more, text still readable
+          
       - name: Upload slides (for checking)
         if: always() && steps.guard.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
