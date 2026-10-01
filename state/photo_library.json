@@ -482,5 +482,49 @@
   "added": "2026-09-30T16:53:01+09:00",
   "uses": 1,
   "last": "2026-09-30T16:53:01+09:00"
+ },
+ "04f8d9bab5dedcca": {
+  "id": "pexels:25826097",
+  "credit": "Photo: Yukio Hama / Pexels",
+  "role": "area",
+  "mood": "day",
+  "kind": "ski",
+  "generic": false,
+  "added": "2026-10-01T11:27:50+09:00",
+  "uses": 1,
+  "last": "2026-10-01T11:27:50+09:00"
+ },
+ "f3045b53f744da55": {
+  "id": "pexels:31606465",
+  "credit": "Photo: Shashank Brahmavar / Pexels",
+  "role": "area",
+  "mood": "day",
+  "kind": "ski",
+  "generic": false,
+  "added": "2026-10-01T11:27:50+09:00",
+  "uses": 1,
+  "last": "2026-10-01T11:27:50+09:00"
+ },
+ "3a09cebd27ce1502": {
+  "id": "pexels:18503670",
+  "credit": "Photo: Mau Torres V / Pexels",
+  "role": "area",
+  "mood": "dusk",
+  "kind": "ski",
+  "generic": false,
+  "added": "2026-10-01T11:27:50+09:00",
+  "uses": 1,
+  "last": "2026-10-01T11:27:50+09:00"
+ },
+ "f67343d165b7bad8": {
+  "id": "house:https://akiya.sumai.biz/wp-content/uploads/2026/09/500sn-1.webp",
+  "credit": "Photo: akiya.sumai.biz",
+  "role": "house",
+  "mood": null,
+  "kind": "ski",
+  "generic": false,
+  "added": "2026-10-01T11:27:50+09:00",
+  "uses": 1,
+  "last": "2026-10-01T11:27:50+09:00"
  }
 }

@@ -1,14 +1,15 @@
 {
  "last_source": "sumai",
- "date": "2026-09-30",
+ "date": "2026-10-01",
  "recent_hooks": [
+  "Myoko Akakura",
   "Ginzan Onsen",
   "Yufuin",
   "Misasa Onsen",
-  "Nozawa Onsen",
-  "Chirihama"
+  "Nozawa Onsen"
  ],
  "s3_templates": [
+  "D",
   "B",
   "D",
   "C",
@@ -30,6 +31,11 @@
   "A"
  ],
  "s3_points": [
+  [
+   "yield",
+   "trend",
+   "bedrooms"
+  ],
   [
    "price",
    "trip",
@@ -128,6 +134,7 @@
   ]
  ],
  "reel_clips": [
+  "pexels:20666702",
   "pexels:30733039",
   "pexels:27739943",
   "pexels:31176378",
@@ -137,7 +144,6 @@
   "pexels:29650757",
   "pexels:30819865",
   "pexels:6985328",
-  "pexels:20666702",
   "reels/any/animate_this_exact_video.mp4"
  ]
 }

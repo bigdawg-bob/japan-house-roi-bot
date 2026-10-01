@@ -1,121 +1,40 @@
 {
- "2026-09-30|https://akiya.sumai.biz/30648|v2": {
-  "angle": "D",
-  "reel_hook": "YUFUIN $19K",
-  "reel_sub": "$19K akiya • 20 min drive to onsen",
-  "s2_line_a": "{yield} • all-in {all_in} & renovation {breakdown}",
-  "s2_line_b": "{place} rental • {adr} × {occ} × {nights} • After {mgmt}: {net}",
-  "s3_headline": "Onsen town, not the famous rival",
-  "s3_points": [
-   {
-    "from": [
-     "visitors"
-    ],
-    "text": "4.3M visitors/yr"
-   },
-   {
-    "from": [
-     "access"
-    ],
-    "text": "1hr train from Oita"
-   },
-   {
-    "from": [
-     "competition",
-     "rival"
-    ],
-    "text": "200 STRs, rival: Kurokawa"
-   }
-  ],
-  "s3_seo1": "Yufuin Onsen house near Kurokawa ryokan",
-  "s3_seo2": "Yufuin onsen village Airbnb & STR rental",
-  "caption_hook": "Yufuin akiya \"$19K\" near Yufuin Onsen on the onsen town edge – 20 min drive from the springs.",
-  "caption_seo": "A cheap Yufuin house in Oita sits 20 min drive from Yufuin Onsen: an akiya for an Airbnb rental on the quieter side of this onsen town, reached by 1hr train from Oita. Some baths tattoo-friendly; 4.3M visitors/yr. Not Kurokawa, but that's the point.",
-  "reel_line1": "Yufuin akiya $19K → ~$858 net per month (Airbnb math).",
-  "reel_dream": "Twenty min from town: steam rising, onsen smell at night.",
-  "hashtags": [
-   "#akiya",
-   "#yufuin",
-   "#onsenhouse",
-   "#oita",
-   "#japanproperty"
-  ]
- },
- "2026-09-30|https://akiya.sumai.biz/30648|v3": {
-  "angle": "D",
-  "reel_hook": "YUFUIN $19K",
-  "reel_sub": "5BR near bath • 20 min drive • 18% net",
-  "s2_line_a": "For {yield} you need {all_in} all-in {breakdown}.",
-  "s2_line_b": "{place}: {adr} × {occ} × {nights}; after {mgmt} your net is {net}.",
-  "s3_headline": "Kurokawa-style Yufuin onsen house $19K",
-  "s3_points": [
-   {
-    "from": [
-     "built"
-    ],
-    "text": "Built 1983: post-1981 quake code"
-   },
-   {
-    "from": [
-     "price"
-    ],
-    "text": "House price $19K (¥3.0M)"
-   },
-   {
-    "from": [
-     "minpaku"
-    ],
-    "text": "Minpaku national cap: 180 nights per year"
-   },
-   {
-    "from": [
-     "bedrooms",
-     "known_for"
-    ],
-    "text": "no"
-   }
-  ],
-  "s3_seo1": "Yufuin akiya for sale near onsen house",
-  "s3_seo2": "Yufuin Ski Resort Akiya rentals Japan cheapest view of rooms to earn on Airbnb pool overnight rates based spaces remaining fine specific bed  also place names Japan property "
- },
- "2026-09-30|https://akiya.sumai.biz/30648|v4": {
+ "2026-10-01|https://akiya.sumai.biz/129643|v6": {
   "angle": "D",
   "reel_hook": [
-   "$19K YUFUIN",
-   "$19K YUFU-IN",
-   "$19K YUFU"
+   "$16K MYOKO AKAKURA",
+   "$16K MYOKO",
+   "MYOKO $16K"
   ],
   "reel_sub": [
-   "5BR • 20 min drive to Yufuin Onsen • 18% net",
-   "20 min drive to Yufuin Onsen • 18% net",
-   "20 min drive to Yufuin Onsen"
+   "6BR • 20 min drive to ski • 15% net",
+   "20 min to ski • 15% net yield",
+   "6BR • 20 min drive to ski"
   ],
-  "s2_line_a": "{yield} • {all_in} all-in: {breakdown}",
-  "s2_line_b": "{place} • {adr} × {occ} × {nights} • After {mgmt}: {net}",
+  "s2_line_a": [
+   "{all_in} buys the house, renovation and fees",
+   "{all_in} covers the house and renovation",
+   "{all_in} all-in for the house"
+  ],
+  "s2_line_b": [
+   "Rent brings in {net_year} a year after management",
+   "That's {net_year} net a year after fees",
+   "Net income: {net_year} a year"
+  ],
   "s3_headline": [
-   "Kurokawa prices, Yufuin address",
-   "Skip Kurokawa: $19K Yufuin",
-   "Yufuin, not Kurokawa"
+   "Nozawa vibes, Akakura price",
+   "Nozawa-style, Myoko price",
+   "Nozawa, but cheaper"
   ],
   "s3_points": [
    {
     "from": [
-     "competition"
+     "yield"
     ],
     "text": [
-     "200 Airbnbs in Yufu",
-     "200 Airbnbs in Yufu",
-     "200 Airbnbs in Yufu"
-    ]
-   },
-   {
-    "from": [
-     "foreign"
-    ],
-    "text": [
-     "Foreign 33% of visitors",
-     "Foreign 33% of visitors",
-     "Foreign 33% of visitors"
+     "15% net yield a year",
+     "15% net yield",
+     "15% yield"
     ]
    },
    {
@@ -123,383 +42,46 @@
      "trend"
     ],
     "text": [
-     "Visitors up 6% in 2024",
-     "Visitors up 6% in 2024",
-     "Visitors up 6% in 2024"
+     "Ski visitors up 17.5%",
+     "Visitors up 17.5%",
+     "Up 17.5%"
+    ]
+   },
+   {
+    "from": [
+     "bedrooms"
+    ],
+    "text": [
+     "6 bedrooms to rent out",
+     "6 bedrooms",
+     "6BR"
     ]
    }
   ],
   "s3_seo1": [
-   "Yufuin akiya: 20 min drive to onsen",
-   "Yufuin akiya 20 min to onsen",
-   "Yufuin akiya, 20 min drive"
+   "Myoko Akakura akiya, 20 min drive to ski",
+   "Myoko Akakura akiya for sale",
+   "Myoko Akakura akiya"
   ],
   "s3_seo2": [
-   "Yufuin Airbnb investment: 180 nights",
-   "Yufuin Airbnb: 180-night cap",
-   "Yufuin Airbnb investment"
+   "Myoko Akakura Airbnb investment, 15% net",
+   "Myoko Akakura Airbnb, 15% net",
+   "Myoko Airbnb investment"
   ],
   "s3_cta": [
-   "Full breakdown + agent contact → newsletter link in bio",
-   "Full breakdown + agent contact → link in bio",
-   "Full breakdown → newsletter link in bio"
+   "Want the agent for this Myoko house? Link in bio",
+   "See the full numbers for this house in bio",
+   "Agent contact in bio"
   ],
-  "caption_hook": "Yufuin akiya for $19K, 20 min drive to Yufuin Onsen, nets $10.3K/yr.",
-  "caption_seo": "Yufuin in Oita: a 5BR akiya for $19K near Yufuin Onsen, with Airbnb net $10.3K/yr and 18% yield, instead of Kurokawa.",
-  "reel_line1": "Yufuin akiya: $19K → $10.3K/yr net.",
-  "reel_dream": "Onsen steam, Mt Yufu views, 20 minutes from your door.",
+  "caption_hook": "Myoko Akakura akiya for $16K — 20 min drive to the ski resort and 15% net yield.",
+  "caption_seo": "This Myoko Akakura akiya in Nagano is a 20 min drive to Myoko Akakura ski resort, with 6 bedrooms and a 15% net yield as an Airbnb.",
+  "reel_line1": "Myoko Akakura akiya for $16K — 15% net yield",
+  "reel_dream": "Historic onsen ski village, 20 min drive to the slopes",
   "hashtags": [
    "#akiya",
-   "#yufuin",
-   "#onsenhouse",
-   "#oita",
-   "#japanproperty"
-  ]
- },
- "2026-09-30|https://akiya.sumai.biz/30648|v5": {
-  "angle": "D",
-  "reel_hook": [
-   "$19K YUFUIN",
-   "YUFUIN $19K",
-   "$19K ONSEN"
-  ],
-  "reel_sub": [
-   "20 min drive to Yufuin Onsen",
-   "20 min drive to onsen",
-   "20 min to onsen"
-  ],
-  "s2_line_a": [
-   "{all_in} for the house and renovation",
-   "{all_in} all-in for the house",
-   "{all_in} all-in"
-  ],
-  "s2_line_b": [
-   "Books ~{booked_nights} nights a year, {net_year} net",
-   "{booked_nights} nights booked, {net_year} net",
-   "{net_year} net a year"
-  ],
-  "s3_headline": [
-   "Skip Kurokawa, buy Yufuin",
-   "Yufuin instead of Kurokawa",
-   "Not Kurokawa: Yufuin"
-  ],
-  "s3_points": [
-   {
-    "from": [
-     "foreign"
-    ],
-    "text": [
-     "A third of visitors come from abroad",
-     "A third of visitors are foreign",
-     "1 in 3 visitors are foreign"
-    ]
-   },
-   {
-    "from": [
-     "competition"
-    ],
-    "text": [
-     "200 Airbnbs in Yufu",
-     "200 Airbnbs already in Yufu",
-     "200 Airbnbs in Yufu"
-    ]
-   },
-   {
-    "from": [
-     "access"
-    ],
-    "text": [
-     "1hr train from Oita",
-     "1hr train from Oita",
-     "1hr from Oita"
-    ]
-   }
-  ],
-  "s3_seo1": [
-   "Yufuin akiya, 20 min drive to the onsen",
-   "Yufuin akiya, 20 min to the onsen",
-   "Yufuin akiya near the onsen"
-  ],
-  "s3_seo2": [
-   "Yufuin Airbnb investment, $19K house",
-   "Yufuin Airbnb for $19K",
-   "Yufuin Airbnb $19K"
-  ],
-  "s3_cta": [
-   "Want the numbers on this Yufuin house? Link in bio",
-   "See the full Yufuin numbers in bio",
-   "Full Yufuin numbers in bio"
-  ],
-  "caption_hook": "Yufuin akiya for $19K, 20 min from the onsen: 18% net yield, ~5.5-year payback.",
-  "caption_seo": "This Yufuin akiya in Oita costs $19K and sits 20 min from Yufuin Onsen, an onsen town at Mt Yufu with 4.3M visitors a year — run it as an Airbnb and it nets $858 a month.",
-  "reel_line1": "Yufuin akiya for $19K → $858 a month net.",
-  "reel_dream": "Soak in Yufuin's onsen steam with Mt Yufu out the window.",
-  "hashtags": [
-   "#akiya",
-   "#Yufuin",
-   "#Oita",
-   "#onsen",
-   "#JapanProperty"
-  ]
- },
- "2026-09-30|https://akiya.sumai.biz/82487|v5": {
-  "angle": "B",
-  "reel_hook": [
-   "GINZAN $10K",
-   "$10K GINZAN",
-   "$10K ONSEN"
-  ],
-  "reel_sub": [
-   "3BR • 20 min drive to Ginzan Onsen",
-   "3BR • 20 min to Ginzan Onsen",
-   "20 min drive to Ginzan Onsen"
-  ],
-  "s2_line_a": [
-   "{all_in} covers the house, the renovation and the fees",
-   "{all_in} gets the house fixed up and paid for",
-   "{all_in} buys the house, fixed up"
-  ],
-  "s2_line_b": [
-   "Guests book some nights, and it nets {net_year} a year",
-   "It books up and nets {net_year} a year",
-   "That nets {net_year} a year"
-  ],
-  "s3_headline": [
-   "A $10K house near Ginzan Onsen",
-   "$10K house near Ginzan Onsen",
-   "$10K near Ginzan Onsen"
-  ],
-  "s3_points": [
-   {
-    "from": [
-     "price"
-    ],
-    "text": [
-     "The house costs $10K",
-     "It costs $10K",
-     "$10K for the house"
-    ]
-   },
-   {
-    "from": [
-     "trip"
-    ],
-    "text": [
-     "20 min drive to Ginzan Onsen",
-     "20 min drive to the onsen",
-     "20 min to the onsen"
-    ]
-   },
-   {
-    "from": [
-     "rate",
-     "booked"
-    ],
-    "text": [
-     "Guests pay $151 for about 77 nights",
-     "$151 a night, 77 nights booked",
-     "$151 a night"
-    ]
-   }
-  ],
-  "s3_seo1": [
-   "Ginzan akiya, 20 min drive to the onsen",
-   "Ginzan akiya, 20 min to the onsen",
-   "Ginzan akiya, 20 min to onsen"
-  ],
-  "s3_seo2": [
-   "A $10K house to Airbnb near Ginzan Onsen",
-   "A $10K Airbnb house in Ginzan",
-   "$10K Airbnb house in Ginzan"
-  ],
-  "s3_cta": [
-   "See the full numbers for this Ginzan house in bio",
-   "Want the Ginzan house numbers? Link in bio",
-   "Ginzan house numbers in bio"
-  ],
-  "caption_hook": "Ginzan akiya for $10K, 20 min from the onsen town 307k people visit a year.",
-  "caption_seo": "This $10K akiya in Ginzan, Yamagata sits 20 minutes from Ginzan Onsen, the Taisho-era onsen town drawing 307k visitors a year, and it works as an Airbnb rental.",
-  "reel_line1": "Ginzan akiya for $10K, 20 min from the onsen.",
-  "reel_dream": "Steam off the river at dusk, wooden ryokan lit up, and this is your drive home.",
-  "hashtags": [
-   "#akiya",
-   "#ginzan",
-   "#yamagata",
-   "#onsen",
-   "#japanproperty"
-  ]
- },
- "2026-09-30|https://akiya.sumai.biz/23408|v5": {
-  "angle": "D",
-  "reel_hook": [
-   "$13K GINZAN",
-   "$13K GINZAN",
-   "$13K GINZAN"
-  ],
-  "reel_sub": [
-   "8BR • 20 min drive to Ginzan Onsen",
-   "8BR • 20 min to Ginzan Onsen",
-   "8BR • 20 min to onsen"
-  ],
-  "s2_line_a": [
-   "{all_in} covers the house, the renovation and the fees",
-   "{all_in} pays for the house and renovation",
-   "{all_in} buys the house, fixed up"
-  ],
-  "s2_line_b": [
-   "It books {booked_nights} nights a year and nets {net_year}",
-   "{booked_nights} booked nights a year → {net_year} net",
-   "{booked_nights} nights booked → {net_year} net"
-  ],
-  "s3_headline": [
-   "Kusatsu-style onsen, $13K",
-   "Kusatsu-style for $13K",
-   "Kusatsu vibe, $13K"
-  ],
-  "s3_points": [
-   {
-    "from": [
-     "foreign"
-    ],
-    "text": [
-     "Foreign visitors are just 6%",
-     "Only 6% of visitors come from abroad",
-     "6% of visitors are foreign"
-    ]
-   },
-   {
-    "from": [
-     "ryokan"
-    ],
-    "text": [
-     "Ryokan rooms run ¥16.5k–36k a person",
-     "Ryokan rooms cost ¥16.5k–36k a person",
-     "Ryokan rooms start at ¥16.5k"
-    ]
-   },
-   {
-    "from": [
-     "minpaku"
-    ],
-    "text": [
-     "The national rule caps rentals at 180 nights",
-     "National rule caps rentals at 180 nights",
-     "Rentals cap at 180 nights a year"
-    ]
-   }
-  ],
-  "s3_seo1": [
-   "Ginzan akiya, 20 min drive to the onsen",
-   "Ginzan akiya, 20 min to the onsen",
-   "Ginzan akiya, 20 min to onsen"
-  ],
-  "s3_seo2": [
-   "A Ginzan house to Airbnb for $13K",
-   "Ginzan house to Airbnb for $13K",
-   "Ginzan Airbnb for $13K"
-  ],
-  "s3_cta": [
-   "Want the agent for this Ginzan house? Link in bio",
-   "See the full numbers for this Ginzan house in bio",
-   "Ginzan house agent? Link in bio"
-  ],
-  "caption_hook": "Ginzan akiya for $13K: 8 bedrooms, 20 min to Ginzan Onsen, and it nets $967 a month.",
-  "caption_seo": "This $13K akiya in Ginzan, Yamagata, is a 20 min drive from Ginzan Onsen and could run as an Airbnb in a Taisho-era onsen town.",
-  "reel_line1": "Ginzan akiya for $13K → $967 a month net.",
-  "reel_dream": "Onsen steam, wooden ryokan, snowy streets — all a 20 min drive from your door.",
-  "hashtags": [
-   "#akiya",
-   "#ginzanonsen",
-   "#yamagata",
-   "#japanproperty",
-   "#onsentown"
-  ]
- },
- "2026-09-30|https://akiya.sumai.biz/23408|v6": {
-  "angle": "A",
-  "reel_hook": [
-   "Ginzan $13K",
-   "Ginzan $13K",
-   "$13K GINZAN"
-  ],
-  "reel_sub": [
-   "8BR • 20 min drive to Ginzan Onsen • 15% net",
-   "8BR • 20 min to Ginzan Onsen • 15% net",
-   "8BR • 20 min to onsen • 15% net"
-  ],
-  "s2_line_a": [
-   "{all_in} covers the house, renovation and fees",
-   "{all_in} buys the house and the fix-up",
-   "{all_in} all-in for the house"
-  ],
-  "s2_line_b": [
-   "Books {booked_nights} nights a year, {net_year} net",
-   "Books {booked_nights} nights, nets {net_year} a year",
-   "{booked_nights} nights booked → {net_year} a year"
-  ],
-  "s3_headline": [
-   "Ryokan prices, $13K house",
-   "Ryokan prices, $13K house",
-   "$13K vs ryokan"
-  ],
-  "s3_points": [
-   {
-    "from": [
-     "ryokan"
-    ],
-    "text": [
-     "Ryokan charge ¥16.5k–36k a person",
-     "Ryokan cost ¥16.5k–36k per person",
-     "Ryokan run ¥16.5k–36k a head"
-    ]
-   },
-   {
-    "from": [
-     "rate",
-     "booked"
-    ],
-    "text": [
-     "Guests pay about $215 a night",
-     "Guests pay about $215 a night",
-     "About $215 a night from guests"
-    ]
-   },
-   {
-    "from": [
-     "net_month",
-     "yield"
-    ],
-    "text": [
-     "It nets $967 a month, 15% yield",
-     "Nets $967 a month at 15% yield",
-     "$967 a month at 15% yield"
-    ]
-   }
-  ],
-  "s3_seo1": [
-   "Ginzan akiya, 20 min drive to Ginzan Onsen",
-   "Ginzan akiya, 20 min drive to the onsen",
-   "Ginzan akiya near the onsen"
-  ],
-  "s3_seo2": [
-   "Ginzan Onsen house for Airbnb investment",
-   "Ginzan Onsen house for Airbnb",
-   "Ginzan Onsen Airbnb house"
-  ],
-  "s3_cta": [
-   "See the full numbers for this Ginzan house in bio",
-   "Want the numbers for this Ginzan house? Bio",
-   "Full numbers for this Ginzan house in bio"
-  ],
-  "caption_hook": "Ginzan akiya for $13K, 20 min from Ginzan Onsen, nets $967 a month.",
-  "caption_seo": "In Yamagata, this Ginzan akiya costs $13K and sits 20 minutes from Ginzan Onsen, an onsen town with 307k visitors a year. It could run as an Airbnb for about $215 a night.",
-  "reel_line1": "Ginzan akiya for $13K, about $215 a night from guests.",
-  "reel_dream": "Soak in Taisho-era onsen steam, then walk back to your own house.",
-  "hashtags": [
-   "#akiya",
-   "#ginzanonsen",
-   "#yamagata",
-   "#onsentown",
+   "#myoko",
+   "#nagano",
+   "#skiresort",
    "#japanproperty"
   ]
  }

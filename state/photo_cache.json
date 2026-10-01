@@ -1429,6 +1429,126 @@
    "light_ok": true,
    "score": 7,
    "why": "Pretty snowy village, grey sky, some cars"
+  },
+  "commons:148031550|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": true,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 2,
+   "why": "Dull indoor museum ski-lift exhibit"
+  },
+  "pexels:31676539|day|place|v3": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 7,
+   "why": "Nice powder action, harsh sun shadows"
+  },
+  "pexels:31606463|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Attractive snowy ski resort, not stunning"
+  },
+  "pexels:31676524|day|place|v3": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Dynamic powder ski through snowy forest"
+  },
+  "pexels:31606403|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Muted generic snowy woods, not tempting"
+  },
+  "pexels:31676526|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Grey overcast forest, nice but dull"
+  },
+  "pexels:31606465|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Inviting snowy peak and red gondola"
+  },
+  "pexels:31676540|day|place|v3": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Grey overcast jumper, pole dominates"
+  },
+  "pexels:6279604|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Warm glowing trees, snowy night, some clutter"
+  },
+  "pexels:30490317|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Inviting snowy trail at blue hour"
+  },
+  "pexels:38042672|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Ordinary stars, generic not Japan or ski"
+  },
+  "pexels:18503670|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Dramatic night volcanic glow on snow"
   }
  },
  "exterior": {
