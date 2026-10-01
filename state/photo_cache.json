@@ -1309,6 +1309,126 @@
    "light_ok": true,
    "score": 7,
    "why": "Moody lantern close-up, artistic night glow"
+  },
+  "pexels:31354630|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "grey overcast ordinary snowy landscape"
+  },
+  "pexels:11177294|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 5,
+   "why": "grey overcast ordinary distant ski slopes"
+  },
+  "pexels:25826097|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Attractive snowy stream scene, plausible Nagano"
+  },
+  "pexels:7166141|day|place|v3": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Grey overcast sky, ordinary snowboard scene"
+  },
+  "pexels:31112554|day|place|v3": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "dynamic powder action, typical ski stock"
+  },
+  "pexels:31676538|day|place|v3": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 7,
+   "why": "Action powder shot, harsh sun glare"
+  },
+  "pexels:31676533|day|place|v3": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 8,
+   "why": "Powder skier action among sunlit trees"
+  },
+  "pexels:31606417|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 5,
+   "why": "Dull grey sky, ordinary ski landscape"
+  },
+  "pexels:17727740|day|generic|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Atmospheric snowy village tempting winter travel"
+  },
+  "pexels:14867064|day|generic|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": true,
+   "score": 8,
+   "why": "Iconic snowy gassho village, very tempting"
+  },
+  "pexels:33755404|day|generic|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Charming snowy gassho house invites travel"
+  },
+  "pexels:33755402|day|generic|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": true,
+   "light_ok": true,
+   "score": 7,
+   "why": "Pretty snowy village, grey sky, some cars"
   }
  },
  "exterior": {
@@ -1331,6 +1451,26 @@
    "exterior": false,
    "score": 0,
    "why": "Interior living room not house exterior"
+  },
+  "house:https://akiya.sumai.biz/wp-content/uploads/2026/09/500sn-1.webp": {
+   "exterior": true,
+   "score": 8,
+   "why": "Clear front exterior with garage and entrance"
+  },
+  "house:https://akiya.sumai.biz/wp-content/uploads/2026/09/500sn-13.webp": {
+   "exterior": false,
+   "score": 0,
+   "why": "Interior floor plan, not house exterior"
+  },
+  "house:https://akiya.sumai.biz/wp-content/uploads/2026/09/500sn-3.webp": {
+   "exterior": true,
+   "score": 7,
+   "why": "Front house view with garage and overgrown yard"
+  },
+  "house:https://akiya.sumai.biz/wp-content/uploads/2026/09/500sn-4.webp": {
+   "exterior": false,
+   "score": 1,
+   "why": "Fields and roof edge, no house shown"
   }
  }
 }
