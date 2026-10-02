@@ -76,6 +76,7 @@ def _env(name, default):
 
 HANDLE           = "@yama.yield"                      # top-left text on the slides
 MAX_PRICE_USD    = float(_env("MAX_PRICE_USD", "100000"))
+MIN_PRICE_USD    = float(_env("MIN_PRICE_USD", "12700"))   # ≈ HKD 100,000
 MAX_DRIVE_MIN    = float(_env("MAX_DRIVE_MIN", "45"))
 MAX_WALK_MIN     = float(_env("MAX_WALK_MIN", "15"))
 FEE_LIMIT        = float(_env("FEE_LIMIT_PCT", "15")) / 100   # yearly fees vs price
@@ -2209,7 +2210,7 @@ def main():
     for l in listings:
         if already_posted(l, posted):
             continue
-        if l.get("price_yen") is None or l["price_yen"] > max_yen:
+        if l.get("price_yen") is None or l["price_yen"] > max_yen or l["price_yen"] < (MIN_PRICE_USD / fx):
             continue
         if l.get("lat") is None or l.get("lng") is None:
             continue
