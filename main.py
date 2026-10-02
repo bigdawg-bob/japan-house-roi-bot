@@ -2118,8 +2118,9 @@ def pick(ranked, fx, last_source=None):
             if not found and budget <= 0:
                 skip_budget += 1                          # would need a paid call, limit reached
                 continue
-            tried += 1
-                        fees = yearly_fees(l, fc)
+                        tried += 1
+            fees = yearly_fees(l, fc)
+
             # High location score (especially walk-to-lift) overrides the fee limit
             high_location = (hp + ap) >= 65 or any(
                 h.get("road_km", h["km"] * ROAD_FACTOR) <= WALK_KM for h in hooks
@@ -2133,6 +2134,8 @@ def pick(ranked, fx, last_source=None):
                 print(f"  KEEP high-fee case study (strong location): "
                       f"{fmt_yen(fees)}/yr fees on {fmt_yen(l['price_yen'])} house → {l['url']}")
                 l["case_study_fees"] = True
+
+            if not found:
                 budget -= 1
                 print(f"  AirROI call for: {l['url']}")
                 est = fetch_estimate(l, ac)
