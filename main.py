@@ -212,7 +212,14 @@ KINDS = {
 
 # (kind, name, lat, lng) – approximate centre coordinates (starter list)
 HOOKS = [
-    # Load extra ski resorts from external file (all sizes)
+    # ── ski resorts ──
+    ("ski", "Niseko Grand Hirafu", 42.862, 140.698),
+    ("ski", "Rusutsu",             42.748, 140.555),
+    # ... all the original ski, onsen, sight, beach, nature entries ...
+    ("nature", "Yakushima",        30.350, 130.530),
+]   # <--- this closing ] is required
+
+# Load extra ski resorts from external file (all sizes)
 SKI_JSON = ROOT / "ski_resorts.json"
 if SKI_JSON.exists():
     try:
