@@ -212,119 +212,20 @@ KINDS = {
 
 # (kind, name, lat, lng) – approximate centre coordinates (starter list)
 HOOKS = [
-    # ── ski resorts ──
-    ("ski", "Niseko Grand Hirafu", 42.862, 140.698),
-    ("ski", "Rusutsu",             42.748, 140.555),
-    ("ski", "Kiroro",              43.075, 140.985),
-    ("ski", "Furano",              43.332, 142.358),
-    ("ski", "Hakkoda",             40.656, 140.858),
-    ("ski", "APPI Kogen",          40.003, 140.966),
-    ("ski", "Kazuno Hanawa",       40.190, 140.750),
-    ("ski", "Tazawako",            39.752, 140.726),
-    ("ski", "Zao Onsen",           38.166, 140.415),
-    ("ski", "Gassan",              38.528, 140.020),
-    ("ski", "Aizu Takatsue",       37.117, 139.563),
-    ("ski", "Oze Iwakura",         36.820, 139.200),
-    ("ski", "Minakami",            36.830, 138.930),
-    ("ski", "GALA Yuzawa",         36.947, 138.804),
-    ("ski", "Naeba",               36.790, 138.760),
-    ("ski", "Myoko Akakura",       36.887, 138.172),
-    ("ski", "Madarao Kogen",       36.863, 138.297),
-    ("ski", "Nozawa Onsen",        36.922, 138.444),
-    ("ski", "Shiga Kogen",         36.707, 138.508),
-    ("ski", "Hakuba Happo-one",    36.700, 137.832),
-    ("ski", "Hakuba Goryu",        36.670, 137.830),
-    ("ski", "Hakuba Cortina",      36.797, 137.853),
-    ("ski", "Hida Nagareha",       36.325, 137.330),
-    # ── onsen towns ──
-    ("onsen", "Noboribetsu Onsen", 42.495, 141.146),
-    ("onsen", "Jozankei Onsen",    42.967, 141.163),
-    ("onsen", "Toyako Onsen",      42.567, 140.817),
-    ("onsen", "Nyuto Onsen",       39.805, 140.773),
-    ("onsen", "Ginzan Onsen",      38.570, 140.530),
-    ("onsen", "Nasu Onsen",        37.090, 139.960),
-    ("onsen", "Kinugawa Onsen",    36.830, 139.720),
-    ("onsen", "Kusatsu Onsen",     36.620, 138.596),
-    ("onsen", "Ikaho Onsen",       36.497, 138.922),
-    ("onsen", "Shibu Onsen",       36.735, 138.425),
-    ("onsen", "Bessho Onsen",      36.356, 138.157),
-    ("onsen", "Hakone Yumoto",     35.233, 139.105),
-    ("onsen", "Atami",             35.096, 139.071),
-    ("onsen", "Shuzenji Onsen",    34.970, 138.927),
-    ("onsen", "Gero Onsen",        35.806, 137.244),
-    ("onsen", "Okuhida Onsen",     36.230, 137.560),
-    ("onsen", "Wakura Onsen",      37.090, 136.915),
-    ("onsen", "Yamanaka Onsen",    36.247, 136.374),
-    ("onsen", "Kinosaki Onsen",    35.626, 134.810),
-    ("onsen", "Arima Onsen",       34.797, 135.247),
-    ("onsen", "Shirahama Onsen",   33.680, 135.345),
-    ("onsen", "Misasa Onsen",      35.411, 133.881),
-    ("onsen", "Tamatsukuri Onsen", 35.420, 133.011),
-    ("onsen", "Dogo Onsen",        33.852, 132.786),
-    ("onsen", "Beppu",             33.280, 131.500),
-    ("onsen", "Yufuin",            33.265, 131.355),
-    ("onsen", "Kurokawa Onsen",    33.077, 131.141),
-    ("onsen", "Unzen Onsen",       32.760, 130.263),
-    ("onsen", "Ureshino Onsen",    33.100, 129.990),
-    ("onsen", "Kirishima Onsen",   31.870, 130.850),
-    ("onsen", "Ibusuki",           31.230, 130.640),
-    # ── famous sights ──
-    ("sight", "Kakunodate",              39.595, 140.562),
-    ("sight", "Hiraizumi",               38.990, 141.120),
-    ("sight", "Nikko",                   36.750, 139.600),
-    ("sight", "Karuizawa",               36.343, 138.635),
-    ("sight", "Lake Kawaguchiko (Fuji)", 35.500, 138.768),
-    ("sight", "Matsumoto Castle",        36.239, 137.969),
-    ("sight", "Shirakawa-go",            36.257, 136.906),
-    ("sight", "Takayama old town",       36.141, 137.252),
-    ("sight", "Tsumago (Kiso Valley)",   35.578, 137.596),
-    ("sight", "Kanazawa",                36.560, 136.660),
-    ("sight", "Miyama Thatched Village", 35.316, 135.562),
-    ("sight", "Amanohashidate",          35.570, 135.190),
-    ("sight", "Himeji Castle",           34.839, 134.694),
-    ("sight", "Koyasan",                 34.213, 135.586),
-    ("sight", "Ise Grand Shrine",        34.455, 136.725),
-    ("sight", "Kumano Hongu Taisha",     33.835, 135.772),
-    ("sight", "Izumo Taisha",            35.402, 132.685),
-    ("sight", "Miyajima",                34.296, 132.320),
-    ("sight", "Naoshima",                34.460, 133.995),
-    # ── beaches ──
-    ("beach", "Kujukuri Beach",           35.530, 140.450),
-    ("beach", "Onjuku Beach",             35.183, 140.353),
-    ("beach", "Hayama / Zushi",           35.270, 139.580),
-    ("beach", "Shirahama Beach (Izu)",    34.690, 138.980),
-    ("beach", "Chirihama",                36.900, 136.760),
-    ("beach", "Kotohikihama",             35.700, 135.030),
-    ("beach", "Takeno Beach",             35.660, 134.760),
-    ("beach", "Shirarahama (Wakayama)",   33.679, 135.342),
-    ("beach", "Katsurahama",              33.497, 133.575),
-    ("beach", "Itoshima",                 33.600, 130.200),
-    ("beach", "Aoshima (Miyazaki)",       31.800, 131.470),
-    ("beach", "Amami Oshima",             28.400, 129.470),
-    ("beach", "Onna coast (Okinawa)",     26.500, 127.850),
-    ("beach", "Emerald Beach (Motobu)",   26.694, 127.878),
-    ("beach", "Miyakojima",               24.800, 125.280),
-    ("beach", "Kabira Bay (Ishigaki)",    24.453, 124.146),
-    # ── nature ──
-    ("nature", "Shiretoko",                44.070, 145.000),
-    ("nature", "Lake Akan",                43.430, 144.090),
-    ("nature", "Biei",                     43.590, 142.470),
-    ("nature", "Sounkyo (Daisetsuzan)",    43.720, 142.950),
-    ("nature", "Lake Towada & Oirase",     40.460, 140.900),
-    ("nature", "Shirakami-Sanchi",         40.560, 139.970),
-    ("nature", "Urabandai",                37.660, 140.080),
-    ("nature", "Oze",                      36.930, 139.260),
-    ("nature", "Chichibu / Nagatoro",      36.110, 139.110),
-    ("nature", "Kamikochi",                36.250, 137.640),
-    ("nature", "Kurobe Gorge",             36.810, 137.580),
-    ("nature", "Yoshino",                  34.370, 135.860),
-    ("nature", "Nachi Falls",              33.668, 135.890),
-    ("nature", "Iya Valley",               33.875, 133.835),
-    ("nature", "Shimanto River",           33.000, 132.930),
-    ("nature", "Takachiho Gorge",          32.700, 131.300),
-    ("nature", "Mt Aso",                   32.950, 131.100),
-    ("nature", "Yakushima",                30.350, 130.530),
-]
+    # Load extra ski resorts from external file (all sizes)
+SKI_JSON = ROOT / "ski_resorts.json"
+if SKI_JSON.exists():
+    try:
+        extra = json.loads(SKI_JSON.read_text(encoding="utf-8"))
+        for item in extra:
+            if isinstance(item, (list, tuple)) and len(item) >= 3:
+                name, lat, lng = item[0], float(item[1]), float(item[2])
+                HOOKS.append(("ski", name, lat, lng))
+            elif isinstance(item, dict):
+                HOOKS.append(("ski", item["name"], float(item["lat"]), float(item["lng"])))
+        print(f"Loaded {len(extra)} extra ski resorts from ski_resorts.json")
+    except Exception as ex:
+        print(f"!! ski_resorts.json error: {ex}")
 
 # names people outside Japan already know -> bonus points (must match HOOKS names)
 FAMOUS = {
