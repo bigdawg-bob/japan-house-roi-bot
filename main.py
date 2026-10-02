@@ -86,8 +86,7 @@ EXTERIOR_CHECKS  = int(_env("EXTERIOR_CHECKS", "4"))           # Grok checks to 
 W, H             = 1080, 1350
 FX_FALLBACK      = 0.0067
 DRY_RUN          = os.getenv("DRY_RUN") == "1"
-ENABLED          = set(_env("HOOK_KINDS", "ski,onsen,sight,beach,nature")
-                       .replace(" ", "").split(","))
+ENABLED          = {"ski"}          # only ski resorts
 SITES_ON         = [s for s in _env("SOURCES", "sumai,athome,homes")
                     .replace(" ", "").split(",") if s]
 ROTATE           = _env("ROTATE_SOURCES", "1") == "1"
@@ -499,21 +498,18 @@ def rank_hooks(hooks, recent=()):
     """Scores the location. Walk-to-lift beats famous-but-far.
     Returns (points, hooks with the BEST attraction first)."""
     def value(h):
-        # Tiered base score
         road_km = h.get("road_km", h["km"] * ROAD_FACTOR)
         if road_km <= WALK_KM:
             v = WALK_PTS
         elif h["min"] <= DRIVE_30_MIN:
             v = DRIVE_30_PTS
         else:
-            # still allow up to MAX_DRIVE_MIN, but lower score
             v = CLOSE_PTS * max(0.0, 1 - h["min"] / MAX_DRIVE_MIN)
 
         if h["name"] in FAMOUS:
             v += FAMOUS_BONUS
         v *= KIND_WEIGHT.get(h["kind"], 1.0)
-        if h["name"] in recent:
-            v -= REPEAT_PENALTY
+        # removed: recent penalty
         return v
 
     ordered = sorted(hooks, key=value, reverse=True)
@@ -2120,20 +2116,6 @@ def pick(ranked, fx, last_source=None):
                 continue
             tried += 1
             fees = yearly_fees(l, fc)
-
-            # High location score (especially walk-to-lift) overrides the fee limit
-            high_location = (hp + ap) >= 65 or any(
-                h.get("road_km", h["km"] * ROAD_FACTOR) <= WALK_KM for h in hooks
-            )
-            if fees is not None and fees > FEE_LIMIT * l["price_yen"] and not high_location:
-                skip_fee += 1
-                print(f"  skip, fees {fmt_yen(fees)}/yr > {FEE_LIMIT:.0%} of "
-                      f"{fmt_yen(l['price_yen'])}: {l['url']}")
-                continue
-            elif fees is not None and fees > FEE_LIMIT * l["price_yen"]:
-                print(f"  KEEP high-fee case study (strong location): "
-                      f"{fmt_yen(fees)}/yr fees on {fmt_yen(l['price_yen'])} house → {l['url']}")
-                l["case_study_fees"] = True
 
             if not found:
                 budget -= 1
