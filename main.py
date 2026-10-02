@@ -2266,7 +2266,6 @@ def main():
         (OUT / "caption.txt").write_text(caption, encoding="utf-8")
         reel_path, reel_text, reel_cap, reel_clip = (tuple(reel or ()) + (None,) * 4)[:4]
 
-        ok = tg_album(paths, caption) and tg_text(caption)
         if ok and reel_path:
             tg_video(reel_path, reel_cap or f"🎬 Reel: {reel_text}")
     else:
