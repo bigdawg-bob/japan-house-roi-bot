@@ -97,7 +97,10 @@ MIN_YIELD        = float(_env("MIN_YIELD_PCT", "0"))   # skip houses with net yi
 MAX_CHECK        = int(_env("MAX_CHECK", "40"))        # top-located houses to fully check
 RECENT_HOOKS     = int(_env("RECENT_HOOKS", "5"))      # avoid repeating these attractions
 REPEAT_PENALTY   = float(_env("REPEAT_PENALTY", "0"))  # points off for a recently used attraction (0 = off)
-CLOSE_PTS        = 60                                  # points for a house right next to the hook
+CLOSE_PTS        = 60                                  # fallback for > 30 min
+WALK_PTS         = 70                                  # road_km <= WALK_KM (walk to lift)
+DRIVE_30_PTS     = 40                                  # within 30 min drive (flat)
+DRIVE_30_MIN     = 30                                  # "good drive" threshold
 FAMOUS_BONUS     = 20
 EXTRA_HOOK_PTS   = 5                                   # per extra attraction nearby
 MAX_EXTRA_HOOKS  = 4
@@ -585,16 +588,26 @@ def add_road_times(ranked):
 
 # ─── location score (the main ranking) ───────────────────────────────
 def rank_hooks(hooks, recent=()):
-    """Scores the location. Returns (points, hooks with the BEST attraction first).
-    Best = close + famous + preferred kind; a house near several attractions gets extra."""
+    """Scores the location. Walk-to-lift beats famous-but-far.
+    Returns (points, hooks with the BEST attraction first)."""
     def value(h):
-        v = CLOSE_PTS * max(0.0, 1 - h["min"] / MAX_DRIVE_MIN)
+        # Tiered base score
+        road_km = h.get("road_km", h["km"] * ROAD_FACTOR)
+        if road_km <= WALK_KM:
+            v = WALK_PTS
+        elif h["min"] <= DRIVE_30_MIN:
+            v = DRIVE_30_PTS
+        else:
+            # still allow up to MAX_DRIVE_MIN, but lower score
+            v = CLOSE_PTS * max(0.0, 1 - h["min"] / MAX_DRIVE_MIN)
+
         if h["name"] in FAMOUS:
             v += FAMOUS_BONUS
         v *= KIND_WEIGHT.get(h["kind"], 1.0)
         if h["name"] in recent:
-            v -= REPEAT_PENALTY                      # variety: not Hakuba every day
+            v -= REPEAT_PENALTY
         return v
+
     ordered = sorted(hooks, key=value, reverse=True)
     extra = EXTRA_HOOK_PTS * min(len(hooks) - 1, MAX_EXTRA_HOOKS)
     return round(value(ordered[0]) + extra, 1), ordered
@@ -2198,13 +2211,20 @@ def pick(ranked, fx, last_source=None):
                 skip_budget += 1                          # would need a paid call, limit reached
                 continue
             tried += 1
-            fees = yearly_fees(l, fc)
-            if fees is not None and fees > FEE_LIMIT * l["price_yen"]:
+                        fees = yearly_fees(l, fc)
+            # High location score (especially walk-to-lift) overrides the fee limit
+            high_location = (hp + ap) >= 65 or any(
+                h.get("road_km", h["km"] * ROAD_FACTOR) <= WALK_KM for h in hooks
+            )
+            if fees is not None and fees > FEE_LIMIT * l["price_yen"] and not high_location:
                 skip_fee += 1
                 print(f"  skip, fees {fmt_yen(fees)}/yr > {FEE_LIMIT:.0%} of "
                       f"{fmt_yen(l['price_yen'])}: {l['url']}")
                 continue
-            if not found:
+            elif fees is not None and fees > FEE_LIMIT * l["price_yen"]:
+                print(f"  KEEP high-fee case study (strong location): "
+                      f"{fmt_yen(fees)}/yr fees on {fmt_yen(l['price_yen'])} house → {l['url']}")
+                l["case_study_fees"] = True
                 budget -= 1
                 print(f"  AirROI call for: {l['url']}")
                 est = fetch_estimate(l, ac)
