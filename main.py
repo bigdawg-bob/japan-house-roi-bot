@@ -130,6 +130,7 @@ BOT_UA         = {"User-Agent": "yama-yield-akiya-bot/1.0 (Instagram @yama.yield
 
 # ── reel (all settings in ai_reel.py; background = bg_videos.txt via Pexels) ──
 REEL_ON      = _env("REEL", "1") == "1"                 # REEL=0 turns the reel off
+MAKE_SLIDES  = False          # set to True when you want carousels + reels again
 REEL_W, REEL_H = 1080, 1920
 REEL_SECS    = 7.0                                      # must match ai_reel.SECS
 REEL_WORDS   = 4                                        # hook line: max 4 words
@@ -1977,6 +1978,25 @@ def build_slides(l, hooks, usd, e, rot=None):
 
 
 # ─── caption ─────────────────────────────────────────────────────────
+def build_numbers_text(l, hooks, usd, e, fees_yen):
+    """Clean numbers-only message for Telegram."""
+    h0 = hooks[0]
+    hp, _ = rank_hooks(hooks)
+    ap, age_label = age_points(l.get("year_built"))
+
+    lines = [
+        f"Price: {fmt_yen(l['price_yen'])}  {fmt_usd(usd)} / All-in {fmt_k(e['all_in'])}",
+        f"Location: {fmt_trip(h0, l)} to {hook_label(h0)} [{hp:.0f} pts]",
+        f"Size: {l.get('bedrooms') or '?'}DK {l.get('area_m2') or '?'}m² {l.get('year_built') or '?'} [{ap:+.0f}]",
+        f"Fees: {fmt_yen(fees_yen or 0)}",
+        f"Running costs: ${e.get('running_cost', 0):,} /yr",
+        f"AirROI: ${e['adr']}/nt × {e['occ']*100:.0f}% × {e['nights']}d = ${e['gross']:,} gross → ${e['net']:,} net",
+        f"Real yield: {e['roi']*100:.1f}%",
+        f"Verdict: {e.get('verdict', 'NO')}",
+        f"Source: {l['url']}",
+    ]
+    return "\n".join(lines)
+
 def build_caption(l, hooks, usd, e, fees_yen, fees_usd, area_credits=(), copy=None):
     """copy = DeepSeek fields that passed ai_copy's checks (caption_hook, caption_seo,
     hashtags). The price, facts, disclaimer and link lines are always our own."""
@@ -2234,16 +2254,25 @@ def main():
           f"{age_points(l.get('year_built'))[1]}, {e['roi'] * 100:.0f}% net yield, "
           f"~${e['monthly']:,}/mo\n  {l['url']}")
 
-    paths, area_credits, s3, reel = build_slides(l, hooks, usd, e, rot)
-    if paths is None:
-        tg_text(f"No post today ({today}) – couldn't find any photo for the slides. "
-                f"Will retry next run.")
-        return
-    copy = s3.get("copy") or {}
-    caption = build_caption(l, hooks, usd, e, fees_yen, fees_usd, area_credits, copy)
-    (OUT / "caption.txt").write_text(caption, encoding="utf-8")
-    reel_path, reel_text, reel_cap, reel_clip = (tuple(reel or ()) + (None,) * 4)[:4]
+        # ---------- OUTPUT ----------
+    if MAKE_SLIDES:
+        paths, area_credits, s3, reel = build_slides(l, hooks, usd, e, rot)
+        if paths is None:
+            tg_text(f"No post today ({today}) – couldn't find any photo for the slides.")
+            return
+        copy = s3.get("copy") or {}
+        caption = build_caption(l, hooks, usd, e, fees_yen, fees_usd, area_credits, copy)
+        (OUT / "caption.txt").write_text(caption, encoding="utf-8")
+        reel_path, reel_text, reel_cap, reel_clip = (tuple(reel or ()) + (None,) * 4)[:4]
 
+        ok = tg_album(paths, caption) and tg_text(caption)
+        if ok and reel_path:
+            tg_video(reel_path, reel_cap or f"🎬 Reel: {reel_text}")
+    else:
+        # numbers-only text output
+        text = build_numbers_text(l, hooks, usd, e, fees_yen)
+        ok = tg_text(text)
+          
     # 1) post package -> n8n (AI agent + your approval). None = handoff not configured.
     try:
         pkg = n8n_handoff.build_package(sys.modules[__name__], l, hooks, usd, e, fees_yen,
