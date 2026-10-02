@@ -1789,6 +1789,126 @@
    "light_ok": false,
    "score": 6,
    "why": "Grey overcast sky, iconic snowy inns"
+  },
+  "pexels:39005187|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Attractive alpine ridge tempting hikers"
+  },
+  "pexels:39005194|day|place|v3": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 7,
+   "why": "Scenic ridge vista, hiker, sunny shadows"
+  },
+  "pexels:39005190|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "foggy grey sky, ordinary alpine meadow"
+  },
+  "pexels:39005188|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Attractive alpine view, space for text"
+  },
+  "pexels:39005192|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "misty alpine peak, attractive travel scene"
+  },
+  "pexels:39005189|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Dramatic peak trail, rich inviting colors"
+  },
+  "pexels:29208963|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Rich alpine colors, inviting lodge vista"
+  },
+  "pexels:34530323|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 5,
+   "why": "grey sky ordinary lake mountain view"
+  },
+  "pexels:39005188|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 7,
+   "why": "Nice alpine vista, daytime hike view"
+  },
+  "pexels:38812885|dusk|place|v3": {
+   "people": true,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 7,
+   "why": "Nice Alps river view, hiker prominent"
+  },
+  "pexels:20494584|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Dramatic moonlit snowy alpine peaks"
+  },
+  "pexels:10828609|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Pretty milky way over alpine night peaks"
   }
  },
  "exterior": {

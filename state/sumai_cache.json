@@ -11979,14 +11979,6 @@
   "lng": 132.46434,
   "geo_level": "district"
  },
- "https://akiya.sumai.biz/43893": {
-  "id": "https://akiya.sumai.biz/43893",
-  "url": "https://akiya.sumai.biz/43893",
-  "title": "(交渉中) 空き家バンク【売買】30万円 高知県幡多郡黒潮町入野 隣家離れた町中・日当り良好 駐車場付き4DKコンパクト2階建",
-  "ok": false,
-  "why": "not available",
-  "lastmod": "2026-08-06T21:15:48+00:00"
- },
  "https://akiya.sumai.biz/121749": {
   "id": "https://akiya.sumai.biz/121749",
   "url": "https://akiya.sumai.biz/121749",
@@ -22346,29 +22338,11 @@
  "https://akiya.sumai.biz/59190": {
   "id": "https://akiya.sumai.biz/59190",
   "url": "https://akiya.sumai.biz/59190",
-  "title": "空き家バンク【売買】370万円(要相談)高知県安芸郡奈半利町甲 海を一望する国道沿い 駐車場2台付き4DK2階建 水洗トイレ",
-  "ok": true,
+  "title": "(交渉中) 空き家バンク【売買】370万円(要相談)高知県安芸郡奈半利町甲 海を一望する国道沿い 駐車場2台付き4DK2階建 水洗トイレ",
+  "ok": false,
   "pv": 2,
-  "price_yen": 3700000.0,
-  "pref": "高知県",
-  "location": "高知県安芸郡奈半利町甲",
-  "bedrooms": 4,
-  "year_built": null,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2025/02/B21nahari-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/02/B21nahari-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/02/B21nahari-17.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/02/B21nahari-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/02/B21nahari-4.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/02/B21nahari-5.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/02/B21nahari-6.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/02/B21nahari-7.jpg"
-  ],
-  "lastmod": "2026-06-10T04:57:48+00:00",
-  "lat": 33.414078,
-  "lng": 134.060089,
-  "geo_level": "district"
+  "why": "not available",
+  "lastmod": "2026-10-02T02:45:52+00:00"
  },
  "https://akiya.sumai.biz/114374": {
   "id": "https://akiya.sumai.biz/114374",
@@ -52012,10 +51986,10 @@
  "https://akiya.sumai.biz/58582": {
   "id": "https://akiya.sumai.biz/58582",
   "url": "https://akiya.sumai.biz/58582",
-  "title": "(価格変更)空き家バンク【売買】40万円→30万円(応相談)高知県幡多郡黒潮町上田の口 田数箇所利用可 駐車場付き7DK2階建 縁側・続き間・薪風呂有",
+  "title": "(価格変更)空き家バンク【売買】30万円→25万円(応相談)高知県幡多郡黒潮町上田の口 田畑数箇所利用可 駐車場付き7DK2階建 縁側・続き間・薪風呂有",
   "ok": true,
   "pv": 2,
-  "price_yen": 300000.0,
+  "price_yen": 250000.0,
   "pref": "高知県",
   "location": "高知県幡多郡黒潮町上田の口",
   "bedrooms": 7,
@@ -52027,7 +52001,7 @@
    "https://akiya.sumai.biz/wp-content/uploads/2025/02/643kuroshio-3.jpg",
    "https://akiya.sumai.biz/wp-content/uploads/2025/02/643kuroshio-4.jpg"
   ],
-  "lastmod": "2025-08-22T09:55:37+00:00",
+  "lastmod": "2026-10-02T02:52:23+00:00",
   "lat": 33.00872,
   "lng": 132.974838,
   "geo_level": "district"
@@ -66834,26 +66808,11 @@
  "https://akiya.sumai.biz/128479": {
   "id": "https://akiya.sumai.biz/128479",
   "url": "https://akiya.sumai.biz/128479",
-  "title": "空き家バンク【売買】130万円(応相談)愛媛県上浮穴郡久万高原町上黒岩 家庭菜園可・カウンター有 地下・車庫付き9部屋平屋古民家 水洗トイレ",
-  "ok": true,
+  "title": "(交渉中) 空き家バンク【売買】130万円(応相談)愛媛県上浮穴郡久万高原町上黒岩 家庭菜園可・カウンター有 地下・車庫付き9部屋平屋古民家 水洗トイレ",
+  "ok": false,
   "pv": 2,
-  "price_yen": 1300000.0,
-  "pref": "愛媛県",
-  "location": "愛媛県上浮穴郡久万高原町上黒岩",
-  "bedrooms": 9,
-  "year_built": null,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/94kk-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/94kk-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/94kk-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/94kk-4.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/09/94kk-5.jpg"
-  ],
-  "lastmod": "2026-09-26T23:11:30+00:00",
-  "lat": 33.614655,
-  "lng": 132.964569,
-  "geo_level": "district"
+  "why": "not available",
+  "lastmod": "2026-10-02T02:42:45+00:00"
  },
  "https://akiya.sumai.biz/127312": {
   "id": "https://akiya.sumai.biz/127312",

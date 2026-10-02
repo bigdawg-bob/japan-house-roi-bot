@@ -526,5 +526,38 @@
   "added": "2026-10-01T11:27:50+09:00",
   "uses": 1,
   "last": "2026-10-01T11:27:50+09:00"
+ },
+ "e379350c9be282ac": {
+  "id": "pexels:39005187",
+  "credit": "Photo: Nur Rochmah / Pexels",
+  "role": "area",
+  "mood": "day",
+  "kind": "ski",
+  "generic": false,
+  "added": "2026-10-02T14:08:50+09:00",
+  "uses": 1,
+  "last": "2026-10-02T14:08:50+09:00"
+ },
+ "9f29b92f4165f944": {
+  "id": "pexels:39005189",
+  "credit": "Photo: Nur Rochmah / Pexels",
+  "role": "area",
+  "mood": "day",
+  "kind": "ski",
+  "generic": false,
+  "added": "2026-10-02T14:08:50+09:00",
+  "uses": 1,
+  "last": "2026-10-02T14:08:50+09:00"
+ },
+ "68d3f9efe64c6281": {
+  "id": "pexels:20494584",
+  "credit": "Photo: Francesco Sommacal / Pexels",
+  "role": "area",
+  "mood": "dusk",
+  "kind": "ski",
+  "generic": false,
+  "added": "2026-10-02T14:08:50+09:00",
+  "uses": 1,
+  "last": "2026-10-02T14:08:50+09:00"
  }
 }

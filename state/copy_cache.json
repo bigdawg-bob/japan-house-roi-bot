@@ -84,5 +84,91 @@
    "#onsentown",
    "#japanproperty"
   ]
+ },
+ "2026-10-02|https://akiya.sumai.biz/125884|v6": {
+  "angle": "D",
+  "reel_hook": [
+   "$5K HAKUBA GORYU",
+   "$5K HAKUBA",
+   "$5K GORYU"
+  ],
+  "reel_sub": [
+   "30 min drive to Hakuba Goryu • 13% net",
+   "30 min to Hakuba Goryu • 13% net",
+   "30 min drive • 13% net"
+  ],
+  "s2_line_a": [
+   "{all_in} once you add renovation and fees",
+   "{all_in} for the house and renovation",
+   "{all_in} all in, fixed up"
+  ],
+  "s2_line_b": [
+   "Books {booked_nights} nights a year, {net_year} net",
+   "That's {net_year} a year after management",
+   "{net_year} a year net after management"
+  ],
+  "s3_headline": [
+   "Skip Myoko Akakura, buy Hakuba",
+   "Hakuba instead of Myoko Akakura",
+   "Hakuba over Myoko Akakura"
+  ],
+  "s3_points": [
+   {
+    "from": [
+     "bedrooms"
+    ],
+    "text": [
+     "8 bedrooms, sleeps a big group",
+     "8 bedrooms for group bookings",
+     "8 bedrooms, room to grow"
+    ]
+   },
+   {
+    "from": [
+     "occupancy"
+    ],
+    "text": [
+     "49% average occupancy in the area",
+     "Area occupancy averages 49%",
+     "Area occupancy sits at 49%"
+    ]
+   },
+   {
+    "from": [
+     "access"
+    ],
+    "text": [
+     "2.5 hrs from Tokyo by train",
+     "2.5 hrs from Tokyo",
+     "2.5 hrs from Tokyo"
+    ]
+   }
+  ],
+  "s3_seo1": [
+   "Hakuba Goryu akiya, 30 min to the ski resort",
+   "Hakuba akiya, 30 min to Goryu ski resort",
+   "Hakuba akiya, 30 min to the slopes"
+  ],
+  "s3_seo2": [
+   "Hakuba Goryu Airbnb investment under $70.2K",
+   "Hakuba Airbnb investment for under $70.2K",
+   "Hakuba Airbnb investment under $70.2K"
+  ],
+  "s3_cta": [
+   "See the full numbers and agent in bio",
+   "Meet the agent for this Hakuba house in bio",
+   "Full Hakuba numbers in bio"
+  ],
+  "caption_hook": "Hakuba Goryu akiya for $5K: 30 min to the ski resort, 13% net yield.",
+  "caption_seo": "This Hakuba Goryu akiya in Nagano is a 30 min drive to Hakuba Goryu ski resort. It works as an Airbnb rental at $161 a night, 13% net yield. Skip Myoko Akakura and look at Hakuba instead.",
+  "reel_line1": "Hakuba Goryu akiya for $5K, 30 min to the ski resort, $742 a month net.",
+  "reel_dream": "Powder days on the North Alps, then a soak in the onsen as snow falls.",
+  "hashtags": [
+   "#akiya",
+   "#hakuba",
+   "#nagano",
+   "#skiresort",
+   "#japanproperty"
+  ]
  }
 }
