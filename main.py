@@ -2295,9 +2295,6 @@ def main():
         handed = False
 
     # 2) Telegram copy (as before)
-    ok = tg_album(paths, caption) and tg_text(caption)
-    if ok and reel_path:
-        tg_video(reel_path, reel_cap or f"🎬 Reel: {reel_text}")   # a failed reel doesn't block the post
     if ok and handed is not False and not DRY_RUN:
         for u in l.get("all_urls", [l["url"]]):
             posted[u] = today
