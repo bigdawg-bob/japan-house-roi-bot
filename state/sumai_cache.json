@@ -18792,15 +18792,6 @@
   "lng": 131.554642,
   "geo_level": "district"
  },
- "https://akiya.sumai.biz/50019": {
-  "id": "https://akiya.sumai.biz/50019",
-  "url": "https://akiya.sumai.biz/50019",
-  "title": "(交渉中) 空き家バンク【売買】80万円【賃貸】2万円 徳島県海部郡海陽町宍喰浦 駅徒歩7分・生活便利 裏庭・倉庫付き5K2階建古民家 水洗トイレ 土間・縁側・続き間有",
-  "ok": false,
-  "pv": 2,
-  "why": "not available",
-  "lastmod": "2026-07-02T00:57:45+00:00"
- },
  "https://akiya.sumai.biz/112920": {
   "id": "https://akiya.sumai.biz/112920",
   "url": "https://akiya.sumai.biz/112920",
@@ -37999,23 +37990,11 @@
  "https://akiya.sumai.biz/104113": {
   "id": "https://akiya.sumai.biz/104113",
   "url": "https://akiya.sumai.biz/104113",
-  "title": "空き家バンク【売買】50万円 香川県三豊市高瀬町 長閑な田園地帯に佇む 納屋・駐車場付き5DK軽量鉄骨2階建",
-  "ok": true,
+  "title": "(交渉中) 空き家バンク【売買】50万円 香川県三豊市高瀬町 長閑な田園地帯に佇む 納屋・駐車場付き5DK軽量鉄骨2階建",
+  "ok": false,
   "pv": 2,
-  "price_yen": 500000.0,
-  "pref": "香川県",
-  "location": "香川県三豊市高瀬町",
-  "bedrooms": 5,
-  "year_built": 1971,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/803mitoyo-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/803mitoyo-2.jpg"
-  ],
-  "lastmod": "2026-02-21T22:37:01+00:00",
-  "lat": 34.142063,
-  "lng": 133.739777,
-  "geo_level": "district"
+  "why": "not available",
+  "lastmod": "2026-10-02T02:07:36+00:00"
  },
  "https://akiya.sumai.biz/103826": {
   "id": "https://akiya.sumai.biz/103826",
@@ -40396,27 +40375,6 @@
   "pv": 2,
   "why": "no sale price",
   "lastmod": "2026-01-31T01:44:08+00:00"
- },
- "https://akiya.sumai.biz/82442": {
-  "id": "https://akiya.sumai.biz/82442",
-  "url": "https://akiya.sumai.biz/82442",
-  "title": "(価格変更)空き家バンク【売買】100万円→50万円 香川県三豊市高瀬町 納屋・駐車場付き5DK軽量鉄骨2階建",
-  "ok": true,
-  "pv": 2,
-  "price_yen": 500000.0,
-  "pref": "香川県",
-  "location": "香川県三豊市高瀬町",
-  "bedrooms": 5,
-  "year_built": 1971,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2025/08/803mtoyo-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2025/08/803mtoyo-2.jpg"
-  ],
-  "lastmod": "2026-01-31T00:46:51+00:00",
-  "lat": 34.142063,
-  "lng": 133.739777,
-  "geo_level": "district"
  },
  "https://akiya.sumai.biz/101786": {
   "id": "https://akiya.sumai.biz/101786",
