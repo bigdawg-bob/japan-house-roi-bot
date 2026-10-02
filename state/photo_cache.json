@@ -1549,6 +1549,126 @@
    "light_ok": true,
    "score": 8,
    "why": "Dramatic night volcanic glow on snow"
+  },
+  "pexels:17248880|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 7,
+   "why": "Pretty snowy dusk town not daylight"
+  },
+  "pexels:35837230|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Grey snowy river, steam, visible poles"
+  },
+  "pexels:36937585|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Charming ryokans, greenery, washed sky"
+  },
+  "pexels:5444497|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "grey overcast sky ordinary village snapshot"
+  },
+  "pexels:16500575|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 8,
+   "why": "Charming snowy Ginzan Onsen riverside town"
+  },
+  "pexels:1615328|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 5,
+   "why": "Grey overcast, not Ginzan Onsen"
+  },
+  "pexels:31046954|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Charming snowy shop, attractive not stunning"
+  },
+  "pexels:7526803|day|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": false,
+   "score": 6,
+   "why": "Moody alley but dim dusk light"
+  },
+  "pexels:39469545|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 5,
+   "why": "Dark ordinary street with lantern"
+  },
+  "pexels:29531012|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 6,
+   "why": "Moody lanterns but generic ordinary street"
+  },
+  "pexels:33996365|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": true,
+   "japan": false,
+   "landmark": false,
+   "light_ok": true,
+   "score": 5,
+   "why": "Nice lantern close-up, not the town"
+  },
+  "pexels:28969415|dusk|place|v3": {
+   "people": false,
+   "watermark_or_text": false,
+   "interior": false,
+   "japan": true,
+   "landmark": false,
+   "light_ok": true,
+   "score": 7,
+   "why": "Moody lantern night scene, attractive not stunning"
   }
  },
  "exterior": {
