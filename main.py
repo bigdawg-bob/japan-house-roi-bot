@@ -2118,7 +2118,7 @@ def pick(ranked, fx, last_source=None):
             if not found and budget <= 0:
                 skip_budget += 1                          # would need a paid call, limit reached
                 continue
-                        tried += 1
+            tried += 1
             fees = yearly_fees(l, fc)
 
             # High location score (especially walk-to-lift) overrides the fee limit
@@ -2146,6 +2146,7 @@ def pick(ranked, fx, last_source=None):
                 skip_data += 1
                 print(f"  skip, no AirROI rate/occupancy: {l['url']}")
                 continue
+            # ... keep the rest of the original code that was already inside the for loop
             roi_pct = e["roi"] * 100
             if e["net"] <= 0 or roi_pct < MIN_YIELD:
                 skip_yield += 1
