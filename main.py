@@ -1980,10 +1980,21 @@ def build_slides(l, hooks, usd, e, rot=None):
 
 # ─── caption ─────────────────────────────────────────────────────────
 def build_numbers_text(l, hooks, usd, e, fees_yen):
-    """Clean numbers-only message for Telegram."""
     h0 = hooks[0]
     hp, _ = rank_hooks(hooks)
-    ap, age_label = age_points(l.get("year_built"))
+    ap, _ = age_points(l.get("year_built"))
+
+    detail = e.get("running_detail", {})
+    run_lines = []
+    if detail:
+        run_lines = [
+            f"  Tax: ${detail.get('tax', 0):,}",
+            f"  Insurance: ${detail.get('insurance', 0):,}",
+            f"  Utilities: ${detail.get('utilities', 0):,}",
+            f"  Snow: ${detail.get('snow', 0):,}",
+            f"  Heating: ${detail.get('heating', 0):,}",
+            f"  Maintenance: ${detail.get('maintenance', 0):,}",
+        ]
 
     lines = [
         f"Price: {fmt_yen(l['price_yen'])}  {fmt_usd(usd)} / All-in {fmt_k(e['all_in'])}",
@@ -1991,6 +2002,7 @@ def build_numbers_text(l, hooks, usd, e, fees_yen):
         f"Size: {l.get('bedrooms') or '?'}DK {l.get('area_m2') or '?'}m² {l.get('year_built') or '?'} [{ap:+.0f}]",
         f"Fees: {fmt_yen(fees_yen or 0)}",
         f"Running costs: ${e.get('running_cost', 0):,} /yr",
+    ] + run_lines + [
         f"AirROI: ${e['adr']}/nt × {e['occ']*100:.0f}% × {e['nights']}d = ${e['gross']:,} gross → ${e['net']:,} net",
         f"Real yield: {e['roi']*100:.1f}%",
         f"Verdict: {e.get('verdict', 'NO')}",
