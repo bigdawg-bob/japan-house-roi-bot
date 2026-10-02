@@ -66,34 +66,29 @@ def is_renovated(listing):
 
 # ---------- NEW: realistic ski-lodge running costs (scaled) ----------
 def ski_lodge_running_cost(price_yen, floor_m2=None, bedrooms=None, year_built=None):
-    """
-    Yearly operating costs for a ski-area house (yen).
-    Scales with size. Conservative but realistic for Hokkaido / Tohoku / Nagano.
-    """
     if not floor_m2:
         floor_m2 = (bedrooms or 5) * 20
     floor_m2 = max(60, min(floor_m2 or 100, 250))
 
-    # Fixed asset tax (~1.4% of assessed ≈ 70% of market)
-    tax = price_yen * 0.014 * 0.70
-
-    # Insurance (fire + earthquake + snow load)
-    insurance = 40_000 + floor_m2 * 400
-
-    # Utilities + septic (even empty)
-    utilities = 10_000 * 12 + floor_m2 * 50
-
-    # Snow clearing (biggest variable cost)
-    snow = 250_000 + floor_m2 * 2_500
-
-    # Heating (kerosene dominant)
-    heating = 120_000 + floor_m2 * 1_800
-
-    # Maintenance + repair reserve (older houses cost more)
+    tax = round(price_yen * 0.014 * 0.70)
+    insurance = round(40_000 + floor_m2 * 400)
+    utilities = round(10_000 * 12 + floor_m2 * 50)
+    snow = round(250_000 + floor_m2 * 2_500)
+    heating = round(120_000 + floor_m2 * 1_800)
     age_factor = 1.4 if (not year_built or year_built < 1981) else 1.0
-    maintenance = (200_000 + floor_m2 * 1_500) * age_factor
+    maintenance = round((200_000 + floor_m2 * 1_500) * age_factor)
 
-    return round(tax + insurance + utilities + snow + heating + maintenance)
+    total = tax + insurance + utilities + snow + heating + maintenance
+
+    return {
+        "tax": tax,
+        "insurance": insurance,
+        "utilities": utilities,
+        "snow": snow,
+        "heating": heating,
+        "maintenance": maintenance,
+        "total": total,
+    }
 
 
 # ---------- AirROI ----------
@@ -129,10 +124,10 @@ def estimate(price_jpy, year_built, airroi_est, fx, floor_m2=None,
     fees_yearly = round((yearly_fees_jpy or 0) * fx)
 
     # New: realistic ski-lodge operating costs
-    running_jpy = ski_lodge_running_cost(
+    running = ski_lodge_running_cost(
         price_jpy, floor_m2=floor_m2, bedrooms=rooms, year_built=year_built
     )
-    running_usd = round(running_jpy * fx)
+    running_usd = round(running["total"] * fx)
 
     net = _r100(gross * (1 - MGMT_PCT) - fees_yearly - running_usd)
 
@@ -159,6 +154,7 @@ def estimate(price_jpy, year_built, airroi_est, fx, floor_m2=None,
         "mgmt_pct": MGMT_PCT,
         "fees_yearly": fees_yearly,
         "running_cost": running_usd,          # new
+        "running_detail": {k: round(v * fx) for k, v in running.items() if k != "total"},
         "net": net,
         "roi": roi,
         "monthly": round(net / 12),
