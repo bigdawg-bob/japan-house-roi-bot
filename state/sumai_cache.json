@@ -2855,10 +2855,29 @@
  "https://akiya.sumai.biz/124447": {
   "id": "https://akiya.sumai.biz/124447",
   "url": "https://akiya.sumai.biz/124447",
-  "title": "(交渉中) 空き家バンク【売買】700万円(応相談)千葉県南房総市千倉町平舘 海まですぐ・閑静住宅地 庭・物置・車庫・駐車場付き5DK2階建 各階水洗トイレ 井戸・広縁有",
-  "ok": false,
-  "why": "not available",
-  "lastmod": "2026-09-12T20:00:44+00:00"
+  "title": "空き家バンク【売買】700万円(応相談)千葉県南房総市千倉町平舘 海まですぐ・閑静住宅地 庭・物置・車庫・駐車場付き5DK2階建 各階水洗トイレ 井戸・広縁有",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 7000000.0,
+  "pref": "千葉県",
+  "location": "千葉県南房総市千倉町平舘",
+  "bedrooms": 5,
+  "year_built": 1986,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2026/08/165mb-1.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/08/165mb-2.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/08/165mb-3.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/08/165mb-4.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/08/165mb-6.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/08/165mb-7.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/08/165mb-5.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2026/08/165mb-10.jpg"
+  ],
+  "lastmod": "2026-10-04T01:42:26+00:00",
+  "lat": 34.954159,
+  "lng": 139.958893,
+  "geo_level": "district"
  },
  "https://akiya.sumai.biz/67966": {
   "id": "https://akiya.sumai.biz/67966",
@@ -73157,5 +73176,14 @@
   "lat": 44.373489,
   "lng": 141.711578,
   "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/130035": {
+  "id": "https://akiya.sumai.biz/130035",
+  "url": "https://akiya.sumai.biz/130035",
+  "title": "佐野市船津川町 母屋60坪+離れ(ガレージ)30坪+倉庫24坪 890万円",
+  "ok": false,
+  "pv": 2,
+  "why": "no sale price",
+  "lastmod": "2026-10-04T01:57:03+00:00"
  }
 }
