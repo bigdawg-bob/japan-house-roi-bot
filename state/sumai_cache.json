@@ -6076,33 +6076,6 @@
   "lng": 133.913208,
   "geo_level": "district"
  },
- "https://akiya.sumai.biz/105331": {
-  "id": "https://akiya.sumai.biz/105331",
-  "url": "https://akiya.sumai.biz/105331",
-  "title": "(価格変更)空き家バンク【売買】180万円→120万円 岡山県和気郡和気町吉田 日当り良好 田畑・庭・納屋・駐車場2台付き7K2階建古民家 井戸・縁側有",
-  "ok": true,
-  "pv": 2,
-  "price_yen": 1200000.0,
-  "pref": "岡山県",
-  "location": "岡山県和気郡和気町吉田",
-  "bedrooms": 7,
-  "year_built": 1935,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/00555121-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/00555121-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/00555121-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/00555121-16.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/00555121-17.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/00555121-18.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/00555121-15.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2026/02/00555121-13.jpg"
-  ],
-  "lastmod": "2026-09-24T04:18:39+00:00",
-  "lat": 34.829056,
-  "lng": 134.195282,
-  "geo_level": "district"
- },
  "https://akiya.sumai.biz/69645": {
   "id": "https://akiya.sumai.biz/69645",
   "url": "https://akiya.sumai.biz/69645",
@@ -6148,10 +6121,23 @@
  "https://akiya.sumai.biz/42745": {
   "id": "https://akiya.sumai.biz/42745",
   "url": "https://akiya.sumai.biz/42745",
-  "title": "(交渉中) 空き家バンク【売買】200万円【賃貸】1万円 鳥取県西伯郡大山町鈑戸 広い敷地 庭・納屋・駐車場付き平屋古民家 水洗トイレ",
-  "ok": false,
-  "why": "not available",
-  "lastmod": "2026-09-24T01:28:49+00:00"
+  "title": "空き家バンク【売買】200万円【賃貸】1万円 鳥取県西伯郡大山町鈑戸 広い敷地 庭・納屋・駐車場付き平屋古民家 水洗トイレ",
+  "ok": true,
+  "pv": 2,
+  "price_yen": 2000000.0,
+  "pref": "鳥取県",
+  "location": "鳥取県西伯郡大山町鈑戸",
+  "bedrooms": null,
+  "year_built": 1926,
+  "area_m2": null,
+  "photos": [
+   "https://akiya.sumai.biz/wp-content/uploads/2024/10/R6-11daisen-1.jpg",
+   "https://akiya.sumai.biz/wp-content/uploads/2024/10/R6-11daisen-2.jpg"
+  ],
+  "lastmod": "2026-10-05T00:51:37+00:00",
+  "lat": 35.419109,
+  "lng": 133.518936,
+  "geo_level": "district"
  },
  "https://akiya.sumai.biz/36129": {
   "id": "https://akiya.sumai.biz/36129",
@@ -65571,31 +65557,6 @@
   "lng": 135.300186,
   "geo_level": "district"
  },
- "https://akiya.sumai.biz/4286": {
-  "id": "https://akiya.sumai.biz/4286",
-  "url": "https://akiya.sumai.biz/4286",
-  "title": "空き家バンク【売買】195万円 岡山県美作市三保原 農地・離れ5部屋・納屋・駐車場付き4部屋平屋古民家",
-  "ok": true,
-  "pv": 2,
-  "price_yen": 1950000.0,
-  "pref": "岡山県",
-  "location": "岡山県美作市三保原",
-  "bedrooms": 5,
-  "year_built": 1940,
-  "area_m2": null,
-  "photos": [
-   "https://akiya.sumai.biz/wp-content/uploads/2024/01/00394575-1.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2024/01/00394575-2.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2024/01/00394575-3.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2024/01/00394575-4.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2024/01/00394575-7.jpg",
-   "https://akiya.sumai.biz/wp-content/uploads/2024/01/00394575-6.jpg"
-  ],
-  "lastmod": "2025-01-05T04:01:02+00:00",
-  "lat": 34.930439,
-  "lng": 134.140579,
-  "geo_level": "district"
- },
  "https://akiya.sumai.biz/3810": {
   "id": "https://akiya.sumai.biz/3810",
   "url": "https://akiya.sumai.biz/3810",
@@ -73368,5 +73329,14 @@
   "lat": 35.465488,
   "lng": 137.412521,
   "geo_level": "district"
+ },
+ "https://akiya.sumai.biz/128835": {
+  "id": "https://akiya.sumai.biz/128835",
+  "url": "https://akiya.sumai.biz/128835",
+  "title": "(交渉中) 空き家バンク【売買】330万円 島根県隠岐郡隠岐の島町北方 平成3年築・日当り良好 倉庫・駐車場2台付き4DKコンパクト2階建",
+  "ok": false,
+  "pv": 2,
+  "why": "not available",
+  "lastmod": "2026-10-05T01:38:57+00:00"
  }
 }
